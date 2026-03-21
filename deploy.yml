@@ -13,20 +13,21 @@
 
   tasks:
     - name: Remove old container
-      ansible.builtin.shell: docker rm -f genai-container 2>/dev/null || true
+      ansible.builtin.raw: docker rm -f genai-container || true
+      changed_when: false
 
     - name: Pull latest image
-      ansible.builtin.shell: docker pull nilesh9890/genai-rag:latest
+      ansible.builtin.raw: docker pull nilesh9890/genai-rag:latest
 
     - name: Run container
-      ansible.builtin.shell: |
-        docker run -d \
-        --name genai-container \
-        -p 5000:8000 \
-        -e GROQ_API_KEY={{ groq_api_key | quote }} \
-        --restart unless-stopped \
+      ansible.builtin.raw: >
+        docker run -d
+        --name genai-container
+        -p 5000:8000
+        -e GROQ_API_KEY={{ groq_api_key | quote }}
+        --restart unless-stopped
         nilesh9890/genai-rag:latest
       no_log: true
 
     - name: Verify container running
-      ansible.builtin.shell: docker ps | grep genai-container
+      ansible.builtin.raw: docker ps --filter name=genai-container
