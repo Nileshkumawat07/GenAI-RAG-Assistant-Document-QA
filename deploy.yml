@@ -1,23 +1,31 @@
+---
 - hosts: all
-  become: true
   gather_facts: false
+  vars:
+    groq_api_key: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
+
+  pre_tasks:
+    - name: Ensure GROQ API key is provided
+      ansible.builtin.assert:
+        that:
+          - groq_api_key | length > 0
+        fail_msg: "Pass groq_api_key to ansible-playbook or set GROQ_API_KEY in the environment."
 
   tasks:
-
     - name: Remove old container
-      shell: docker rm -f genai-container 2>/dev/null || true
+      ansible.builtin.shell: docker rm -f genai-container 2>/dev/null || true
 
     - name: Pull latest image
-      shell: docker pull nilesh9890/genai-rag:latest
+      ansible.builtin.shell: docker pull nilesh9890/genai-rag:latest
 
-    - name: Run container (WITH CORRECT ENV)
-      shell: |
+    - name: Run container
+      ansible.builtin.shell: |
         docker run -d \
         --name genai-container \
         -p 5000:8000 \
-        -e GROQ_API_KEY="{{ GROQ_API_KEY }}" \
+        -e GROQ_API_KEY="{{ groq_api_key }}" \
         --restart unless-stopped \
         nilesh9890/genai-rag:latest
 
     - name: Verify container running
-      shell: docker ps | grep genai-container
+      ansible.builtin.shell: docker ps | grep genai-container
