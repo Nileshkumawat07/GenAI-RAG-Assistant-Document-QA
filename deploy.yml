@@ -4,23 +4,8 @@
 
   tasks:
 
-    - name: Ensure Docker is installed
-      apt:
-        name: docker.io
-        state: present
-        update_cache: yes
-
-    - name: Start Docker service
-      service:
-        name: docker
-        state: started
-        enabled: true
-
-    - name: Remove old container if present
+    - name: Remove old container
       shell: docker rm -f genai-container || true
-
-    - name: Remove old image (optional clean)
-      shell: docker rmi nilesh9890/genai-rag:latest || true
 
     - name: Pull latest image
       shell: docker pull nilesh9890/genai-rag:latest
@@ -34,11 +19,5 @@
         --restart unless-stopped \
         nilesh9890/genai-rag:latest
 
-    - name: Verify container is running
+    - name: Verify container
       shell: docker ps | grep genai-container
-      register: result
-      failed_when: result.rc != 0
-
-    - name: Show running container
-      debug:
-        var: result.stdout
