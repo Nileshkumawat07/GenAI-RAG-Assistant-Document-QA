@@ -1,17 +1,44 @@
 - hosts: all
   become: true
-  gather_facts: false   # 🔥 ADD THIS LINE
+  gather_facts: false
 
   tasks:
 
+    - name: Ensure Docker is installed
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: true
+
     - name: Remove old container if present
       shell: docker rm -f genai-container || true
+
+    - name: Remove old image (optional clean)
+      shell: docker rmi nilesh9890/genai-rag:latest || true
 
     - name: Pull latest image
       shell: docker pull nilesh9890/genai-rag:latest
 
     - name: Run container
       shell: |
-        docker run -d -p 5000:8000 --name genai-container \
-        -e GROQ_API_KEY={{ groq_api_key }} \
+        docker run -d \
+        --name genai-container \
+        -p 5000:8000 \
+        -e GROQ_API_KEY="{{ groq_api_key }}" \
+        --restart unless-stopped \
         nilesh9890/genai-rag:latest
+
+    - name: Verify container is running
+      shell: docker ps | grep genai-container
+      register: result
+      failed_when: result.rc != 0
+
+    - name: Show running container
+      debug:
+        var: result.stdout
