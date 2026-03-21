@@ -12,10 +12,6 @@
         fail_msg: "Pass groq_api_key to ansible-playbook or set GROQ_API_KEY in the environment."
 
   tasks:
-    - name: Remove old container
-      ansible.builtin.raw: docker rm -f genai-container || true
-      changed_when: false
-
     - name: Pull latest image
       ansible.builtin.raw: docker pull nilesh9890/genai-rag:latest
 
