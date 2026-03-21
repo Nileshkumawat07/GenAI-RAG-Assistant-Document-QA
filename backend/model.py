@@ -57,7 +57,9 @@ class RAGService:
         self.documents = []
         self.chunks: List[DocumentChunk] = []
         if not GROQ_API_KEY or GROQ_API_KEY == "<SECRET>":
-            raise ValueError("Set GROQ_API_KEY in backend/.env before starting the backend.")
+            raise ValueError(
+                "Set GROQ_API_KEY in the container environment or backend/.env before starting the backend."
+            )
         self.client = OpenAI(
             api_key=GROQ_API_KEY,
             base_url="https://api.groq.com/openai/v1",
