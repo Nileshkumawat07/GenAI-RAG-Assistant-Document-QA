@@ -1,14 +1,16 @@
 - hosts: all
   become: true
 
-- name: Remove old container if present
-  shell: docker rm -f genai-container || true
+  tasks:
 
-- name: Pull latest image
-  shell: docker pull nilesh9890/genai-rag:latest
+    - name: Remove old container if present
+      shell: docker rm -f genai-container || true
 
-- name: Run container
-  shell: |
-    docker run -d -p 5000:8000 --name genai-container \
-    -e GROQ_API_KEY={{ groq_api_key }} \
-    nilesh9890/genai-rag:latest
+    - name: Pull latest image
+      shell: docker pull nilesh9890/genai-rag:latest
+
+    - name: Run container
+      shell: |
+        docker run -d -p 5000:8000 --name genai-container \
+        -e GROQ_API_KEY={{ groq_api_key }} \
+        nilesh9890/genai-rag:latest
