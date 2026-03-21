@@ -103,7 +103,7 @@ class RAGService:
 
         retrieved = self._retrieve(question)
         if not retrieved:
-            raise ValueError("Question not found in the uploaded document.")
+            raise ValueError("Invalid question. Refine the wording if you want a more specific answer.")
 
         answer = self._generate_answer(question, retrieved)
 

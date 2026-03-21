@@ -100,8 +100,7 @@ function Chat() {
       setAnswer(data.answer);
       pushStatus("Answer generated successfully.", "success");
     } catch (err) {
-      setError(err.message);
-      pushStatus(`Question failed: ${err.message}`, "error");
+      setAnswer(err.message);
     } finally {
       setIsAsking(false);
     }
