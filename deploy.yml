@@ -12,8 +12,11 @@
         fail_msg: "Pass groq_api_key to ansible-playbook or set GROQ_API_KEY in the environment."
 
   tasks:
-    - name: Pull latest image
-      ansible.builtin.raw: docker pull nilesh9890/genai-rag:latest
+    - name: Verify image exists on server
+      ansible.builtin.raw: docker image inspect nilesh9890/genai-rag:latest
+      register: image_check
+      changed_when: false
+      failed_when: image_check.rc != 0
 
     - name: Run container
       ansible.builtin.raw: >
