@@ -1,20 +1,45 @@
 ---
 - name: Deploy App
   hosts: ec2
-  gather_facts: no
+  gather_facts: false
   vars:
     groq_api_key: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
+    app_image: nilesh9890/genai-rag:latest
+    app_container_name: genai-container
+    app_port: "8000"
 
   pre_tasks:
     - name: Ensure GROQ_API_KEY is provided
       ansible.builtin.assert:
         that:
           - groq_api_key | length > 0
-        fail_msg: "Set GROQ_API_KEY in your shell before running this playbook."
+        fail_msg: "Set GROQ_API_KEY before running this playbook."
+
+    - name: Verify Docker daemon is reachable
+      ansible.builtin.command: docker info
+      register: docker_info
+      changed_when: false
 
   tasks:
-    - name: Pull latest image
-      ansible.builtin.command: docker pull nilesh9890/genai-rag:latest
+    - name: Remove old container if present
+      ansible.builtin.command: docker rm -f {{ app_container_name }}
+      register: remove_container
+      failed_when: false
+      changed_when: remove_container.rc == 0
+
+    - name: Pull latest image in background
+      ansible.builtin.command: docker pull {{ app_image }}
+      async: 900
+      poll: 0
+      register: pull_job
+
+    - name: Wait for image pull to finish
+      ansible.builtin.async_status:
+        jid: "{{ pull_job.ansible_job_id }}"
+      register: pull_status
+      until: pull_status.finished
+      retries: 90
+      delay: 10
 
     - name: Run container
       ansible.builtin.command:
@@ -23,9 +48,22 @@
           - run
           - -d
           - -p
-          - 8000:8000
+          - "{{ app_port }}:8000"
           - --name
-          - genai-container
+          - "{{ app_container_name }}"
           - -e
-          - GROQ_API_KEY={{ groq_api_key }}
-          - nilesh9890/genai-rag:latest
+          - "GROQ_API_KEY={{ groq_api_key }}"
+          - "{{ app_image }}"
+      register: run_container
+
+    - name: Wait for app port to be reachable
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ app_port | int }}"
+        timeout: 60
+        delay: 2
+
+    - name: Show running container
+      ansible.builtin.command: docker ps --filter name={{ app_container_name }}
+      register: running_container
+      changed_when: false
