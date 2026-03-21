@@ -14,10 +14,10 @@
 
   tasks:
     - name: Remove old container forcefully
-      shell: docker rm -f genai-container || true
+      shell: timeout 20s docker rm -f genai-container || true
 
     - name: Pull latest image
-      shell: docker pull nilesh9890/genai-rag:latest
+      shell: timeout 180s docker pull nilesh9890/genai-rag:latest
 
     - name: Run container
-      shell: docker run -d -p 8000:8000 --name genai-container -e "GROQ_API_KEY={{ groq_api_key }}" nilesh9890/genai-rag:latest
+      shell: timeout 30s docker run -d -p 8000:8000 --name genai-container -e "GROQ_API_KEY={{ groq_api_key }}" nilesh9890/genai-rag:latest
