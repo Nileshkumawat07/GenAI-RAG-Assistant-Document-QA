@@ -1,39 +1,14 @@
----
-- name: Deploy App
-  hosts: ec2
-  gather_facts: false
-  vars:
-    groq_api_key: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
+- hosts: all
+  become: true
 
-  pre_tasks:
-    - name: Ensure GROQ_API_KEY is provided
-      ansible.builtin.assert:
-        that:
-          - groq_api_key | length > 0
-        fail_msg: "Set GROQ_API_KEY before running this playbook."
+- name: Remove old container if present
+  shell: docker rm -f genai-container || true
 
-  tasks:
-    - name: Remove old container if present
-      community.docker.docker_container:
-        name: genai-container
-        state: absent
-      become: true
+- name: Pull latest image
+  shell: docker pull nilesh9890/genai-rag:latest
 
-    - name: Pull latest image
-      community.docker.docker_image:
-        name: nilesh9890/genai-rag
-        tag: latest
-        source: pull
-      become: true
-
-    - name: Run container
-      community.docker.docker_container:
-        name: genai-container
-        image: nilesh9890/genai-rag:latest
-        state: started
-        restart_policy: unless-stopped
-        published_ports:
-          - "5000:8000"
-        env:
-          GROQ_API_KEY: "{{ groq_api_key }}"
-      become: true
+- name: Run container
+  shell: |
+    docker run -d -p 5000:8000 --name genai-container \
+    -e GROQ_API_KEY={{ groq_api_key }} \
+    nilesh9890/genai-rag:latest
