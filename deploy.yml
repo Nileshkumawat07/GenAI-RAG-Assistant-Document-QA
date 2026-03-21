@@ -18,6 +18,13 @@
       changed_when: false
       failed_when: image_check.rc != 0
 
+    - name: Remove existing app container if present
+      ansible.builtin.raw: >
+        if docker container inspect genai-container >/dev/null 2>&1; then
+          docker rm -f genai-container;
+        fi
+      changed_when: false
+
     - name: Run container
       ansible.builtin.raw: >
         docker run -d
