@@ -483,32 +483,93 @@ textarea {
     height: auto;
   }
 
+  .workspace-shell {
+    flex-direction: column;
+  }
+
+  .workspace-sidebar {
+    flex: 0 0 auto;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
   .workspace-content {
     padding: 24px;
+    overflow: visible;
   }
 
   .content-grid {
     grid-template-columns: 1fr;
   }
-
 }
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 16px;
+    height: auto;
+    min-height: 100vh;
+    padding: 10px;
+    gap: 10px;
+    overflow: visible;
   }
 
   .app-header-inner {
-    flex-direction: column;
-    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .app-header {
+    padding: 8px 12px;
   }
 
   .workspace-sidebar,
   .workspace-content {
-    padding: 20px;
+    padding: 16px;
+  }
+
+  .sidebar-title {
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-description {
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+
+  .sidebar-boost-card {
+    margin-top: 20px;
+  }
+
+  .content-card,
+  .tool-card,
+  .answer-section,
+  .insight-card,
+  .info-card {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .question-input,
+  .upload-box {
+    height: auto;
+    min-height: 120px;
+  }
+
+  .primary-button {
+    min-height: 42px;
   }
 
   .answer-card-head {
     flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .answer-badge {
+    align-self: flex-start;
+  }
+
+  .answer-box {
+    min-height: 180px;
   }
 }
