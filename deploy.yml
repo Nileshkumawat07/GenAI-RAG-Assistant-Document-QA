@@ -4,18 +4,18 @@
 
   tasks:
 
-    - name: Remove old container (fast & safe)
+    - name: Remove old container
       shell: docker rm -f genai-container 2>/dev/null || true
 
     - name: Pull latest image
       shell: docker pull nilesh9890/genai-rag:latest
 
-    - name: Run container
+    - name: Run container (WITH CORRECT ENV)
       shell: |
         docker run -d \
         --name genai-container \
         -p 5000:8000 \
-        -e GROQ_API_KEY="{{ groq_api_key }}" \
+        -e GROQ_API_KEY="{{ GROQ_API_KEY }}" \
         --restart unless-stopped \
         nilesh9890/genai-rag:latest
 
