@@ -4,9 +4,6 @@
   gather_facts: false
   vars:
     groq_api_key: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
-    app_image: nilesh9890/genai-rag:latest
-    app_container_name: genai-container
-    app_port: "8000"
 
   pre_tasks:
     - name: Ensure GROQ_API_KEY is provided
@@ -17,42 +14,26 @@
 
   tasks:
     - name: Remove old container if present
-      ansible.builtin.shell: docker rm -f {{ app_container_name }} || true
-      register: remove_container
-      failed_when: false
-      changed_when: "'{{ app_container_name }}' in remove_container.stdout"
+      community.docker.docker_container:
+        name: genai-container
+        state: absent
+      become: true
 
-    - name: Pull latest image in background
-      ansible.builtin.shell: docker pull {{ app_image }}
-      async: 900
-      poll: 0
-      register: pull_job
-
-    - name: Wait for image pull to finish
-      ansible.builtin.async_status:
-        jid: "{{ pull_job.ansible_job_id }}"
-      register: pull_status
-      until: pull_status.finished
-      retries: 90
-      delay: 10
+    - name: Pull latest image
+      community.docker.docker_image:
+        name: nilesh9890/genai-rag
+        tag: latest
+        source: pull
+      become: true
 
     - name: Run container
-      ansible.builtin.shell: >
-        docker run -d
-        -p {{ app_port }}:8000
-        --name {{ app_container_name }}
-        -e "GROQ_API_KEY={{ groq_api_key }}"
-        {{ app_image }}
-      register: run_container
-
-    - name: Wait for app port to be reachable
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: "{{ app_port | int }}"
-        timeout: 60
-        delay: 2
-
-    - name: Show running container
-      ansible.builtin.shell: docker ps --filter name={{ app_container_name }}
-      register: running_container
-      changed_when: false
+      community.docker.docker_container:
+        name: genai-container
+        image: nilesh9890/genai-rag:latest
+        state: started
+        restart_policy: unless-stopped
+        published_ports:
+          - "5000:8000"
+        env:
+          GROQ_API_KEY: "{{ groq_api_key }}"
+      become: true
