@@ -42,7 +42,7 @@ textarea {
 
 .app-shell {
   height: 100vh;
-  padding: 14px 20px;
+  padding: 14px clamp(12px, 2vw, 28px);
   overflow: hidden;
   display: grid;
   grid-template-rows: auto 1fr;
@@ -50,7 +50,6 @@ textarea {
 }
 
 .app-header {
-  max-width: 1400px;
   width: 100%;
   margin: 0 auto;
   border-radius: 0;
@@ -103,7 +102,7 @@ textarea {
 }
 
 .workspace-shell {
-  max-width: 1400px;
+  width: 100%;
   height: 100%;
   margin: 0 auto;
   background: var(--shell-bg);
@@ -114,7 +113,7 @@ textarea {
 }
 
 .workspace-sidebar {
-  flex: 1 1 280px;
+  flex: 0 0 clamp(280px, 24vw, 360px);
   background: var(--sidebar-bg);
   padding: 30px;
   border-right: 1px solid var(--border);
@@ -211,7 +210,7 @@ textarea {
 }
 
 .workspace-content {
-  flex: 2 1 1000px;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   padding: 24px;
