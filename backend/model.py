@@ -102,6 +102,9 @@ class RAGService:
             raise ValueError("Upload a document before asking questions.")
 
         retrieved = self._retrieve(question)
+        if not retrieved:
+            raise ValueError("Question not found in the uploaded document.")
+
         answer = self._generate_answer(question, retrieved)
 
         return {
@@ -171,7 +174,7 @@ class RAGService:
         scored.sort(key=lambda item: item[0], reverse=True)
         if scored:
             return [chunk for _, chunk in scored[:TOP_K_RESULTS]]
-        return self.chunks[:TOP_K_RESULTS]
+        return []
 
     def _generate_answer(self, question: str, chunks: List[DocumentChunk]) -> str:
         context = "\n\n".join(
