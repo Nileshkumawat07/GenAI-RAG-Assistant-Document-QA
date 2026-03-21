@@ -4,8 +4,8 @@
 
   tasks:
 
-    - name: Remove old container
-      shell: docker rm -f genai-container || true
+    - name: Remove old container (fast & safe)
+      shell: docker rm -f genai-container 2>/dev/null || true
 
     - name: Pull latest image
       shell: docker pull nilesh9890/genai-rag:latest
@@ -19,5 +19,5 @@
         --restart unless-stopped \
         nilesh9890/genai-rag:latest
 
-    - name: Verify container
+    - name: Verify container running
       shell: docker ps | grep genai-container
