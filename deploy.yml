@@ -1,10 +1,9 @@
 ---
 - name: Deploy App
   hosts: ec2
-  become: true
   gather_facts: no
   vars:
-    groq_api_key: "{{ lookup('env', 'GROQ_API_KEY') }}"
+    groq_api_key: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
 
   pre_tasks:
     - name: Ensure GROQ_API_KEY is provided
@@ -14,14 +13,11 @@
         fail_msg: "Set GROQ_API_KEY in your shell before running this playbook."
 
   tasks:
-    - name: Stop old container
-      shell: docker stop genai-container || true
-
-    - name: Remove old container
-      shell: docker rm genai-container || true
+    - name: Remove old container forcefully
+      shell: docker rm -f genai-container || true
 
     - name: Pull latest image
       shell: docker pull nilesh9890/genai-rag:latest
 
     - name: Run container
-      shell: docker run -d -p 8000:8000 --name genai-container -e GROQ_API_KEY={{ groq_api_key }} nilesh9890/genai-rag:latest
+      shell: docker run -d -p 8000:8000 --name genai-container -e "GROQ_API_KEY={{ groq_api_key }}" nilesh9890/genai-rag:latest
