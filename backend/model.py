@@ -117,6 +117,12 @@ class RAGService:
             ],
         }
 
+    def indexed_document_count(self) -> int:
+        return len(self.documents_by_session)
+
+    def indexed_chunk_count(self) -> int:
+        return len(self.chunk_map)
+
     def _retrieve(self, question: str) -> List[DocumentChunk]:
         if self.index is None:
             return self.chunk_map[:TOP_K_RESULTS]
@@ -134,6 +140,62 @@ class RAGService:
                 results.append(self.chunk_map[idx])
 
         return results
+
+    def _get_or_load_session_document(self, session_id: str) -> Optional[SessionDocument]:
+        document = self.documents_by_session.get(session_id)
+        if document:
+            return document
+
+        session_dir = self._session_dir(session_id)
+        if not session_dir.exists():
+            return None
+
+        candidates = [path for path in session_dir.iterdir() if path.is_file()]
+        if not candidates:
+            return None
+
+        file_path = candidates[0]
+        try:
+            content = file_path.read_bytes()
+        except OSError:
+            return None
+
+        text = self._extract_text(content, file_path.name)
+        if not text.strip():
+            return None
+
+        chunk_texts = self._chunk_text(text)
+        chunks = [
+            DocumentChunk(
+                doc_id=f"{session_id}-{file_path.name}",
+                session_id=session_id,
+                filename=file_path.name,
+                text=chunk_text,
+                chunk_id=i,
+            )
+            for i, chunk_text in enumerate(chunk_texts, start=1)
+        ]
+
+        self._load_model()
+        texts = [c.text for c in chunks]
+        embeddings = self.embedding_model.encode(texts, convert_to_numpy=True)
+        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+        dim = embeddings.shape[1]
+        self.index = faiss.IndexFlatIP(dim)
+        self.index.add(embeddings.astype("float32"))
+        self.chunk_map = chunks
+
+        document = SessionDocument(
+            doc_id=f"{session_id}-{file_path.name}",
+            session_id=session_id,
+            filename=file_path.name,
+            text=text,
+            chunks=chunks,
+            file_path=file_path,
+        )
+        self.documents_by_session[session_id] = document
+        return document
 
     def _generate_answer(self, question: str, retrieved: List[DocumentChunk]) -> str:
         context = "\n\n".join(chunk.text for chunk in retrieved)
