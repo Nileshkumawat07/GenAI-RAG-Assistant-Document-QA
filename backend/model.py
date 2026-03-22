@@ -45,6 +45,19 @@ STOPWORDS = {
     "with",
 }
 
+QUERY_SYNONYMS = {
+    "summary": ["overview", "abstract", "introduction"],
+    "details": ["information", "facts", "content"],
+    "steps": ["procedure", "process", "instructions"],
+    "requirements": ["criteria", "conditions", "prerequisites"],
+    "deadline": ["due date", "last date", "closing date"],
+    "price": ["cost", "amount", "fee"],
+    "contact": ["email", "phone", "mobile", "address"],
+    "author": ["writer", "creator", "publisher"],
+    "location": ["address", "city", "place"],
+    "date": ["time", "period", "duration"],
+}
+
 
 @dataclass
 class DocumentChunk:
@@ -160,61 +173,72 @@ class RAGService:
         return sum(len(document.chunks) for document in self.documents_by_session.values())
 
     def _chunk_text(self, text: str) -> List[str]:
-        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
-        if not paragraphs:
-            paragraphs = [text]
+        normalized_text = text.replace("\r\n", "\n")
+        sections = [part.strip() for part in re.split(r"\n\s*\n", normalized_text) if part.strip()]
+        if not sections:
+            sections = [normalized_text]
 
         chunks = []
-        current = ""
+        current_lines: List[str] = []
+        current_length = 0
 
-        for paragraph in paragraphs:
-            normalized = " ".join(paragraph.split())
-            if not normalized:
+        for section in sections:
+            lines = [self._normalize_chunk_line(line) for line in section.splitlines()]
+            lines = [line for line in lines if line]
+            if not lines:
                 continue
 
-            if len(normalized) > CHUNK_SIZE:
-                if current.strip():
-                    chunks.append(current.strip())
-                    current = ""
+            for line in lines:
+                line_length = len(line) + (1 if current_lines else 0)
+                if len(line) > CHUNK_SIZE:
+                    if current_lines:
+                        chunks.append("\n".join(current_lines).strip())
+                        current_lines = []
+                        current_length = 0
+                    chunks.extend(self._split_long_line(line))
+                    continue
 
-                start = 0
-                while start < len(normalized):
-                    end = min(len(normalized), start + CHUNK_SIZE)
-                    chunk = normalized[start:end].strip()
-                    if chunk:
-                        chunks.append(chunk)
-                    if end == len(normalized):
-                        break
-                    start = max(end - CHUNK_OVERLAP, start + 1)
-                continue
+                if current_length + line_length <= CHUNK_SIZE:
+                    current_lines.append(line)
+                    current_length += line_length
+                    continue
 
-            candidate = f"{current}\n{normalized}".strip() if current else normalized
-            if len(candidate) <= CHUNK_SIZE:
-                current = candidate
-            else:
-                if current.strip():
-                    chunks.append(current.strip())
-                current = normalized
+                if current_lines:
+                    chunks.append("\n".join(current_lines).strip())
+                overlap_lines = self._tail_overlap_lines(current_lines)
+                current_lines = overlap_lines + [line]
+                current_length = sum(len(item) for item in current_lines) + max(0, len(current_lines) - 1)
 
-        if current.strip():
-            chunks.append(current.strip())
+            if current_lines:
+                chunks.append("\n".join(current_lines).strip())
+                current_lines = []
+                current_length = 0
 
-        return chunks
+        return [chunk for chunk in chunks if chunk.strip()]
 
     def _retrieve(self, question: str, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
-        question_terms = self._tokenize(question)
+        if len(chunks) <= TOP_K_RESULTS:
+            return chunks
+
+        expanded_question = self._expand_question(question)
+        question_terms = self._tokenize(expanded_question)
+        question_phrases = self._extract_query_phrases(question)
         scored = []
 
-        for chunk in chunks:
+        for index, chunk in enumerate(chunks):
             chunk_terms = self._tokenize(chunk.text)
-            score = self._score_overlap(question_terms, chunk_terms)
+            score = self._score_chunk(question, question_terms, question_phrases, chunk.text, chunk_terms)
             if score > 0:
-                scored.append((score, chunk))
+                scored.append((score, index, chunk))
 
         scored.sort(key=lambda item: item[0], reverse=True)
         if scored:
-            return [chunk for _, chunk in scored[:TOP_K_RESULTS]]
-        return []
+            top_indexes = [index for _, index, _ in scored[:TOP_K_RESULTS]]
+            selected_indexes = self._expand_with_neighbors(top_indexes, len(chunks))
+            return [chunks[index] for index in selected_indexes]
+        # Fall back to leading chunks when a question is too short or retrieval is ambiguous.
+        fallback_indexes = self._expand_with_neighbors(list(range(min(TOP_K_RESULTS, len(chunks)))), len(chunks))
+        return [chunks[index] for index in fallback_indexes]
 
     def _answer_direct_field(self, question: str, text: str) -> str | None:
         lowered = question.lower()
@@ -375,6 +399,83 @@ class RAGService:
             return 0.0
         return overlap / max(1, len(question_set))
 
+    def _score_chunk(
+        self,
+        question: str,
+        question_terms: List[str],
+        question_phrases: List[str],
+        chunk_text: str,
+        chunk_terms: List[str],
+    ) -> float:
+        overlap_score = self._score_overlap(question_terms, chunk_terms)
+
+        chunk_text_lower = chunk_text.lower()
+        question_lower = question.lower()
+        exact_question_bonus = 0.45 if question_lower and question_lower in chunk_text_lower else 0.0
+        phrase_bonus = sum(0.14 for phrase in question_phrases if phrase and phrase in chunk_text_lower)
+
+        query_numbers = re.findall(r"\d+(?:[./:-]\d+)*", question)
+        number_bonus = sum(0.18 for value in query_numbers if value in chunk_text)
+
+        query_symbols = [token for token in question.split() if any(char in token for char in "@:/._-")]
+        symbol_bonus = sum(0.2 for token in query_symbols if token.lower() in chunk_text_lower)
+
+        heading_bonus = 0.18 if self._looks_like_heading_match(question_terms, chunk_text_lower) else 0.0
+        coverage_bonus = min(0.45, len(set(question_terms) & set(chunk_terms)) * 0.06)
+        density_bonus = self._score_term_density(question_terms, chunk_terms)
+
+        return overlap_score + exact_question_bonus + phrase_bonus + number_bonus + symbol_bonus + heading_bonus + coverage_bonus + density_bonus
+
+    def _expand_question(self, question: str) -> str:
+        lowered = question.lower()
+        additions = []
+        for key, synonyms in QUERY_SYNONYMS.items():
+            if key in lowered:
+                additions.extend(synonyms)
+        if additions:
+            return f"{question} {' '.join(additions)}"
+        return question
+
+    def _extract_query_phrases(self, question: str) -> List[str]:
+        phrases = []
+        lowered = question.lower().strip()
+        if lowered:
+            phrases.append(lowered)
+
+        words = [word for word in re.split(r"\s+", lowered) if word]
+        if len(words) >= 2:
+            phrases.extend(
+                " ".join(words[index:index + 2])
+                for index in range(len(words) - 1)
+            )
+        return list(dict.fromkeys(phrases))
+
+    def _expand_with_neighbors(self, indexes: List[int], chunk_count: int) -> List[int]:
+        selected = set()
+        for index in indexes:
+            selected.add(index)
+            if index - 1 >= 0:
+                selected.add(index - 1)
+            if index + 1 < chunk_count:
+                selected.add(index + 1)
+        return sorted(selected)[: min(chunk_count, max(TOP_K_RESULTS + 2, len(indexes) * 2))]
+
+    def _score_term_density(self, question_terms: List[str], chunk_terms: List[str]) -> float:
+        if not question_terms or not chunk_terms:
+            return 0.0
+        matches = sum(1 for token in chunk_terms if token in set(question_terms))
+        density = matches / max(1, len(chunk_terms))
+        return min(0.25, density * 2.5)
+
+    def _looks_like_heading_match(self, question_terms: List[str], chunk_text_lower: str) -> bool:
+        if not question_terms:
+            return False
+        lines = [line.strip().lower() for line in chunk_text_lower.splitlines()[:4] if line.strip()]
+        if not lines:
+            return False
+        joined_head = " ".join(lines)
+        return any(term in joined_head for term in question_terms[:4])
+
     def _extract_text(self, content: bytes, filename: str) -> str:
         if filename.lower().endswith(".pdf"):
             reader = PdfReader(io.BytesIO(content))
@@ -516,3 +617,36 @@ class RAGService:
         )
         self.documents_by_session[session_id] = document
         return document
+
+    def _normalize_chunk_line(self, line: str) -> str:
+        return " ".join(line.split()).strip()
+
+    def _split_long_line(self, line: str) -> List[str]:
+        pieces = []
+        start = 0
+        while start < len(line):
+            end = min(len(line), start + CHUNK_SIZE)
+            if end < len(line):
+                split_at = line.rfind(" ", start, end)
+                if split_at > start:
+                    end = split_at
+            piece = line[start:end].strip()
+            if piece:
+                pieces.append(piece)
+            if end >= len(line):
+                break
+            start = max(end - CHUNK_OVERLAP, start + 1)
+        return pieces
+
+    def _tail_overlap_lines(self, lines: List[str]) -> List[str]:
+        if not lines:
+            return []
+        kept: List[str] = []
+        total = 0
+        for line in reversed(lines):
+            projected = total + len(line) + (1 if kept else 0)
+            if projected > CHUNK_OVERLAP:
+                break
+            kept.insert(0, line)
+            total = projected
+        return kept
