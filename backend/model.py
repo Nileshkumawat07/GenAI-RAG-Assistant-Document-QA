@@ -1,6 +1,7 @@
 import io
 import re
 import shutil
+import string
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -199,6 +200,7 @@ class RAGService:
 
     def _generate_answer(self, question: str, retrieved: List[DocumentChunk]) -> str:
         context = "\n\n".join(chunk.text for chunk in retrieved)
+        fallback_answer = self._extract_answer_from_context(question, context)
 
         prompt = f"""
 You MUST answer ONLY from the provided context.
@@ -218,9 +220,81 @@ Context:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
             )
-            return response.choices[0].message.content.strip()
+            answer = response.choices[0].message.content.strip()
+            if answer and answer.lower() != "not in document":
+                return answer
         except Exception:
-            return "Not in document."
+            pass
+
+        return fallback_answer or "Not in document."
+
+    def _extract_answer_from_context(self, question: str, context: str) -> Optional[str]:
+        if not context.strip():
+            return None
+
+        question_words = {
+            word.strip(string.punctuation).lower()
+            for word in re.split(r"\W+", question)
+            if len(word.strip(string.punctuation)) > 2
+        }
+        stop_words = {
+            "what",
+            "when",
+            "where",
+            "which",
+            "who",
+            "whom",
+            "whose",
+            "does",
+            "do",
+            "did",
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "this",
+            "that",
+            "about",
+            "document",
+            "file",
+            "please",
+            "tell",
+            "show",
+            "give",
+            "me",
+            "info",
+            "information",
+        }
+        keywords = {word for word in question_words if word not in stop_words}
+
+        candidates = [line.strip() for line in re.split(r"[\n\r]+|(?<=[.!?])\s+", context) if line.strip()]
+        if not candidates:
+            return None
+
+        scored_candidates = []
+        for candidate in candidates:
+            candidate_words = {
+                word.strip(string.punctuation).lower()
+                for word in re.split(r"\W+", candidate)
+                if word.strip(string.punctuation)
+            }
+            score = len(keywords & candidate_words)
+
+            if re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", candidate):
+                score += 3
+            if re.search(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b", candidate):
+                score += 2
+
+            if score > 0:
+                scored_candidates.append((score, len(candidate), candidate))
+
+        if not scored_candidates:
+            return None
+
+        scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+        best = scored_candidates[0][2]
+        return best.strip()
 
     def _chunk_text(self, text: str) -> List[str]:
         sentences = re.split(r'(?<=[.!?]) +', text)
