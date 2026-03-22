@@ -253,12 +253,20 @@ class RAGService:
         lower_question = question.lower().strip()
 
         patterns = []
+        strict_only = False
         if any(word in lower_question for word in ["name", "candidate", "person"]):
             patterns.extend([r"(?im)^\s*name\s*[:\-]\s*(.+)$", r"(?im)^\s*full name\s*[:\-]\s*(.+)$"])
         if any(word in lower_question for word in ["email", "mail"]):
             patterns.append(r"[\w.\-+]+@[\w.\-]+\.\w+")
+            strict_only = True
         if "phone" in lower_question or "mobile" in lower_question or "contact" in lower_question:
-            patterns.append(r"(?im)^\s*(?:phone|mobile|contact)\s*[:\-]\s*(.+)$")
+            patterns.extend(
+                [
+                    r"(?im)^\s*(?:phone|mobile|contact)\s*[:\-]\s*([+()0-9\s-]{7,})$",
+                    r"(?<!\d)(?:\+?\d[\d\s()-]{7,}\d)(?!\d)",
+                ]
+            )
+            strict_only = True
         if any(word in lower_question for word in ["role", "title", "designation", "position"]):
             patterns.extend([r"(?im)^\s*(?:role|title|designation|position)\s*[:\-]\s*(.+)$"])
         if any(word in lower_question for word in ["education", "qualification", "degree", "college", "university"]):
@@ -268,8 +276,16 @@ class RAGService:
                     r"(?im)^\s*educational background\s*[:\-]\s*(.+)$",
                 ]
             )
+            strict_only = True
         if any(word in lower_question for word in ["skill", "skills", "technology", "technologies"]):
-            patterns.extend([r"(?im)^\s*skills\s*[:\-]\s*(.+)$", r"(?im)^\s*technical skills\s*[:\-]\s*(.+)$"])
+            patterns.extend(
+                [
+                    r"(?im)^\s*skills\s*[:\-]\s*(.+)$",
+                    r"(?im)^\s*technical skills\s*[:\-]\s*(.+)$",
+                    r"(?im)^\s*core competencies\s*[:\-]\s*(.+)$",
+                ]
+            )
+            strict_only = True
 
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
@@ -277,18 +293,21 @@ class RAGService:
                 value = match.group(1) if match.groups() else match.group(0)
                 value = value.strip()
                 if value:
-                    return value
+                    return self._clean_answer_value(value)
+
+        if strict_only:
+            return None
 
         if any(word in lower_question for word in ["education", "qualification", "degree", "skills", "experience"]):
             section = self._extract_section(text, lower_question)
             if section:
-                return section
+                return self._clean_answer_value(section)
 
         for keyword, synonyms in QUERY_SYNONYMS.items():
             if keyword in lower_question or any(syn in lower_question for syn in synonyms):
                 for line in text.splitlines():
                     if keyword in line.lower():
-                        return line.strip()
+                        return self._clean_answer_value(line.strip())
 
         if "summary" in lower_question and len(text.split()) <= 120:
             return text.strip()
@@ -385,6 +404,13 @@ class RAGService:
     def _extract_answer_from_context(self, question: str, retrieved: List[DocumentChunk]) -> Optional[str]:
         combined = "\n".join(chunk.text for chunk in retrieved)
         return self._answer_direct_field(question, combined)
+
+    def _clean_answer_value(self, value: str) -> str:
+        cleaned = re.sub(r"\s+", " ", value).strip()
+        cleaned = cleaned.strip(" |;,-")
+        if cleaned.lower() in {"", "n/a", "na", "not available"}:
+            return ""
+        return cleaned
 
     def _extract_text(self, content: bytes, filename: str) -> str:
         if filename.lower().endswith(".pdf"):
