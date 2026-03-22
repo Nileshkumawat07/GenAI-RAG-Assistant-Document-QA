@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
-const API_BASE = "http://3.108.71.66:5000"
-const SESSION_STORAGE_KEY = "document_assistant_sessiocd n_id";
+const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
+const SESSION_STORAGE_KEY = "document_assistant_session_id";
 
 const apiUrl = (path) => `${API_BASE}${path}`;
 
