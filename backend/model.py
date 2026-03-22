@@ -203,7 +203,8 @@ class RAGService:
 
     def _generate_answer(self, question: str, chunks: List[DocumentChunk]) -> str:
         context = "\n\n".join(
-            f"[Source {index}] {chunk.text}" for index, chunk in enumerate(chunks, start=1)
+            f"[Source {index} | {chunk.filename} | chunk {chunk.chunk_id}]\n{chunk.text}"
+            for index, chunk in enumerate(chunks, start=1)
         )
 
         response = self.client.chat.completions.create(
@@ -216,9 +217,13 @@ class RAGService:
                         "You are a strict document question answering assistant. "
                         "Answer only from the provided document context. "
                         "If the answer is not clearly present, reply exactly: Not in document. "
-                        "Prefer exact facts and concise answers. "
-                        "Return only one direct answer sentence. "
-                        "No bullet points. "
+                        "Prefer complete, accurate answers over overly short answers. "
+                        "When the question asks for explanation, summary, steps, details, or multiple items, "
+                        "respond with clear section headings and bullet points where helpful. "
+                        "When the question asks for a short fact, answer briefly but still include the key detail. "
+                        "If the document contains multiple relevant points, include all important points supported by the context. "
+                        "Use plain text formatting only. "
+                        "Start the answer with a short heading that matches the question intent when appropriate. "
                         "Do not add outside knowledge."
                     ),
                 },
@@ -227,11 +232,13 @@ class RAGService:
                     "content": (
                         f"Question: {question}\n\n"
                         f"Document context:\n{context}\n\n"
-                        "Return exactly one direct answer grounded in the context."
+                        "Write a complete answer grounded only in the document context. "
+                        "Use headings and bullets when they improve clarity. "
+                        "Do not mention any information that is not present in the context."
                     ),
                 },
             ],
-            max_tokens=300,
+            max_tokens=700,
         )
 
         return response.choices[0].message.content.strip()

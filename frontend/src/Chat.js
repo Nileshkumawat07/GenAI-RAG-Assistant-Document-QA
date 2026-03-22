@@ -45,6 +45,88 @@ async function requestJson(path, options, fallbackMessage) {
   }
 }
 
+function renderAnswer(answer) {
+  const lines = answer.split(/\r?\n/);
+  const elements = [];
+  let listItems = [];
+  let paragraphLines = [];
+  let key = 0;
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) {
+      return;
+    }
+
+    elements.push(
+      <p key={`p-${key++}`} className="answer-paragraph">
+        {paragraphLines.join(" ")}
+      </p>
+    );
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (!listItems.length) {
+      return;
+    }
+
+    elements.push(
+      <ul key={`ul-${key++}`} className="answer-list">
+        {listItems.map((item, index) => (
+          <li key={`li-${key}-${index}`}>{item}</li>
+        ))}
+      </ul>
+    );
+    listItems = [];
+  };
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+
+    if (!line) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+
+    if (/^#{1,6}\s+/.test(line)) {
+      flushParagraph();
+      flushList();
+      elements.push(
+        <h4 key={`h-${key++}`} className="answer-heading">
+          {line.replace(/^#{1,6}\s+/, "")}
+        </h4>
+      );
+      return;
+    }
+
+    if (/^[A-Za-z][A-Za-z0-9 /&()-]{0,50}:$/.test(line)) {
+      flushParagraph();
+      flushList();
+      elements.push(
+        <h4 key={`h-${key++}`} className="answer-heading">
+          {line.slice(0, -1)}
+        </h4>
+      );
+      return;
+    }
+
+    if (/^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+      flushParagraph();
+      listItems.push(line.replace(/^[-*]\s+/, "").replace(/^\d+\.\s+/, ""));
+      return;
+    }
+
+    flushList();
+    paragraphLines.push(line);
+  });
+
+  flushParagraph();
+  flushList();
+
+  return elements.length ? elements : <p className="answer-paragraph">{answer}</p>;
+}
+
 function Chat() {
   const [sessionId] = useState(() => getSessionId());
   const [selectedFile, setSelectedFile] = useState(null);
@@ -260,7 +342,7 @@ function Chat() {
 
               <div className={`answer-box ${answer ? "has-answer" : ""}`}>
                 {answer ? (
-                  <p>{answer}</p>
+                  <div className="answer-content">{renderAnswer(answer)}</div>
                 ) : (
                   <p>Upload a document and ask a question to view the answer here.</p>
                 )}
