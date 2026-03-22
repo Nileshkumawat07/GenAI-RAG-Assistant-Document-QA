@@ -1,7 +1,6 @@
 import io
 import re
 import shutil
-import string
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -23,6 +22,8 @@ class DocumentChunk:
     filename: str
     text: str
     chunk_id: int
+    start_char: int = 0
+    end_char: int = 0
 
 
 @dataclass
@@ -135,12 +136,23 @@ class RAGService:
 
         scores, indices = self.index.search(query_embedding.astype("float32"), TOP_K_RESULTS)
 
-        results = []
-        for idx in indices[0]:
-            if 0 <= idx < len(self.chunk_map):
-                results.append(self.chunk_map[idx])
+        ranked: Dict[int, float] = {}
+        question_terms = self._question_terms(question)
 
-        return results
+        for rank, idx in enumerate(indices[0]):
+            if 0 <= idx < len(self.chunk_map):
+                ranked[idx] = float(scores[0][rank])
+
+        for idx, chunk in enumerate(self.chunk_map):
+            lexical_score = self._lexical_overlap_score(question_terms, chunk.text)
+            if lexical_score > 0:
+                ranked[idx] = max(ranked.get(idx, 0.0), lexical_score + 0.25)
+
+        if not ranked:
+            return self.chunk_map[:TOP_K_RESULTS]
+
+        ordered = sorted(ranked.items(), key=lambda item: item[1], reverse=True)
+        return [self.chunk_map[idx] for idx, _ in ordered[:TOP_K_RESULTS]]
 
     def _get_or_load_session_document(self, session_id: str) -> Optional[SessionDocument]:
         document = self.documents_by_session.get(session_id)
@@ -199,13 +211,94 @@ class RAGService:
         return document
 
     def _generate_answer(self, question: str, retrieved: List[DocumentChunk]) -> str:
-        context = "\n\n".join(chunk.text for chunk in retrieved)
+        context = self._build_context(retrieved)
         fallback_answer = self._extract_answer_from_context(question, context)
+        response_style = self._response_style(question)
+        prompt = self._build_prompt(question, context, response_style)
 
-        prompt = f"""
-You MUST answer ONLY from the provided context.
-If the answer is NOT clearly present, reply exactly: Not in document.
-DO NOT guess. DO NOT add extra info.
+        try:
+            response = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a document QA assistant. "
+                            "Use only the provided document context. "
+                            "Never invent facts. "
+                            "If the context does not contain the answer, reply exactly: Not in document."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                top_p=0.9,
+            )
+            answer = response.choices[0].message.content.strip()
+            normalized = answer.lower().strip().rstrip(".")
+            if answer and normalized != "not in document":
+                return self._clean_answer(answer)
+        except Exception:
+            pass
+
+        return self._clean_answer(fallback_answer) if fallback_answer else "Not in document."
+
+    def _extract_answer_from_context(self, question: str, context: str) -> Optional[str]:
+        if not context.strip():
+            return None
+
+        keywords = self._question_terms(question)
+        candidates = [line.strip() for line in re.split(r"[\n\r]+|(?<=[.!?])\s+", context) if line.strip()]
+        if not candidates:
+            return None
+
+        scored_candidates = []
+        for candidate in candidates:
+            score = self._lexical_overlap_score(keywords, candidate)
+
+            if re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", candidate):
+                score += 3
+            if re.search(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b", candidate):
+                score += 2
+
+            if score > 0:
+                scored_candidates.append((score, len(candidate), candidate))
+
+        if not scored_candidates:
+            return None
+
+        scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+        best = scored_candidates[0][2]
+        return best.strip()
+
+    def _build_context(self, retrieved: List[DocumentChunk]) -> str:
+        if not retrieved:
+            return ""
+
+        parts = []
+        for chunk in retrieved:
+            parts.append(
+                f"[Chunk {chunk.chunk_id} | {chunk.filename}]\n{chunk.text.strip()}"
+            )
+        return "\n\n".join(parts)
+
+    def _build_prompt(self, question: str, context: str, response_style: str) -> str:
+        return f"""
+Answer the question using only the context below.
+If the answer is not clearly present, reply exactly: Not in document.
+Do not use outside knowledge.
+Do not add disclaimers, filler, or reasoning steps.
+
+Formatting rules:
+- Keep the answer grounded in the document.
+- If there are multiple facts, use bullet points.
+- If the question asks for steps, use a numbered list.
+- If the question asks for contact details, return each field on its own line.
+- If the question asks for a summary, write a short heading and then 3-6 bullets.
+- If the answer is a single fact, answer in one short sentence.
+
+Desired style:
+{response_style}
 
 Question:
 {question}
@@ -214,29 +307,17 @@ Context:
 {context}
 """
 
-        try:
-            response = self.client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-            )
-            answer = response.choices[0].message.content.strip()
-            if answer and answer.lower() != "not in document":
-                return answer
-        except Exception:
-            pass
+    def _response_style(self, question: str) -> str:
+        q = question.lower()
+        if any(word in q for word in ["how to", "steps", "process", "procedure", "instructions", "guide"]):
+            return "Provide a numbered step-by-step answer."
+        if any(word in q for word in ["list", "skills", "names", "emails", "phone", "contact", "details"]):
+            return "Provide a clean bullet list or field-by-field answer."
+        if any(word in q for word in ["summary", "summarize", "overview"]):
+            return "Provide a short summary with bullets."
+        return "Provide the most direct factual answer, using bullets only when it improves readability."
 
-        return fallback_answer or "Not in document."
-
-    def _extract_answer_from_context(self, question: str, context: str) -> Optional[str]:
-        if not context.strip():
-            return None
-
-        question_words = {
-            word.strip(string.punctuation).lower()
-            for word in re.split(r"\W+", question)
-            if len(word.strip(string.punctuation)) > 2
-        }
+    def _question_terms(self, question: str) -> set[str]:
         stop_words = {
             "what",
             "when",
@@ -265,54 +346,71 @@ Context:
             "me",
             "info",
             "information",
+            "are",
+            "is",
+            "was",
+            "were",
+            "can",
+            "could",
+            "would",
+            "should",
+            "list",
+            "explain",
         }
-        keywords = {word for word in question_words if word not in stop_words}
+        terms = set()
+        for word in re.split(r"\W+", question.lower()):
+            word = word.strip()
+            if len(word) > 2 and word not in stop_words:
+                terms.add(word)
+        return terms
 
-        candidates = [line.strip() for line in re.split(r"[\n\r]+|(?<=[.!?])\s+", context) if line.strip()]
-        if not candidates:
-            return None
+    def _lexical_overlap_score(self, terms: set[str], text: str) -> float:
+        if not terms:
+            return 0.0
 
-        scored_candidates = []
-        for candidate in candidates:
-            candidate_words = {
-                word.strip(string.punctuation).lower()
-                for word in re.split(r"\W+", candidate)
-                if word.strip(string.punctuation)
-            }
-            score = len(keywords & candidate_words)
+        candidate_words = {
+            word.strip().lower()
+            for word in re.split(r"\W+", text)
+            if len(word.strip()) > 2
+        }
+        overlap = len(terms & candidate_words)
+        if not overlap:
+            return 0.0
 
-            if re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", candidate):
-                score += 3
-            if re.search(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b", candidate):
-                score += 2
+        return overlap / max(len(terms), 1)
 
-            if score > 0:
-                scored_candidates.append((score, len(candidate), candidate))
-
-        if not scored_candidates:
-            return None
-
-        scored_candidates.sort(key=lambda item: (-item[0], item[1]))
-        best = scored_candidates[0][2]
-        return best.strip()
+    def _clean_answer(self, answer: str) -> str:
+        cleaned = answer.replace("\r\n", "\n").strip()
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+        return cleaned
 
     def _chunk_text(self, text: str) -> List[str]:
-        sentences = re.split(r'(?<=[.!?]) +', text)
-
-        chunks = []
-        chunk = ""
+        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+        chunks: List[str] = []
+        current = ""
 
         for sentence in sentences:
-            if len(chunk) + len(sentence) < CHUNK_SIZE:
-                chunk += " " + sentence
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            if len(current) + len(sentence) + 1 <= CHUNK_SIZE:
+                current = f"{current} {sentence}".strip()
             else:
-                chunks.append(chunk.strip())
-                chunk = sentence
+                if current:
+                    chunks.append(current.strip())
+                if CHUNK_OVERLAP > 0 and chunks:
+                    overlap_source = chunks[-1]
+                    overlap = overlap_source[-CHUNK_OVERLAP:]
+                    current = f"{overlap} {sentence}".strip()
+                else:
+                    current = sentence
 
-        if chunk:
-            chunks.append(chunk.strip())
+        if current:
+            chunks.append(current.strip())
 
-        return chunks
+        return [chunk for chunk in chunks if chunk]
 
     def _extract_text(self, content: bytes, filename: str) -> str:
         if filename.lower().endswith(".pdf"):
