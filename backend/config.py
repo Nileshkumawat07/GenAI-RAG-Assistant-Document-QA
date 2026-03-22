@@ -10,7 +10,7 @@ load_dotenv(BASE_DIR / ".env")  # Load values from `backend/.env`.
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()  # API key for the AI model.
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()  # Model name used to create answers.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192").strip()  # Model name used to create answers.
 
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "700"))  # Size of each text chunk.
 
