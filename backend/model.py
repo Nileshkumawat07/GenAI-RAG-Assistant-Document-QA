@@ -3,60 +3,16 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
+import faiss
+import numpy as np
 from fastapi import UploadFile
 from openai import OpenAI
 from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
 
 from config import CHUNK_OVERLAP, CHUNK_SIZE, DOCUMENTS_DIR, GROQ_API_KEY, GROQ_MODEL, TOP_K_RESULTS
-
-
-WORD_RE = re.compile(r"\b[a-zA-Z0-9]+\b")
-STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "how",
-    "in",
-    "is",
-    "it",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "this",
-    "to",
-    "was",
-    "what",
-    "when",
-    "where",
-    "which",
-    "who",
-    "why",
-    "with",
-}
-
-QUERY_SYNONYMS = {
-    "summary": ["overview", "abstract", "introduction"],
-    "details": ["information", "facts", "content"],
-    "steps": ["procedure", "process", "instructions"],
-    "requirements": ["criteria", "conditions", "prerequisites"],
-    "deadline": ["due date", "last date", "closing date"],
-    "price": ["cost", "amount", "fee"],
-    "contact": ["email", "phone", "mobile", "address"],
-    "author": ["writer", "creator", "publisher"],
-    "location": ["address", "city", "place"],
-    "date": ["time", "period", "duration"],
-}
 
 
 @dataclass
@@ -66,6 +22,8 @@ class DocumentChunk:
     filename: str
     text: str
     chunk_id: int
+    start_char: int = 0
+    end_char: int = 0
 
 
 @dataclass
@@ -81,88 +39,83 @@ class SessionDocument:
 class RAGService:
     def __init__(self):
         self.documents_by_session: Dict[str, SessionDocument] = {}
+
         if not GROQ_API_KEY or GROQ_API_KEY == "<SECRET>":
-            raise ValueError(
-                "Set GROQ_API_KEY in the container environment or backend/.env before starting the backend."
-            )
+            raise ValueError("Set GROQ_API_KEY")
+
         DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
         self.client = OpenAI(
             api_key=GROQ_API_KEY,
             base_url="https://api.groq.com/openai/v1",
         )
 
+        self.embedding_model: Optional[SentenceTransformer] = None
+        self.index = None
+        self.chunk_map: List[DocumentChunk] = []
+
+    def _load_model(self):
+        if self.embedding_model is None:
+            self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
     async def ingest(self, upload: UploadFile, session_id: str):
         content = await upload.read()
         filename = self._sanitize_filename(upload.filename or "document.txt")
+
         session_dir = self._session_dir(session_id)
         self._reset_session_storage(session_dir)
+
         file_path = session_dir / filename
         file_path.write_bytes(content)
 
         text = self._extract_text(content, filename)
-
         if not text.strip():
-            if file_path.exists():
-                file_path.unlink()
-            raise ValueError("No readable text found in the uploaded document.")
+            raise ValueError("No readable text found.")
 
         doc_id = f"{session_id}-{filename}"
         chunk_texts = self._chunk_text(text)
+
         chunks = [
-            DocumentChunk(
-                doc_id=doc_id,
-                session_id=session_id,
-                filename=filename,
-                text=chunk_text,
-                chunk_id=index,
-            )
-            for index, chunk_text in enumerate(chunk_texts, start=1)
+            DocumentChunk(doc_id, session_id, filename, chunk_text, i)
+            for i, chunk_text in enumerate(chunk_texts, start=1)
         ]
 
+        self._load_model()
+
+        texts = [c.text for c in chunks]
+        embeddings = self.embedding_model.encode(texts, convert_to_numpy=True)
+        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+        dim = embeddings.shape[1]
+        self.index = faiss.IndexFlatIP(dim)  # cosine similarity
+        self.index.add(embeddings.astype("float32"))
+
+        self.chunk_map = chunks
+
         self.documents_by_session[session_id] = SessionDocument(
-            doc_id=doc_id,
-            session_id=session_id,
-            filename=filename,
-            text=text,
-            chunks=chunks,
-            file_path=file_path,
+            doc_id, session_id, filename, text, chunks, file_path
         )
 
-        return {"chunks": len(chunks), "filename": filename, "session_id": session_id}
+        return {"chunks": len(chunks), "filename": filename}
 
     def query(self, question: str, session_id: str):
         document = self._get_or_load_session_document(session_id)
         if not document:
-            raise ValueError("Upload a document before asking questions.")
+            raise ValueError("Upload document first.")
 
-        direct_answer = self._answer_direct_field(question, document.text)
-        if direct_answer:
-            return {
-                "answer": direct_answer,
-                "sources": [
-                    {
-                        "filename": document.filename,
-                        "chunk_id": 1,
-                        "excerpt": document.text[:220],
-                    }
-                ],
-            }
+        retrieved = self._retrieve(question)
 
-        retrieved = self._retrieve(question, document.chunks)
-        if not retrieved:
-            raise ValueError("Invalid question. Refine the wording if you want a more specific answer.")
-
-        answer = self._normalize_answer_format(self._generate_answer(question, retrieved))
+        answer = self._generate_answer(question, retrieved)
 
         return {
             "answer": answer,
             "sources": [
                 {
-                    "filename": chunk.filename,
-                    "chunk_id": chunk.chunk_id,
-                    "excerpt": chunk.text[:220],
+                    "filename": c.filename,
+                    "chunk_id": c.chunk_id,
+                    "excerpt": c.text[:200],
                 }
-                for chunk in retrieved
+                for c in retrieved
             ],
         }
 
@@ -170,541 +123,84 @@ class RAGService:
         return len(self.documents_by_session)
 
     def indexed_chunk_count(self) -> int:
-        return sum(len(document.chunks) for document in self.documents_by_session.values())
+        return len(self.chunk_map)
 
-    def _chunk_text(self, text: str) -> List[str]:
-        normalized_text = text.replace("\r\n", "\n")
-        sections = [part.strip() for part in re.split(r"\n\s*\n", normalized_text) if part.strip()]
-        if not sections:
-            sections = [normalized_text]
+    def _retrieve(self, question: str) -> List[DocumentChunk]:
+        if self.index is None:
+            return self.chunk_map[:TOP_K_RESULTS]
 
-        chunks = []
-        current_lines: List[str] = []
-        current_length = 0
+        self._load_model()
 
-        for section in sections:
-            lines = [self._normalize_chunk_line(line) for line in section.splitlines()]
-            lines = [line for line in lines if line]
-            if not lines:
-                continue
+        query_embedding = self.embedding_model.encode([question], convert_to_numpy=True)
+        query_embedding = query_embedding / np.linalg.norm(query_embedding, axis=1, keepdims=True)
 
-            for line in lines:
-                line_length = len(line) + (1 if current_lines else 0)
-                if len(line) > CHUNK_SIZE:
-                    if current_lines:
-                        chunks.append("\n".join(current_lines).strip())
-                        current_lines = []
-                        current_length = 0
-                    chunks.extend(self._split_long_line(line))
-                    continue
+        scores, indices = self.index.search(query_embedding.astype("float32"), TOP_K_RESULTS)
 
-                if current_length + line_length <= CHUNK_SIZE:
-                    current_lines.append(line)
-                    current_length += line_length
-                    continue
+        ranked: Dict[int, float] = {}
+        question_terms = self._question_terms(question)
 
-                if current_lines:
-                    chunks.append("\n".join(current_lines).strip())
-                overlap_lines = self._tail_overlap_lines(current_lines)
-                current_lines = overlap_lines + [line]
-                current_length = sum(len(item) for item in current_lines) + max(0, len(current_lines) - 1)
+        for rank, idx in enumerate(indices[0]):
+            if 0 <= idx < len(self.chunk_map):
+                ranked[idx] = float(scores[0][rank])
 
-            if current_lines:
-                chunks.append("\n".join(current_lines).strip())
-                current_lines = []
-                current_length = 0
+        for idx, chunk in enumerate(self.chunk_map):
+            lexical_score = self._lexical_overlap_score(question_terms, chunk.text)
+            if lexical_score > 0:
+                ranked[idx] = max(ranked.get(idx, 0.0), lexical_score + 0.25)
 
-        return [chunk for chunk in chunks if chunk.strip()]
+        if not ranked:
+            return self.chunk_map[:TOP_K_RESULTS]
 
-    def _retrieve(self, question: str, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
-        if len(chunks) <= TOP_K_RESULTS:
-            return chunks
+        ordered = sorted(ranked.items(), key=lambda item: item[1], reverse=True)
+        return [self.chunk_map[idx] for idx, _ in ordered[:TOP_K_RESULTS]]
 
-        expanded_question = self._expand_question(question)
-        question_terms = self._tokenize(expanded_question)
-        question_phrases = self._extract_query_phrases(question)
-        scored = []
-
-        for index, chunk in enumerate(chunks):
-            chunk_terms = self._tokenize(chunk.text)
-            score = self._score_chunk(question, question_terms, question_phrases, chunk.text, chunk_terms)
-            if score > 0:
-                scored.append((score, index, chunk))
-
-        scored.sort(key=lambda item: item[0], reverse=True)
-        if scored:
-            top_indexes = [index for _, index, _ in scored[:TOP_K_RESULTS]]
-            selected_indexes = self._expand_with_neighbors(top_indexes, len(chunks))
-            return [chunks[index] for index in selected_indexes]
-        # Fall back to leading chunks when a question is too short or retrieval is ambiguous.
-        fallback_indexes = self._expand_with_neighbors(list(range(min(TOP_K_RESULTS, len(chunks)))), len(chunks))
-        return [chunks[index] for index in fallback_indexes]
-
-    def _answer_direct_field(self, question: str, text: str) -> str | None:
-        lowered = question.lower()
-
-        field_extractors = [
-            (
-                {"email", "mail"},
-                "Email Address",
-                self._extract_email(text),
-            ),
-            (
-                {"phone", "mobile", "contact", "number"},
-                "Contact Number",
-                self._extract_phone(text),
-            ),
-            (
-                {"linkedin"},
-                "LinkedIn Profile",
-                self._extract_link(text, "linkedin"),
-            ),
-            (
-                {"github"},
-                "GitHub Profile",
-                self._extract_link(text, "github"),
-            ),
-            (
-                {"portfolio", "website", "site"},
-                "Website",
-                self._extract_link(text, None),
-            ),
-            (
-                {"name"},
-                "Candidate Name",
-                self._extract_name(text),
-            ),
-            (
-                {"address"},
-                "Address",
-                self._extract_address(text),
-            ),
-            (
-                {"location", "city"},
-                "Location",
-                self._extract_location(text),
-            ),
-        ]
-
-        for keywords, label, value in field_extractors:
-            if any(keyword in lowered for keyword in keywords):
-                if not value:
-                    return "Not in document."
-                return f"{label}:\n{value}"
-
-        return None
-
-    def _generate_answer(self, question: str, chunks: List[DocumentChunk]) -> str:
-        context = "\n\n".join(
-            f"[Source {index} | {chunk.filename} | chunk {chunk.chunk_id}]\n{chunk.text}"
-            for index, chunk in enumerate(chunks, start=1)
-        )
-
-        response = self.client.chat.completions.create(
-            model=GROQ_MODEL,
-            temperature=0,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a strict document question answering assistant. "
-                        "Answer only from the provided document context. "
-                        "If the answer is not clearly present, reply exactly: Not in document. "
-                        "Prefer complete, accurate answers over overly short answers. "
-                        "Write in a professional, neat, business-style format. "
-                        "Do not use markdown syntax of any kind. "
-                        "Do not use asterisks, double asterisks, hash headings, underscores, or backticks. "
-                        "Use plain text only. "
-                        "When the answer needs structure, use short title-style headings ending with a colon, "
-                        "followed by clean sentences or numbered points. "
-                        "When the question asks for explanation, summary, details, qualifications, education, skills, "
-                        "experience, or multiple items, include all important points supported by the context. "
-                        "When the document contains multiple records such as education entries, jobs, projects, or certifications, "
-                        "separate them clearly. "
-                        "Give each record its own numbered subsection or title. "
-                        "Keep the details for one record together under that record only. "
-                        "Do not merge details from different records into the same bullet or same paragraph. "
-                        "For education answers, present each degree or diploma separately with its own institution, duration, "
-                        "location, affiliation, and any other available details. "
-                        "When the question asks for a short fact, answer briefly but still include the key detail. "
-                        "Keep the language clear, polished, and professional. "
-                        "Do not add outside knowledge."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Question: {question}\n\n"
-                        f"Document context:\n{context}\n\n"
-                        "Write a complete answer grounded only in the document context. "
-                        "Use a polished plain-text format. "
-                        "If helpful, format the answer like this:\n"
-                        "Answer Summary:\n"
-                        "...\n\n"
-                        "Details:\n"
-                        "1. Record Name:\n"
-                        "Institution: ...\n"
-                        "Duration: ...\n"
-                        "Location: ...\n\n"
-                        "2. Record Name:\n"
-                        "Institution: ...\n"
-                        "Duration: ...\n"
-                        "Location: ...\n\n"
-                        "If there are multiple education items or other records, create a separate numbered block for each one. "
-                        "Do not mix the details of one record with another record. "
-                        "Never use markdown symbols such as **, *, #, _, or backticks. "
-                        "Do not mention any information that is not present in the context."
-                    ),
-                },
-            ],
-            max_tokens=700,
-        )
-
-        return response.choices[0].message.content.strip()
-
-    def _normalize_answer_format(self, answer: str) -> str:
-        normalized = answer.replace("\r\n", "\n").strip()
-        labels = [
-            "Institution",
-            "Duration",
-            "Location",
-            "Affiliation",
-            "Email",
-            "Email Address",
-            "Contact",
-            "Contact Number",
-            "Phone",
-            "Mobile",
-            "LinkedIn",
-            "GitHub",
-            "Website",
-            "Name",
-            "Candidate Name",
-        ]
-        normalized = re.sub(r"\s+(\d+\.\s+[^\n:]+:)", r"\n\n\1", normalized)
-        for label in labels:
-            normalized = re.sub(rf"\s+({re.escape(label)}:)", r"\n\1", normalized)
-        normalized = re.sub(r"\n{3,}", "\n\n", normalized)
-        return normalized.strip()
-
-    def _tokenize(self, text: str) -> List[str]:
-        return [
-            token
-            for token in (match.group(0).lower() for match in WORD_RE.finditer(text))
-            if token not in STOPWORDS
-        ]
-
-    def _score_overlap(self, question_terms: List[str], chunk_terms: List[str]) -> float:
-        if not question_terms or not chunk_terms:
-            return 0.0
-        question_set = set(question_terms)
-        chunk_set = set(chunk_terms)
-        overlap = len(question_set & chunk_set)
-        if overlap == 0:
-            return 0.0
-        return overlap / max(1, len(question_set))
-
-    def _score_chunk(
-        self,
-        question: str,
-        question_terms: List[str],
-        question_phrases: List[str],
-        chunk_text: str,
-        chunk_terms: List[str],
-    ) -> float:
-        overlap_score = self._score_overlap(question_terms, chunk_terms)
-
-        chunk_text_lower = chunk_text.lower()
-        question_lower = question.lower()
-        exact_question_bonus = 0.45 if question_lower and question_lower in chunk_text_lower else 0.0
-        phrase_bonus = sum(0.14 for phrase in question_phrases if phrase and phrase in chunk_text_lower)
-
-        query_numbers = re.findall(r"\d+(?:[./:-]\d+)*", question)
-        number_bonus = sum(0.18 for value in query_numbers if value in chunk_text)
-
-        query_symbols = [token for token in question.split() if any(char in token for char in "@:/._-")]
-        symbol_bonus = sum(0.2 for token in query_symbols if token.lower() in chunk_text_lower)
-
-        heading_bonus = 0.18 if self._looks_like_heading_match(question_terms, chunk_text_lower) else 0.0
-        coverage_bonus = min(0.45, len(set(question_terms) & set(chunk_terms)) * 0.06)
-        density_bonus = self._score_term_density(question_terms, chunk_terms)
-
-        return overlap_score + exact_question_bonus + phrase_bonus + number_bonus + symbol_bonus + heading_bonus + coverage_bonus + density_bonus
-
-    def _expand_question(self, question: str) -> str:
-        lowered = question.lower()
-        additions = []
-        for key, synonyms in QUERY_SYNONYMS.items():
-            if key in lowered:
-                additions.extend(synonyms)
-        if additions:
-            return f"{question} {' '.join(additions)}"
-        return question
-
-    def _extract_query_phrases(self, question: str) -> List[str]:
-        phrases = []
-        lowered = question.lower().strip()
-        if lowered:
-            phrases.append(lowered)
-
-        words = [word for word in re.split(r"\s+", lowered) if word]
-        if len(words) >= 2:
-            phrases.extend(
-                " ".join(words[index:index + 2])
-                for index in range(len(words) - 1)
-            )
-        return list(dict.fromkeys(phrases))
-
-    def _expand_with_neighbors(self, indexes: List[int], chunk_count: int) -> List[int]:
-        selected = set()
-        for index in indexes:
-            selected.add(index)
-            if index - 1 >= 0:
-                selected.add(index - 1)
-            if index + 1 < chunk_count:
-                selected.add(index + 1)
-        return sorted(selected)[: min(chunk_count, max(TOP_K_RESULTS + 2, len(indexes) * 2))]
-
-    def _score_term_density(self, question_terms: List[str], chunk_terms: List[str]) -> float:
-        if not question_terms or not chunk_terms:
-            return 0.0
-        matches = sum(1 for token in chunk_terms if token in set(question_terms))
-        density = matches / max(1, len(chunk_terms))
-        return min(0.25, density * 2.5)
-
-    def _looks_like_heading_match(self, question_terms: List[str], chunk_text_lower: str) -> bool:
-        if not question_terms:
-            return False
-        lines = [line.strip().lower() for line in chunk_text_lower.splitlines()[:4] if line.strip()]
-        if not lines:
-            return False
-        joined_head = " ".join(lines)
-        return any(term in joined_head for term in question_terms[:4])
-
-    def _extract_text(self, content: bytes, filename: str) -> str:
-        if filename.lower().endswith(".pdf"):
-            reader = PdfReader(io.BytesIO(content))
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
-        return content.decode("utf-8", errors="ignore")
-
-    def _extract_email(self, text: str) -> str | None:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        extracted_name = self._extract_name(text)
-        name_tokens = self._name_tokens(extracted_name)
-
-        # Prefer lines near the top of the document or lines explicitly mentioning email.
-        prioritized_lines = []
-        prioritized_lines.extend(lines[:12])
-        prioritized_lines.extend(
-            line for line in lines if any(keyword in line.lower() for keyword in ("email", "mail", "@"))
-        )
-
-        candidates = []
-        for line in prioritized_lines:
-            normalized_line = self._normalize_inline_contact_text(line)
-            candidates.extend(re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", normalized_line))
-
-        for candidate in candidates:
-            cleaned = candidate.strip(".,;:|")
-            cleaned = self._refine_email_candidate(cleaned, name_tokens)
-            if self._is_valid_email(cleaned):
-                return cleaned
-
-        return None
-
-    def _extract_phone(self, text: str) -> str | None:
-        match = re.search(r"(?<!\d)(?:\+?\d[\d\s().-]{8,}\d)", text)
-        return match.group(0).strip() if match else None
-
-    def _extract_link(self, text: str, keyword: str | None) -> str | None:
-        matches = re.findall(r"(https?://[^\s]+|www\.[^\s]+|[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[^\s]+)", text)
-        cleaned_matches = [match.rstrip(".,);]") for match in matches]
-        if keyword:
-            for match in cleaned_matches:
-                if keyword.lower() in match.lower():
-                    return match
-            return None
-        return cleaned_matches[0] if cleaned_matches else None
-
-    def _extract_name(self, text: str) -> str | None:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        for line in lines[:12]:
-            if "resume" in line.lower():
-                candidate = line.replace("Resume", "").replace("resume", "").strip(" -|:")
-                if candidate:
-                    return candidate
-            if re.fullmatch(r"[A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+){1,4}", line):
-                return line
-        return None
-
-    def _extract_location(self, text: str) -> str | None:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        top_lines = lines[:8]
-
-        for line in top_lines:
-            normalized = self._normalize_inline_contact_text(line)
-            location = self._extract_location_from_line(normalized)
-            if location:
-                return location
-
-        for index, line in enumerate(lines):
-            if "location" in line.lower():
-                parts = line.split(":", 1)
-                if len(parts) == 2 and parts[1].strip():
-                    return parts[1].strip()
-                if index + 1 < len(lines):
-                    return lines[index + 1]
-
-        return None
-
-    def _extract_address(self, text: str) -> str | None:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        for index, line in enumerate(lines):
-            lowered = line.lower()
-            if "address" in lowered:
-                parts = line.split(":", 1)
-                if len(parts) == 2 and parts[1].strip():
-                    return parts[1].strip()
-                if index + 1 < len(lines):
-                    next_line = lines[index + 1].strip()
-                    if next_line:
-                        return next_line
-
-        for line in lines[:8]:
-            street_match = re.search(
-                r"\b\d{1,5}\s+[A-Za-z0-9., -]+(?:road|rd|street|st|lane|ln|avenue|ave|sector|block)\b",
-                line,
-                flags=re.IGNORECASE,
-            )
-            if street_match:
-                return street_match.group(0).strip()
-
-        return None
-
-    def _normalize_inline_contact_text(self, text: str) -> str:
-        normalized = text
-        normalized = re.sub(r"\s*@\s*", "@", normalized)
-        normalized = re.sub(r"\s*\.\s*", ".", normalized)
-        normalized = re.sub(r"\s+", " ", normalized)
-        return normalized
-
-    def _is_valid_email(self, email: str) -> bool:
-        local_part, _, domain = email.partition("@")
-        if not local_part or not domain:
-            return False
-        if ".." in email:
-            return False
-        if domain.startswith(".") or domain.endswith("."):
-            return False
-        if "." not in domain:
-            return False
-        return True
-
-    def _refine_email_candidate(self, email: str, name_tokens: List[str]) -> str:
-        local_part, separator, domain = email.partition("@")
-        if not separator:
-            return email
-
-        variants = [local_part]
-        for trim in range(1, min(4, len(local_part))):
-            variants.append(local_part[trim:])
-
-        best_local = local_part
-        best_score = -1
-        for variant in variants:
-            score = 0
-            variant_lower = variant.lower()
-            for token in name_tokens:
-                if token in variant_lower:
-                    score += len(token)
-            if variant_lower.startswith(tuple(name_tokens)):
-                score += 2
-            if score > best_score or (score == best_score and len(variant) < len(best_local)):
-                best_local = variant
-                best_score = score
-
-        return f"{best_local}@{domain}"
-
-    def _name_tokens(self, name: str | None) -> List[str]:
-        if not name:
-            return []
-        return [
-            token.lower()
-            for token in re.findall(r"[A-Za-z]+", name)
-            if len(token) >= 4
-        ]
-
-    def _extract_location_from_line(self, line: str) -> str | None:
-        for separator in ("|", "/", ";"):
-            parts = [part.strip() for part in line.split(separator) if part.strip()]
-            for part in parts:
-                if self._looks_like_location_value(part):
-                    return part
-
-        comma_groups = [part.strip() for part in line.split("|") if part.strip()]
-        for group in comma_groups:
-            if self._looks_like_location_value(group):
-                return group
-
-        return None
-
-    def _looks_like_location_value(self, value: str) -> bool:
-        lowered = value.lower()
-        if "@" in value or "linkedin" in lowered or "github" in lowered or "http" in lowered:
-            return False
-        if re.search(r"\d{5,}", value):
-            return False
-        location_pattern = re.fullmatch(
-            r"[A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)*(?:,\s*[A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)*){1,2}",
-            value,
-        )
-        return bool(location_pattern)
-
-    def _session_dir(self, session_id: str) -> Path:
-        return DOCUMENTS_DIR / session_id
-
-    def _reset_session_storage(self, session_dir: Path) -> None:
-        if session_dir.exists():
-            shutil.rmtree(session_dir)
-        session_dir.mkdir(parents=True, exist_ok=True)
-
-    def _sanitize_filename(self, filename: str) -> str:
-        cleaned = Path(filename).name.strip()
-        cleaned = re.sub(r"[^A-Za-z0-9._ -]", "_", cleaned)
-        return cleaned or "document.txt"
-
-    def _get_or_load_session_document(self, session_id: str) -> SessionDocument | None:
-        existing = self.documents_by_session.get(session_id)
-        if existing:
-            return existing
+    def _get_or_load_session_document(self, session_id: str) -> Optional[SessionDocument]:
+        document = self.documents_by_session.get(session_id)
+        if document:
+            return document
 
         session_dir = self._session_dir(session_id)
         if not session_dir.exists():
             return None
 
-        files = [path for path in session_dir.iterdir() if path.is_file()]
-        if not files:
+        candidates = [path for path in session_dir.iterdir() if path.is_file()]
+        if not candidates:
             return None
 
-        file_path = max(files, key=lambda path: path.stat().st_mtime)
-        content = file_path.read_bytes()
+        file_path = candidates[0]
+        try:
+            content = file_path.read_bytes()
+        except OSError:
+            return None
+
         text = self._extract_text(content, file_path.name)
         if not text.strip():
             return None
 
-        doc_id = f"{session_id}-{file_path.name}"
+        chunk_texts = self._chunk_text(text)
         chunks = [
             DocumentChunk(
-                doc_id=doc_id,
+                doc_id=f"{session_id}-{file_path.name}",
                 session_id=session_id,
                 filename=file_path.name,
                 text=chunk_text,
-                chunk_id=index,
+                chunk_id=i,
             )
-            for index, chunk_text in enumerate(self._chunk_text(text), start=1)
+            for i, chunk_text in enumerate(chunk_texts, start=1)
         ]
+
+        self._load_model()
+        texts = [c.text for c in chunks]
+        embeddings = self.embedding_model.encode(texts, convert_to_numpy=True)
+        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+        dim = embeddings.shape[1]
+        self.index = faiss.IndexFlatIP(dim)
+        self.index.add(embeddings.astype("float32"))
+        self.chunk_map = chunks
+
         document = SessionDocument(
-            doc_id=doc_id,
+            doc_id=f"{session_id}-{file_path.name}",
             session_id=session_id,
             filename=file_path.name,
             text=text,
@@ -714,35 +210,223 @@ class RAGService:
         self.documents_by_session[session_id] = document
         return document
 
-    def _normalize_chunk_line(self, line: str) -> str:
-        return " ".join(line.split()).strip()
+    def _generate_answer(self, question: str, retrieved: List[DocumentChunk]) -> str:
+        context = self._build_context(retrieved)
+        fallback_answer = self._extract_answer_from_context(question, context)
+        response_style = self._response_style(question)
+        prompt = self._build_prompt(question, context, response_style)
 
-    def _split_long_line(self, line: str) -> List[str]:
-        pieces = []
-        start = 0
-        while start < len(line):
-            end = min(len(line), start + CHUNK_SIZE)
-            if end < len(line):
-                split_at = line.rfind(" ", start, end)
-                if split_at > start:
-                    end = split_at
-            piece = line[start:end].strip()
-            if piece:
-                pieces.append(piece)
-            if end >= len(line):
-                break
-            start = max(end - CHUNK_OVERLAP, start + 1)
-        return pieces
+        try:
+            response = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a document QA assistant. "
+                            "Use only the provided document context. "
+                            "Never invent facts. "
+                            "If the context does not contain the answer, reply exactly: Not in document."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                top_p=0.9,
+            )
+            answer = response.choices[0].message.content.strip()
+            normalized = answer.lower().strip().rstrip(".")
+            if answer and normalized != "not in document":
+                return self._clean_answer(answer)
+        except Exception:
+            pass
 
-    def _tail_overlap_lines(self, lines: List[str]) -> List[str]:
-        if not lines:
-            return []
-        kept: List[str] = []
-        total = 0
-        for line in reversed(lines):
-            projected = total + len(line) + (1 if kept else 0)
-            if projected > CHUNK_OVERLAP:
-                break
-            kept.insert(0, line)
-            total = projected
-        return kept
+        return self._clean_answer(fallback_answer) if fallback_answer else "Not in document."
+
+    def _extract_answer_from_context(self, question: str, context: str) -> Optional[str]:
+        if not context.strip():
+            return None
+
+        keywords = self._question_terms(question)
+        candidates = [line.strip() for line in re.split(r"[\n\r]+|(?<=[.!?])\s+", context) if line.strip()]
+        if not candidates:
+            return None
+
+        scored_candidates = []
+        for candidate in candidates:
+            score = self._lexical_overlap_score(keywords, candidate)
+
+            if re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", candidate):
+                score += 3
+            if re.search(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b", candidate):
+                score += 2
+
+            if score > 0:
+                scored_candidates.append((score, len(candidate), candidate))
+
+        if not scored_candidates:
+            return None
+
+        scored_candidates.sort(key=lambda item: (-item[0], item[1]))
+        best = scored_candidates[0][2]
+        return best.strip()
+
+    def _build_context(self, retrieved: List[DocumentChunk]) -> str:
+        if not retrieved:
+            return ""
+
+        parts = []
+        for chunk in retrieved:
+            parts.append(
+                f"[Chunk {chunk.chunk_id} | {chunk.filename}]\n{chunk.text.strip()}"
+            )
+        return "\n\n".join(parts)
+
+    def _build_prompt(self, question: str, context: str, response_style: str) -> str:
+        return f"""
+Answer the question using only the context below.
+If the answer is not clearly present, reply exactly: Not in document.
+Do not use outside knowledge.
+Do not add disclaimers, filler, or reasoning steps.
+
+Formatting rules:
+- Keep the answer grounded in the document.
+- If there are multiple facts, use bullet points.
+- If the question asks for steps, use a numbered list.
+- If the question asks for contact details, return each field on its own line.
+- If the question asks for a summary, write a short heading and then 3-6 bullets.
+- If the answer is a single fact, answer in one short sentence.
+
+Desired style:
+{response_style}
+
+Question:
+{question}
+
+Context:
+{context}
+"""
+
+    def _response_style(self, question: str) -> str:
+        q = question.lower()
+        if any(word in q for word in ["how to", "steps", "process", "procedure", "instructions", "guide"]):
+            return "Provide a numbered step-by-step answer."
+        if any(word in q for word in ["list", "skills", "names", "emails", "phone", "contact", "details"]):
+            return "Provide a clean bullet list or field-by-field answer."
+        if any(word in q for word in ["summary", "summarize", "overview"]):
+            return "Provide a short summary with bullets."
+        return "Provide the most direct factual answer, using bullets only when it improves readability."
+
+    def _question_terms(self, question: str) -> set[str]:
+        stop_words = {
+            "what",
+            "when",
+            "where",
+            "which",
+            "who",
+            "whom",
+            "whose",
+            "does",
+            "do",
+            "did",
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "this",
+            "that",
+            "about",
+            "document",
+            "file",
+            "please",
+            "tell",
+            "show",
+            "give",
+            "me",
+            "info",
+            "information",
+            "are",
+            "is",
+            "was",
+            "were",
+            "can",
+            "could",
+            "would",
+            "should",
+            "list",
+            "explain",
+        }
+        terms = set()
+        for word in re.split(r"\W+", question.lower()):
+            word = word.strip()
+            if len(word) > 2 and word not in stop_words:
+                terms.add(word)
+        return terms
+
+    def _lexical_overlap_score(self, terms: set[str], text: str) -> float:
+        if not terms:
+            return 0.0
+
+        candidate_words = {
+            word.strip().lower()
+            for word in re.split(r"\W+", text)
+            if len(word.strip()) > 2
+        }
+        overlap = len(terms & candidate_words)
+        if not overlap:
+            return 0.0
+
+        return overlap / max(len(terms), 1)
+
+    def _clean_answer(self, answer: str) -> str:
+        cleaned = answer.replace("\r\n", "\n").strip()
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+        return cleaned
+
+    def _chunk_text(self, text: str) -> List[str]:
+        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+        chunks: List[str] = []
+        current = ""
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            if len(current) + len(sentence) + 1 <= CHUNK_SIZE:
+                current = f"{current} {sentence}".strip()
+            else:
+                if current:
+                    chunks.append(current.strip())
+                if CHUNK_OVERLAP > 0 and chunks:
+                    overlap_source = chunks[-1]
+                    overlap = overlap_source[-CHUNK_OVERLAP:]
+                    current = f"{overlap} {sentence}".strip()
+                else:
+                    current = sentence
+
+        if current:
+            chunks.append(current.strip())
+
+        return [chunk for chunk in chunks if chunk]
+
+    def _extract_text(self, content: bytes, filename: str) -> str:
+        if filename.lower().endswith(".pdf"):
+            reader = PdfReader(io.BytesIO(content))
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
+        return content.decode("utf-8", errors="ignore")
+
+    def _session_dir(self, session_id: str) -> Path:
+        return DOCUMENTS_DIR / session_id
+
+    def _reset_session_storage(self, session_dir: Path):
+        if session_dir.exists():
+            shutil.rmtree(session_dir)
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+    def _sanitize_filename(self, filename: str) -> str:
+        cleaned = Path(filename).name.strip()
+        cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", cleaned)
+        return cleaned
