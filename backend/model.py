@@ -61,6 +61,40 @@ QUERY_SYNONYMS = {
     "date": ["time", "period", "duration"],
 }
 
+SECTION_QUERY_KEYWORDS = {
+    "summary": {"summary", "profile", "overview", "objective", "about"},
+    "skills": {"skill", "skills", "competencies", "competency", "technology", "technologies", "tools"},
+    "projects": {"project", "projects"},
+    "experience": {"experience", "experiences", "work", "employment", "internship", "internships"},
+    "education": {"education", "qualification", "qualifications", "degree", "degrees", "diploma", "academic"},
+    "certifications": {"certification", "certifications", "certificate", "certificates"},
+}
+
+SECTION_HEADING_ALIASES = {
+    "summary": {"summary", "profile", "professional summary", "career summary", "objective", "about"},
+    "skills": {"skills", "core competencies", "core competencies skills", "technical skills"},
+    "projects": {"projects", "project"},
+    "experience": {"experience", "work experience", "professional experience", "employment"},
+    "education": {"education", "academic background", "qualifications"},
+    "certifications": {"certifications", "certification", "licenses certifications"},
+}
+
+CONTACT_QUERY_KEYWORDS = {
+    "email",
+    "mail",
+    "phone",
+    "mobile",
+    "contact",
+    "number",
+    "linkedin",
+    "github",
+    "website",
+    "portfolio",
+    "address",
+    "location",
+    "city",
+}
+
 
 @dataclass
 class DocumentChunk:
@@ -166,7 +200,25 @@ class RAGService:
                 ],
             }
 
-        retrieved = self._retrieve(question, session_id, document.chunks)
+        section_name = self._match_section_query(question)
+        section_answer = self._answer_section_query(question, document.text, section_name)
+        if section_answer:
+            section_chunks = self._select_section_chunks(section_name, document.chunks)
+            if not section_chunks:
+                section_chunks = document.chunks[:1]
+            return {
+                "answer": section_answer,
+                "sources": [
+                    {
+                        "filename": chunk.filename,
+                        "chunk_id": chunk.chunk_id,
+                        "excerpt": chunk.text[:220],
+                    }
+                    for chunk in section_chunks[: min(3, len(section_chunks))]
+                ],
+            }
+
+        retrieved = self._retrieve(question, session_id, document.chunks, preferred_section=section_name)
         answer = self._normalize_answer_format(self._generate_answer(question, retrieved))
 
         return {
@@ -205,7 +257,13 @@ class RAGService:
         index.add(embeddings.astype("float32"))
         self.indexes_by_session[session_id] = index
 
-    def _retrieve(self, question: str, session_id: str, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
+    def _retrieve(
+        self,
+        question: str,
+        session_id: str,
+        chunks: List[DocumentChunk],
+        preferred_section: str | None = None,
+    ) -> List[DocumentChunk]:
         if len(chunks) <= TOP_K_RESULTS:
             return chunks
 
@@ -214,6 +272,8 @@ class RAGService:
         question_phrases = self._extract_query_phrases(question)
         semantic_scores: Dict[int, float] = {}
         session_index = self.indexes_by_session.get(session_id)
+        candidate_indexes = self._candidate_chunk_indexes(preferred_section, chunks)
+        candidate_index_set = set(candidate_indexes) if candidate_indexes else set(range(len(chunks)))
 
         if session_index is not None:
             self._load_model()
@@ -224,11 +284,12 @@ class RAGService:
             semantic_top_k = min(len(chunks), max(TOP_K_RESULTS * 3, 8))
             scores, indices = session_index.search(query_embedding.astype("float32"), semantic_top_k)
             for score, index in zip(scores[0], indices[0]):
-                if 0 <= index < len(chunks):
+                if 0 <= index < len(chunks) and index in candidate_index_set:
                     semantic_scores[index] = float(score)
 
         scored = []
-        for index, chunk in enumerate(chunks):
+        for index in candidate_index_set:
+            chunk = chunks[index]
             chunk_terms = self._tokenize(chunk.text)
             lexical_score = self._score_chunk(
                 question,
@@ -243,6 +304,9 @@ class RAGService:
             if semantic_score >= 0.35:
                 total_score += 0.12
 
+            if not self._is_contact_query(question) and self._looks_like_contact_chunk(chunk.text):
+                total_score -= 0.5
+
             if total_score > 0:
                 scored.append((total_score, index, chunk))
 
@@ -250,6 +314,8 @@ class RAGService:
         if scored:
             top_indexes = [index for _, index, _ in scored[:TOP_K_RESULTS]]
             selected_indexes = self._expand_with_neighbors(top_indexes, len(chunks))
+            if candidate_indexes:
+                selected_indexes = [index for index in selected_indexes if index in candidate_index_set]
             return [chunks[index] for index in selected_indexes]
 
         if semantic_scores:
@@ -258,7 +324,12 @@ class RAGService:
                 for index, _ in sorted(semantic_scores.items(), key=lambda item: item[1], reverse=True)[:TOP_K_RESULTS]
             ]
             selected_indexes = self._expand_with_neighbors(top_indexes, len(chunks))
+            if candidate_indexes:
+                selected_indexes = [index for index in selected_indexes if index in candidate_index_set]
             return [chunks[index] for index in selected_indexes]
+
+        if candidate_indexes:
+            return [chunks[index] for index in candidate_indexes[: min(TOP_K_RESULTS, len(candidate_indexes))]]
 
         fallback_indexes = self._expand_with_neighbors(list(range(min(TOP_K_RESULTS, len(chunks)))), len(chunks))
         return [chunks[index] for index in fallback_indexes]
@@ -349,6 +420,7 @@ class RAGService:
                             "location, affiliation, and any other available details. "
                             "When the question asks for a short fact, answer briefly but still include the key detail. "
                             "Keep the language clear, polished, and professional. "
+                            "Do not include contact details or unrelated profile headers unless the question explicitly asks for them. "
                             "Do not add outside knowledge."
                         ),
                     },
@@ -374,6 +446,7 @@ class RAGService:
                             "Location: ...\n\n"
                             "If there are multiple education items or other records, create a separate numbered block for each one. "
                             "Do not mix the details of one record with another record. "
+                            "Do not include phone numbers, emails, links, or addresses unless the question is specifically about contact information. "
                             "Never use markdown symbols such as **, *, #, _, or backticks. "
                             "Do not mention any information that is not present in the context."
                         ),
@@ -562,6 +635,193 @@ class RAGService:
         if any(word in lowered for word in ["skills", "education", "experience", "projects", "details"]):
             return "Use clear sections and keep each record separate."
         return "Answer directly, but use sections when it improves clarity."
+
+    def _match_section_query(self, question: str) -> str | None:
+        lowered = question.lower()
+        raw_terms = {term.lower() for term in WORD_RE.findall(question)}
+
+        for section_name, keywords in SECTION_QUERY_KEYWORDS.items():
+            if raw_terms & keywords:
+                return section_name
+            if any(keyword in lowered for keyword in keywords if " " in keyword):
+                return section_name
+
+        return None
+
+    def _answer_section_query(self, question: str, text: str, section_name: str | None) -> str | None:
+        if not section_name or not self._is_simple_section_query(question, section_name):
+            return None
+
+        sections = self._extract_named_sections(text)
+        lines = self._coalesce_section_lines(sections.get(section_name, []))
+        if not lines:
+            return None
+
+        return self._format_section_answer(section_name, lines)
+
+    def _is_simple_section_query(self, question: str, section_name: str) -> bool:
+        raw_terms = [term.lower() for term in WORD_RE.findall(question)]
+        allowed_terms = {
+            "what",
+            "which",
+            "show",
+            "list",
+            "listed",
+            "tell",
+            "give",
+            "provide",
+            "describe",
+            "mention",
+            "mentioned",
+            "all",
+            "my",
+            "the",
+            "are",
+            "is",
+            "in",
+            "on",
+            "of",
+            "you",
+            "can",
+        } | SECTION_QUERY_KEYWORDS.get(section_name, set())
+
+        return bool(raw_terms) and all(term in allowed_terms for term in raw_terms)
+
+    def _extract_named_sections(self, text: str) -> Dict[str, List[str]]:
+        sections: Dict[str, List[str]] = {"summary": []}
+        current_section = "summary"
+
+        for raw_line in text.splitlines():
+            line = self._normalize_chunk_line(raw_line)
+            if not line:
+                continue
+
+            matched_section = self._match_section_heading(line)
+            if matched_section:
+                current_section = matched_section
+                sections.setdefault(current_section, [])
+                continue
+
+            sections.setdefault(current_section, []).append(line)
+
+        return sections
+
+    def _normalize_section_heading(self, text: str) -> str:
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
+        normalized = " ".join(normalized.split())
+        if len(normalized.split()) > 5:
+            return ""
+        return normalized
+
+    def _match_section_heading(self, text: str) -> str | None:
+        normalized = self._normalize_section_heading(text)
+        if not normalized:
+            return None
+
+        for section_name, aliases in SECTION_HEADING_ALIASES.items():
+            if normalized in aliases:
+                return section_name
+
+        return None
+
+    def _select_section_chunks(self, section_name: str | None, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
+        if not section_name:
+            return []
+
+        if section_name == "summary":
+            selected = []
+            for chunk in chunks:
+                if self._match_section_heading(chunk.text):
+                    break
+                selected.append(chunk)
+            return selected
+
+        selected = []
+        in_section = False
+        for chunk in chunks:
+            heading = self._match_section_heading(chunk.text)
+            if heading == section_name:
+                in_section = True
+                selected.append(chunk)
+                continue
+            if in_section and heading and heading != section_name:
+                break
+            if in_section:
+                selected.append(chunk)
+
+        if selected:
+            return selected
+
+        keywords = SECTION_QUERY_KEYWORDS.get(section_name, set())
+        return [chunk for chunk in chunks if any(keyword in chunk.text.lower() for keyword in keywords)][:TOP_K_RESULTS]
+
+    def _candidate_chunk_indexes(self, section_name: str | None, chunks: List[DocumentChunk]) -> List[int]:
+        selected_chunks = self._select_section_chunks(section_name, chunks)
+        if not selected_chunks:
+            return []
+
+        selected_ids = {id(chunk) for chunk in selected_chunks}
+        return [index for index, chunk in enumerate(chunks) if id(chunk) in selected_ids]
+
+    def _format_section_answer(self, section_name: str, lines: List[str]) -> str:
+        section_titles = {
+            "summary": "Summary",
+            "skills": "Skills",
+            "projects": "Projects",
+            "experience": "Experience",
+            "education": "Education",
+            "certifications": "Certifications",
+        }
+        title = section_titles.get(section_name, section_name.title())
+
+        formatted_lines = []
+        for line in lines:
+            cleaned = line.lstrip("•*- ").strip()
+            if not cleaned:
+                continue
+            formatted_lines.append(f"- {cleaned}")
+
+        if not formatted_lines:
+            return "Not in document."
+
+        return f"{title}:\n" + "\n".join(formatted_lines)
+
+    def _coalesce_section_lines(self, lines: List[str]) -> List[str]:
+        merged: List[str] = []
+        for raw_line in lines:
+            line = self._normalize_chunk_line(raw_line)
+            if not line:
+                continue
+
+            is_new_item = bool(re.match(r"^(?:[•*-]|\d+[.)])\s*", line))
+            if merged and not is_new_item and merged[-1].startswith(("•", "-", "*")):
+                merged[-1] = f"{merged[-1]} {line}".strip()
+                continue
+
+            merged.append(line)
+
+        return merged
+
+    def _is_contact_query(self, question: str) -> bool:
+        lowered = question.lower()
+        raw_terms = {term.lower() for term in WORD_RE.findall(question)}
+        if raw_terms & CONTACT_QUERY_KEYWORDS:
+            return True
+        return any(keyword in lowered for keyword in CONTACT_QUERY_KEYWORDS if " " in keyword)
+
+    def _looks_like_contact_chunk(self, text: str) -> bool:
+        lowered = text.lower()
+        has_contact_signal = bool(
+            re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", text)
+            or re.search(r"\b(?:\+?\d[\d\s().-]{8,}\d)\b", text)
+            or "linkedin" in lowered
+            or "github" in lowered
+        )
+        if not has_contact_signal:
+            return False
+
+        text_lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return len(text_lines) <= 3
 
     def _clean_answer(self, answer: str) -> str:
         cleaned = answer.replace("\r\n", "\n").strip()

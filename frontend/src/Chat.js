@@ -48,6 +48,8 @@ async function requestJson(path, options, fallbackMessage) {
 function sanitizeAnswer(answer) {
   return answer
     .replace(/\r\n/g, "\n")
+    .replace(/^[•]\s*/gm, "- ")
+    .replace(/\n(\d+)\.\s*\n(?=\S)/g, "\n$1. ")
     .replace(/[*_`#]+/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -97,8 +99,8 @@ function renderAnswer(answer) {
       return;
     }
 
-    if (/^[-]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
-      listItems.push(line.replace(/^-\s+/, "").replace(/^\d+\.\s+/, ""));
+    if (/^[-]\s+/.test(line) || /^•\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+      listItems.push(line.replace(/^[-•]\s+/, "").replace(/^\d+\.\s+/, ""));
       return;
     }
 
