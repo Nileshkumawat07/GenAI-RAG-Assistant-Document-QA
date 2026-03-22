@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,26 +35,35 @@ class QueryRequest(BaseModel):
 def health_check():
     return {
         "status": "ok",
-        "documents_indexed": len(rag_service.documents),
-        "chunks_indexed": len(rag_service.chunks),
+        "documents_indexed": rag_service.indexed_document_count(),
+        "chunks_indexed": rag_service.indexed_chunk_count(),
     }
 
 
 @app.post("/documents/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(
+    file: UploadFile = File(...),
+    x_session_id: str | None = Header(default=None),
+):
+    session_id = _require_session_id(x_session_id)
     try:
-        return await rag_service.ingest(file)
+        return await rag_service.ingest(file, session_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/query")
-def query_documents(payload: QueryRequest):
+def query_documents(
+    payload: QueryRequest,
+    x_session_id: str | None = Header(default=None),
+):
     if not payload.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
+    session_id = _require_session_id(x_session_id)
+
     try:
-        return rag_service.query(payload.question.strip())
+        return rag_service.query(payload.question.strip(), session_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -81,6 +90,12 @@ def serve_frontend_routes(full_path: str):
         return FileResponse(index_file)
 
     raise HTTPException(status_code=404, detail="Frontend build not found.")
+
+
+def _require_session_id(session_id: str | None) -> str:
+    if not session_id or not session_id.strip():
+        raise HTTPException(status_code=400, detail="Missing X-Session-Id header.")
+    return session_id.strip()
 
 
 if __name__ == "__main__":

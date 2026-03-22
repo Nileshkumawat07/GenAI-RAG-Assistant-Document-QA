@@ -1,8 +1,22 @@
 import React, { useState } from "react";
 
 const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
+const SESSION_STORAGE_KEY = "document_assistant_session_id";
 
 const apiUrl = (path) => `${API_BASE}${path}`;
+
+function getSessionId() {
+  const existing = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const created =
+    window.crypto?.randomUUID?.() ||
+    `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  window.localStorage.setItem(SESSION_STORAGE_KEY, created);
+  return created;
+}
 
 async function readJson(response) {
   try {
@@ -32,6 +46,7 @@ async function requestJson(path, options, fallbackMessage) {
 }
 
 function Chat() {
+  const [sessionId] = useState(() => getSessionId());
   const [selectedFile, setSelectedFile] = useState(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -65,6 +80,9 @@ function Chat() {
     try {
       const data = await requestJson("/documents/upload", {
         method: "POST",
+        headers: {
+          "X-Session-Id": sessionId
+        },
         body: formData
       }, "Document upload failed.");
 
@@ -92,7 +110,8 @@ function Chat() {
       const data = await requestJson("/query", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-Session-Id": sessionId
         },
         body: JSON.stringify({ question })
       }, "Question answering failed.");
@@ -147,7 +166,8 @@ function Chat() {
                   Ask for names, emails, phone numbers, skills, roles, dates, or
                   project details for the clearest results. Upload one document,
                   ask one focused question, then refine the wording if you want a
-                  more specific answer.
+                  more specific answer. A new upload replaces your current session
+                  document only.
                 </p>
               </div>
             </div>

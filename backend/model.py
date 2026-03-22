@@ -1,13 +1,15 @@
 import io
 import re
+import shutil
 from dataclasses import dataclass
-from typing import List
+from pathlib import Path
+from typing import Dict, List
 
 from fastapi import UploadFile
 from openai import OpenAI
 from pypdf import PdfReader
 
-from config import CHUNK_OVERLAP, CHUNK_SIZE, GROQ_API_KEY, GROQ_MODEL, TOP_K_RESULTS
+from config import CHUNK_OVERLAP, CHUNK_SIZE, DOCUMENTS_DIR, GROQ_API_KEY, GROQ_MODEL, TOP_K_RESULTS
 
 
 WORD_RE = re.compile(r"\b[a-zA-Z0-9]+\b")
@@ -47,61 +49,78 @@ STOPWORDS = {
 @dataclass
 class DocumentChunk:
     doc_id: str
+    session_id: str
     filename: str
     text: str
     chunk_id: int
 
 
+@dataclass
+class SessionDocument:
+    doc_id: str
+    session_id: str
+    filename: str
+    chunks: List[DocumentChunk]
+    file_path: Path
+
+
 class RAGService:
     def __init__(self):
-        self.documents = []
-        self.chunks: List[DocumentChunk] = []
+        self.documents_by_session: Dict[str, SessionDocument] = {}
         if not GROQ_API_KEY or GROQ_API_KEY == "<SECRET>":
             raise ValueError(
                 "Set GROQ_API_KEY in the container environment or backend/.env before starting the backend."
             )
+        DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
         self.client = OpenAI(
             api_key=GROQ_API_KEY,
             base_url="https://api.groq.com/openai/v1",
         )
 
-    async def ingest(self, upload: UploadFile):
+    async def ingest(self, upload: UploadFile, session_id: str):
         content = await upload.read()
-        filename = upload.filename or "document.txt"
+        filename = self._sanitize_filename(upload.filename or "document.txt")
+        session_dir = self._session_dir(session_id)
+        self._reset_session_storage(session_dir)
+        file_path = session_dir / filename
+        file_path.write_bytes(content)
 
-        if filename.lower().endswith(".pdf"):
-            reader = PdfReader(io.BytesIO(content))
-            text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        else:
-            text = content.decode("utf-8", errors="ignore")
+        text = self._extract_text(content, filename)
 
         if not text.strip():
+            if file_path.exists():
+                file_path.unlink()
             raise ValueError("No readable text found in the uploaded document.")
 
-        doc_id = f"doc-{len(self.documents) + 1}"
-        chunks = self._chunk_text(text)
-
-        for index, chunk_text in enumerate(chunks, start=1):
-            self.chunks.append(
-                DocumentChunk(
-                    doc_id=doc_id,
-                    filename=filename,
-                    text=chunk_text,
-                    chunk_id=index,
-                )
+        doc_id = f"{session_id}-{filename}"
+        chunk_texts = self._chunk_text(text)
+        chunks = [
+            DocumentChunk(
+                doc_id=doc_id,
+                session_id=session_id,
+                filename=filename,
+                text=chunk_text,
+                chunk_id=index,
             )
+            for index, chunk_text in enumerate(chunk_texts, start=1)
+        ]
 
-        self.documents.append(
-            {"doc_id": doc_id, "filename": filename, "chunks": len(chunks)}
+        self.documents_by_session[session_id] = SessionDocument(
+            doc_id=doc_id,
+            session_id=session_id,
+            filename=filename,
+            chunks=chunks,
+            file_path=file_path,
         )
 
-        return {"chunks": len(chunks), "filename": filename}
+        return {"chunks": len(chunks), "filename": filename, "session_id": session_id}
 
-    def query(self, question: str):
-        if not self.chunks:
+    def query(self, question: str, session_id: str):
+        document = self._get_or_load_session_document(session_id)
+        if not document:
             raise ValueError("Upload a document before asking questions.")
 
-        retrieved = self._retrieve(question)
+        retrieved = self._retrieve(question, document.chunks)
         if not retrieved:
             raise ValueError("Invalid question. Refine the wording if you want a more specific answer.")
 
@@ -118,6 +137,12 @@ class RAGService:
                 for chunk in retrieved
             ],
         }
+
+    def indexed_document_count(self) -> int:
+        return len(self.documents_by_session)
+
+    def indexed_chunk_count(self) -> int:
+        return sum(len(document.chunks) for document in self.documents_by_session.values())
 
     def _chunk_text(self, text: str) -> List[str]:
         paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
@@ -161,11 +186,11 @@ class RAGService:
 
         return chunks
 
-    def _retrieve(self, question: str) -> List[DocumentChunk]:
+    def _retrieve(self, question: str, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
         question_terms = self._tokenize(question)
         scored = []
 
-        for chunk in self.chunks:
+        for chunk in chunks:
             chunk_terms = self._tokenize(chunk.text)
             score = self._score_overlap(question_terms, chunk_terms)
             if score > 0:
@@ -227,3 +252,62 @@ class RAGService:
         if overlap == 0:
             return 0.0
         return overlap / max(1, len(question_set))
+
+    def _extract_text(self, content: bytes, filename: str) -> str:
+        if filename.lower().endswith(".pdf"):
+            reader = PdfReader(io.BytesIO(content))
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
+        return content.decode("utf-8", errors="ignore")
+
+    def _session_dir(self, session_id: str) -> Path:
+        return DOCUMENTS_DIR / session_id
+
+    def _reset_session_storage(self, session_dir: Path) -> None:
+        if session_dir.exists():
+            shutil.rmtree(session_dir)
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+    def _sanitize_filename(self, filename: str) -> str:
+        cleaned = Path(filename).name.strip()
+        cleaned = re.sub(r"[^A-Za-z0-9._ -]", "_", cleaned)
+        return cleaned or "document.txt"
+
+    def _get_or_load_session_document(self, session_id: str) -> SessionDocument | None:
+        existing = self.documents_by_session.get(session_id)
+        if existing:
+            return existing
+
+        session_dir = self._session_dir(session_id)
+        if not session_dir.exists():
+            return None
+
+        files = [path for path in session_dir.iterdir() if path.is_file()]
+        if not files:
+            return None
+
+        file_path = max(files, key=lambda path: path.stat().st_mtime)
+        content = file_path.read_bytes()
+        text = self._extract_text(content, file_path.name)
+        if not text.strip():
+            return None
+
+        doc_id = f"{session_id}-{file_path.name}"
+        chunks = [
+            DocumentChunk(
+                doc_id=doc_id,
+                session_id=session_id,
+                filename=file_path.name,
+                text=chunk_text,
+                chunk_id=index,
+            )
+            for index, chunk_text in enumerate(self._chunk_text(text), start=1)
+        ]
+        document = SessionDocument(
+            doc_id=doc_id,
+            session_id=session_id,
+            filename=file_path.name,
+            chunks=chunks,
+            file_path=file_path,
+        )
+        self.documents_by_session[session_id] = document
+        return document
