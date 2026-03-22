@@ -60,6 +60,7 @@ class SessionDocument:
     doc_id: str
     session_id: str
     filename: str
+    text: str
     chunks: List[DocumentChunk]
     file_path: Path
 
@@ -109,6 +110,7 @@ class RAGService:
             doc_id=doc_id,
             session_id=session_id,
             filename=filename,
+            text=text,
             chunks=chunks,
             file_path=file_path,
         )
@@ -120,11 +122,24 @@ class RAGService:
         if not document:
             raise ValueError("Upload a document before asking questions.")
 
+        direct_answer = self._answer_direct_field(question, document.text)
+        if direct_answer:
+            return {
+                "answer": direct_answer,
+                "sources": [
+                    {
+                        "filename": document.filename,
+                        "chunk_id": 1,
+                        "excerpt": document.text[:220],
+                    }
+                ],
+            }
+
         retrieved = self._retrieve(question, document.chunks)
         if not retrieved:
             raise ValueError("Invalid question. Refine the wording if you want a more specific answer.")
 
-        answer = self._generate_answer(question, retrieved)
+        answer = self._normalize_answer_format(self._generate_answer(question, retrieved))
 
         return {
             "answer": answer,
@@ -201,6 +216,55 @@ class RAGService:
             return [chunk for _, chunk in scored[:TOP_K_RESULTS]]
         return []
 
+    def _answer_direct_field(self, question: str, text: str) -> str | None:
+        lowered = question.lower()
+
+        field_extractors = [
+            (
+                {"email", "mail"},
+                "Email Address",
+                self._extract_email(text),
+            ),
+            (
+                {"phone", "mobile", "contact", "number"},
+                "Contact Number",
+                self._extract_phone(text),
+            ),
+            (
+                {"linkedin"},
+                "LinkedIn Profile",
+                self._extract_link(text, "linkedin"),
+            ),
+            (
+                {"github"},
+                "GitHub Profile",
+                self._extract_link(text, "github"),
+            ),
+            (
+                {"portfolio", "website", "site"},
+                "Website",
+                self._extract_link(text, None),
+            ),
+            (
+                {"name"},
+                "Candidate Name",
+                self._extract_name(text),
+            ),
+            (
+                {"location", "address", "city"},
+                "Location",
+                self._extract_location(text),
+            ),
+        ]
+
+        for keywords, label, value in field_extractors:
+            if any(keyword in lowered for keyword in keywords):
+                if not value:
+                    return "Not in document."
+                return f"{label}:\n{value}"
+
+        return None
+
     def _generate_answer(self, question: str, chunks: List[DocumentChunk]) -> str:
         context = "\n\n".join(
             f"[Source {index} | {chunk.filename} | chunk {chunk.chunk_id}]\n{chunk.text}"
@@ -269,6 +333,30 @@ class RAGService:
 
         return response.choices[0].message.content.strip()
 
+    def _normalize_answer_format(self, answer: str) -> str:
+        normalized = answer.replace("\r\n", "\n").strip()
+        labels = [
+            "Institution",
+            "Duration",
+            "Location",
+            "Affiliation",
+            "Email",
+            "Email Address",
+            "Contact",
+            "Contact Number",
+            "Phone",
+            "Mobile",
+            "LinkedIn",
+            "GitHub",
+            "Website",
+            "Name",
+            "Candidate Name",
+        ]
+        for label in labels:
+            normalized = re.sub(rf"\s+({re.escape(label)}:)", r"\n\1", normalized)
+        normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+        return normalized.strip()
+
     def _tokenize(self, text: str) -> List[str]:
         return [
             token
@@ -291,6 +379,51 @@ class RAGService:
             reader = PdfReader(io.BytesIO(content))
             return "\n".join(page.extract_text() or "" for page in reader.pages)
         return content.decode("utf-8", errors="ignore")
+
+    def _extract_email(self, text: str) -> str | None:
+        match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+        return match.group(0) if match else None
+
+    def _extract_phone(self, text: str) -> str | None:
+        match = re.search(r"(?<!\d)(?:\+?\d[\d\s().-]{8,}\d)", text)
+        return match.group(0).strip() if match else None
+
+    def _extract_link(self, text: str, keyword: str | None) -> str | None:
+        matches = re.findall(r"(https?://[^\s]+|www\.[^\s]+|[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[^\s]+)", text)
+        cleaned_matches = [match.rstrip(".,);]") for match in matches]
+        if keyword:
+            for match in cleaned_matches:
+                if keyword.lower() in match.lower():
+                    return match
+            return None
+        return cleaned_matches[0] if cleaned_matches else None
+
+    def _extract_name(self, text: str) -> str | None:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for line in lines[:12]:
+            if "resume" in line.lower():
+                candidate = line.replace("Resume", "").replace("resume", "").strip(" -|:")
+                if candidate:
+                    return candidate
+            if re.fullmatch(r"[A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+){1,4}", line):
+                return line
+        return None
+
+    def _extract_location(self, text: str) -> str | None:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for index, line in enumerate(lines):
+            if "location" in line.lower():
+                parts = line.split(":", 1)
+                if len(parts) == 2 and parts[1].strip():
+                    return parts[1].strip()
+                if index + 1 < len(lines):
+                    return lines[index + 1]
+
+        city_match = re.search(
+            r"\b([A-Z][a-z]+(?: [A-Z][a-z]+)*,\s*[A-Z][a-z]+(?: [A-Z][a-z]+)*)\b",
+            text,
+        )
+        return city_match.group(1) if city_match else None
 
     def _session_dir(self, session_id: str) -> Path:
         return DOCUMENTS_DIR / session_id
@@ -339,6 +472,7 @@ class RAGService:
             doc_id=doc_id,
             session_id=session_id,
             filename=file_path.name,
+            text=text,
             chunks=chunks,
             file_path=file_path,
         )
