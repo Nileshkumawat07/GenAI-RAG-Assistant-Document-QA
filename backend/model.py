@@ -15,55 +15,6 @@ from sentence_transformers import SentenceTransformer
 from config import CHUNK_OVERLAP, CHUNK_SIZE, DOCUMENTS_DIR, GROQ_API_KEY, GROQ_MODEL, TOP_K_RESULTS
 
 
-WORD_RE = re.compile(r"\b[a-zA-Z0-9]+\b")
-
-STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "how",
-    "in",
-    "is",
-    "it",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "this",
-    "to",
-    "was",
-    "what",
-    "when",
-    "where",
-    "which",
-    "who",
-    "why",
-    "with",
-}
-
-
-QUERY_SYNONYMS = {
-    "summary": ["overview", "abstract", "introduction"],
-    "details": ["information", "facts", "content"],
-    "steps": ["procedure", "process", "instructions"],
-    "requirements": ["criteria", "conditions", "prerequisites"],
-    "deadline": ["due date", "last date", "closing date"],
-    "price": ["cost", "amount", "fee"],
-    "contact": ["email", "phone", "mobile", "address"],
-    "author": ["writer", "creator", "publisher"],
-    "location": ["address", "city", "place"],
-    "date": ["time", "period", "duration"],
-}
-
-
 @dataclass
 class DocumentChunk:
     doc_id: str
@@ -103,10 +54,7 @@ class RAGService:
 
     def _load_model(self):
         if self.embedding_model is None:
-            try:
-                self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-            except Exception as exc:
-                raise RuntimeError(f"Embedding model failed to load: {exc}") from exc
+            self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
     async def ingest(self, upload: UploadFile, session_id: str):
         content = await upload.read()
@@ -120,297 +68,115 @@ class RAGService:
 
         text = self._extract_text(content, filename)
         if not text.strip():
-            if file_path.exists():
-                file_path.unlink()
             raise ValueError("No readable text found.")
 
         doc_id = f"{session_id}-{filename}"
         chunk_texts = self._chunk_text(text)
+
         chunks = [
             DocumentChunk(doc_id, session_id, filename, chunk_text, i)
             for i, chunk_text in enumerate(chunk_texts, start=1)
         ]
 
         self._load_model()
-        texts = [chunk.text for chunk in chunks]
+
+        texts = [c.text for c in chunks]
         embeddings = self.embedding_model.encode(texts, convert_to_numpy=True)
-        embeddings = np.asarray(embeddings, dtype="float32")
+        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
 
         dim = embeddings.shape[1]
-        self.index = faiss.IndexFlatL2(dim)
-        self.index.add(embeddings)
+        self.index = faiss.IndexFlatIP(dim)  # cosine similarity
+        self.index.add(embeddings.astype("float32"))
+
         self.chunk_map = chunks
 
         self.documents_by_session[session_id] = SessionDocument(
-            doc_id=doc_id,
-            session_id=session_id,
-            filename=filename,
-            text=text,
-            chunks=chunks,
-            file_path=file_path,
+            doc_id, session_id, filename, text, chunks, file_path
         )
 
-        return {"chunks": len(chunks), "filename": filename, "session_id": session_id}
+        return {"chunks": len(chunks), "filename": filename}
 
     def query(self, question: str, session_id: str):
         document = self._get_or_load_session_document(session_id)
         if not document:
             raise ValueError("Upload document first.")
 
-        direct_answer = self._answer_direct_field(question, document.text)
-        if direct_answer:
-            return {
-                "answer": direct_answer,
-                "sources": [
-                    {
-                        "filename": document.filename,
-                        "chunk_id": 1,
-                        "excerpt": document.text[:220],
-                    }
-                ],
-            }
+        retrieved = self._retrieve(question)
 
-        retrieved = self._retrieve(question, document.chunks)
-        answer = self._normalize_answer_format(self._generate_answer(question, retrieved))
+        answer = self._generate_answer(question, retrieved)
 
         return {
             "answer": answer,
             "sources": [
                 {
-                    "filename": chunk.filename,
-                    "chunk_id": chunk.chunk_id,
-                    "excerpt": chunk.text[:220],
+                    "filename": c.filename,
+                    "chunk_id": c.chunk_id,
+                    "excerpt": c.text[:200],
                 }
-                for chunk in retrieved
+                for c in retrieved
             ],
         }
 
-    def indexed_document_count(self) -> int:
-        return len(self.documents_by_session)
-
-    def indexed_chunk_count(self) -> int:
-        return len(self.chunk_map)
-
-    def _get_or_load_session_document(self, session_id: str) -> Optional[SessionDocument]:
-        document = self.documents_by_session.get(session_id)
-        if document:
-            return document
-
-        session_dir = self._session_dir(session_id)
-        if not session_dir.exists():
-            return None
-
-        candidates = [path for path in session_dir.iterdir() if path.is_file()]
-        if not candidates:
-            return None
-
-        file_path = max(candidates, key=lambda path: path.stat().st_mtime)
-        content = file_path.read_bytes()
-        text = self._extract_text(content, file_path.name)
-        if not text.strip():
-            return None
-
-        doc_id = f"{session_id}-{file_path.name}"
-        chunk_texts = self._chunk_text(text)
-        chunks = [
-            DocumentChunk(doc_id, session_id, file_path.name, chunk_text, i)
-            for i, chunk_text in enumerate(chunk_texts, start=1)
-        ]
-
-        document = SessionDocument(
-            doc_id=doc_id,
-            session_id=session_id,
-            filename=file_path.name,
-            text=text,
-            chunks=chunks,
-            file_path=file_path,
-        )
-        self.documents_by_session[session_id] = document
-        return document
-
-    def _retrieve(self, question: str, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
-        if not chunks:
-            return []
-
-        if self.index is None or not self.chunk_map:
-            return chunks[:TOP_K_RESULTS]
+    def _retrieve(self, question: str) -> List[DocumentChunk]:
+        if self.index is None:
+            return self.chunk_map[:TOP_K_RESULTS]
 
         self._load_model()
-        query_embedding = self.embedding_model.encode([question], convert_to_numpy=True)
-        query_embedding = np.asarray(query_embedding, dtype="float32")
 
-        _, indices = self.index.search(query_embedding, TOP_K_RESULTS)
-        results: List[DocumentChunk] = []
-        seen = set()
+        query_embedding = self.embedding_model.encode([question], convert_to_numpy=True)
+        query_embedding = query_embedding / np.linalg.norm(query_embedding, axis=1, keepdims=True)
+
+        scores, indices = self.index.search(query_embedding.astype("float32"), TOP_K_RESULTS)
+
+        results = []
         for idx in indices[0]:
-            if 0 <= idx < len(self.chunk_map) and idx not in seen:
-                seen.add(idx)
+            if 0 <= idx < len(self.chunk_map):
                 results.append(self.chunk_map[idx])
 
-        return results or chunks[:TOP_K_RESULTS]
-
-    def _answer_direct_field(self, question: str, text: str) -> Optional[str]:
-        lower_question = question.lower().strip()
-
-        patterns = []
-        strict_only = False
-        if any(word in lower_question for word in ["name", "candidate", "person"]):
-            patterns.extend([r"(?im)^\s*name\s*[:\-]\s*(.+)$", r"(?im)^\s*full name\s*[:\-]\s*(.+)$"])
-        if any(word in lower_question for word in ["email", "mail"]):
-            patterns.append(r"[\w.\-+]+@[\w.\-]+\.\w+")
-            strict_only = True
-        if "phone" in lower_question or "mobile" in lower_question or "contact" in lower_question:
-            patterns.extend(
-                [
-                    r"(?im)^\s*(?:phone|mobile|contact)\s*[:\-]\s*([+()0-9\s-]{7,})$",
-                    r"(?<!\d)(?:\+?\d[\d\s()-]{7,}\d)(?!\d)",
-                ]
-            )
-            strict_only = True
-        if any(word in lower_question for word in ["role", "title", "designation", "position"]):
-            patterns.extend([r"(?im)^\s*(?:role|title|designation|position)\s*[:\-]\s*(.+)$"])
-        if any(word in lower_question for word in ["education", "qualification", "degree", "college", "university"]):
-            patterns.extend(
-                [
-                    r"(?im)^\s*education\s*[:\-]\s*(.+)$",
-                    r"(?im)^\s*educational background\s*[:\-]\s*(.+)$",
-                ]
-            )
-            strict_only = True
-        if any(word in lower_question for word in ["skill", "skills", "technology", "technologies"]):
-            patterns.extend(
-                [
-                    r"(?im)^\s*skills\s*[:\-]\s*(.+)$",
-                    r"(?im)^\s*technical skills\s*[:\-]\s*(.+)$",
-                    r"(?im)^\s*core competencies\s*[:\-]\s*(.+)$",
-                ]
-            )
-            strict_only = True
-
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
-            if match:
-                value = match.group(1) if match.groups() else match.group(0)
-                value = value.strip()
-                if value:
-                    return self._clean_answer_value(value)
-
-        if strict_only:
-            return None
-
-        if any(word in lower_question for word in ["education", "qualification", "degree", "skills", "experience"]):
-            section = self._extract_section(text, lower_question)
-            if section:
-                return self._clean_answer_value(section)
-
-        for keyword, synonyms in QUERY_SYNONYMS.items():
-            if keyword in lower_question or any(syn in lower_question for syn in synonyms):
-                for line in text.splitlines():
-                    if keyword in line.lower():
-                        return self._clean_answer_value(line.strip())
-
-        if "summary" in lower_question and len(text.split()) <= 120:
-            return text.strip()
-
-        return None
+        return results
 
     def _generate_answer(self, question: str, retrieved: List[DocumentChunk]) -> str:
-        context = "\n\n".join(
-            f"Source {i + 1} ({chunk.filename}, chunk {chunk.chunk_id}):\n{chunk.text}"
-            for i, chunk in enumerate(retrieved)
-        )
+        context = "\n\n".join(chunk.text for chunk in retrieved)
 
-        prompt = (
-            "You are a document question answering assistant.\n"
-            "Answer only using the provided context.\n"
-            "If the answer is not present, say exactly: Not in document.\n"
-            "Keep the answer concise and factual.\n\n"
-            f"Question: {question}\n\n"
-            f"Context:\n{context}"
-        )
+        prompt = f"""
+You MUST answer ONLY from the provided context.
+If the answer is NOT clearly present, reply exactly: Not in document.
+DO NOT guess. DO NOT add extra info.
+
+Question:
+{question}
+
+Context:
+{context}
+"""
 
         try:
             response = self.client.chat.completions.create(
                 model=GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": "You answer strictly from the given document context."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
             )
-            content = response.choices[0].message.content or ""
-            if content.strip():
-                return content
+            return response.choices[0].message.content.strip()
         except Exception:
-            pass
-
-        fallback = self._extract_answer_from_context(question, retrieved)
-        return fallback or "Not in document."
-
-    def _normalize_answer_format(self, answer: str) -> str:
-        answer = (answer or "").replace("\r\n", "\n").strip()
-        if not answer:
             return "Not in document."
-        if "not in document" in answer.lower():
-            return "Not in document."
-        return answer
 
     def _chunk_text(self, text: str) -> List[str]:
-        words = text.split()
-        if not words:
-            return []
+        sentences = re.split(r'(?<=[.!?]) +', text)
 
-        chunk_size = max(50, CHUNK_SIZE)
-        overlap = max(0, min(CHUNK_OVERLAP, chunk_size - 1))
+        chunks = []
+        chunk = ""
 
-        chunks: List[str] = []
-        start = 0
-        while start < len(words):
-            end = min(len(words), start + chunk_size)
-            chunk = " ".join(words[start:end]).strip()
-            if chunk:
-                chunks.append(chunk)
-            if end >= len(words):
-                break
-            start = max(end - overlap, start + 1)
+        for sentence in sentences:
+            if len(chunk) + len(sentence) < CHUNK_SIZE:
+                chunk += " " + sentence
+            else:
+                chunks.append(chunk.strip())
+                chunk = sentence
+
+        if chunk:
+            chunks.append(chunk.strip())
 
         return chunks
-
-    def _extract_section(self, text: str, question: str) -> Optional[str]:
-        headings = []
-        if "education" in question or "qualification" in question or "degree" in question:
-            headings = ["education", "educational background", "academic background"]
-        elif "skill" in question:
-            headings = ["skills", "technical skills", "core skills"]
-        elif "experience" in question:
-            headings = ["experience", "work experience", "professional experience"]
-
-        if not headings:
-            return None
-
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        for index, line in enumerate(lines):
-            lowered = line.lower()
-            if any(lowered.startswith(f"{heading}:") or lowered == heading for heading in headings):
-                collected = [line]
-                for next_line in lines[index + 1 : index + 6]:
-                    if re.match(r"^[A-Za-z][A-Za-z0-9 /&().,-]{0,60}:$", next_line):
-                        break
-                    collected.append(next_line)
-                return " ".join(collected).strip()
-
-        return None
-
-    def _extract_answer_from_context(self, question: str, retrieved: List[DocumentChunk]) -> Optional[str]:
-        combined = "\n".join(chunk.text for chunk in retrieved)
-        return self._answer_direct_field(question, combined)
-
-    def _clean_answer_value(self, value: str) -> str:
-        cleaned = re.sub(r"\s+", " ", value).strip()
-        cleaned = cleaned.strip(" |;,-")
-        if cleaned.lower() in {"", "n/a", "na", "not available"}:
-            return ""
-        return cleaned
 
     def _extract_text(self, content: bytes, filename: str) -> str:
         if filename.lower().endswith(".pdf"):
@@ -428,4 +194,5 @@ class RAGService:
 
     def _sanitize_filename(self, filename: str) -> str:
         cleaned = Path(filename).name.strip()
-        return re.sub(r"[^A-Za-z0-9._ -]", "_", cleaned) or "document.txt"
+        cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", cleaned)
+        return cleaned
