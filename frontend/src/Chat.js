@@ -45,8 +45,21 @@ async function requestJson(path, options, fallbackMessage) {
   }
 }
 
+function sanitizeAnswer(answer) {
+  return answer
+    .replace(/\r\n/g, "\n")
+    .replace(/[*_`#]+/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
+}
+
 function renderAnswer(answer) {
-  const lines = answer.split(/\r?\n/);
+  const cleanedAnswer = sanitizeAnswer(answer);
+  const lines = cleanedAnswer.split(/\r?\n/);
   const elements = [];
   let listItems = [];
   let paragraphLines = [];
@@ -89,17 +102,6 @@ function renderAnswer(answer) {
       return;
     }
 
-    if (/^#{1,6}\s+/.test(line)) {
-      flushParagraph();
-      flushList();
-      elements.push(
-        <h4 key={`h-${key++}`} className="answer-heading">
-          {line.replace(/^#{1,6}\s+/, "")}
-        </h4>
-      );
-      return;
-    }
-
     if (/^[A-Za-z][A-Za-z0-9 /&()-]{0,50}:$/.test(line)) {
       flushParagraph();
       flushList();
@@ -111,9 +113,9 @@ function renderAnswer(answer) {
       return;
     }
 
-    if (/^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+    if (/^[-]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
       flushParagraph();
-      listItems.push(line.replace(/^[-*]\s+/, "").replace(/^\d+\.\s+/, ""));
+      listItems.push(line.replace(/^-\s+/, "").replace(/^\d+\.\s+/, ""));
       return;
     }
 
@@ -124,7 +126,7 @@ function renderAnswer(answer) {
   flushParagraph();
   flushList();
 
-  return elements.length ? elements : <p className="answer-paragraph">{answer}</p>;
+  return elements.length ? elements : <p className="answer-paragraph">{cleanedAnswer}</p>;
 }
 
 function Chat() {
