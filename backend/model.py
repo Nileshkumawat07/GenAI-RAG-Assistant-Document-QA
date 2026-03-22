@@ -352,6 +352,7 @@ class RAGService:
             "Name",
             "Candidate Name",
         ]
+        normalized = re.sub(r"\s+(\d+\.\s+[^\n:]+:)", r"\n\n\1", normalized)
         for label in labels:
             normalized = re.sub(rf"\s+({re.escape(label)}:)", r"\n\1", normalized)
         normalized = re.sub(r"\n{3,}", "\n\n", normalized)
@@ -381,8 +382,26 @@ class RAGService:
         return content.decode("utf-8", errors="ignore")
 
     def _extract_email(self, text: str) -> str | None:
-        match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
-        return match.group(0) if match else None
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+        # Prefer lines near the top of the document or lines explicitly mentioning email.
+        prioritized_lines = []
+        prioritized_lines.extend(lines[:12])
+        prioritized_lines.extend(
+            line for line in lines if any(keyword in line.lower() for keyword in ("email", "mail", "@"))
+        )
+
+        candidates = []
+        for line in prioritized_lines:
+            normalized_line = self._normalize_inline_contact_text(line)
+            candidates.extend(re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", normalized_line))
+
+        for candidate in candidates:
+            cleaned = candidate.strip(".,;:|")
+            if self._is_valid_email(cleaned):
+                return cleaned
+
+        return None
 
     def _extract_phone(self, text: str) -> str | None:
         match = re.search(r"(?<!\d)(?:\+?\d[\d\s().-]{8,}\d)", text)
@@ -424,6 +443,25 @@ class RAGService:
             text,
         )
         return city_match.group(1) if city_match else None
+
+    def _normalize_inline_contact_text(self, text: str) -> str:
+        normalized = text
+        normalized = re.sub(r"\s*@\s*", "@", normalized)
+        normalized = re.sub(r"\s*\.\s*", ".", normalized)
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized
+
+    def _is_valid_email(self, email: str) -> bool:
+        local_part, _, domain = email.partition("@")
+        if not local_part or not domain:
+            return False
+        if ".." in email:
+            return False
+        if domain.startswith(".") or domain.endswith("."):
+            return False
+        if "." not in domain:
+            return False
+        return True
 
     def _session_dir(self, session_id: str) -> Path:
         return DOCUMENTS_DIR / session_id

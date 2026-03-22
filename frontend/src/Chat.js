@@ -62,21 +62,7 @@ function renderAnswer(answer) {
   const lines = cleanedAnswer.split(/\r?\n/);
   const elements = [];
   let listItems = [];
-  let paragraphLines = [];
   let key = 0;
-
-  const flushParagraph = () => {
-    if (!paragraphLines.length) {
-      return;
-    }
-
-    elements.push(
-      <p key={`p-${key++}`} className="answer-paragraph">
-        {paragraphLines.join(" ")}
-      </p>
-    );
-    paragraphLines = [];
-  };
 
   const flushList = () => {
     if (!listItems.length) {
@@ -97,13 +83,11 @@ function renderAnswer(answer) {
     const line = rawLine.trim();
 
     if (!line) {
-      flushParagraph();
       flushList();
       return;
     }
 
     if (/^[A-Za-z][A-Za-z0-9 /&()-]{0,50}:$/.test(line)) {
-      flushParagraph();
       flushList();
       elements.push(
         <h4 key={`h-${key++}`} className="answer-heading">
@@ -114,16 +98,18 @@ function renderAnswer(answer) {
     }
 
     if (/^[-]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
-      flushParagraph();
       listItems.push(line.replace(/^-\s+/, "").replace(/^\d+\.\s+/, ""));
       return;
     }
 
     flushList();
-    paragraphLines.push(line);
+    elements.push(
+      <p key={`p-${key++}`} className="answer-paragraph">
+        {line}
+      </p>
+    );
   });
 
-  flushParagraph();
   flushList();
 
   return elements.length ? elements : <p className="answer-paragraph">{cleanedAnswer}</p>;
@@ -171,9 +157,9 @@ function Chat() {
       }, "Document upload failed.");
 
       setUploadStatus(
-        `${data.filename} indexed successfully with ${data.chunks} chunks.`
+        `Document indexed successfully with ${data.chunks} chunks.`
       );
-      pushStatus(`${data.filename} indexed successfully with ${data.chunks} chunks.`, "success");
+      pushStatus(`Document indexed successfully with ${data.chunks} chunks.`, "success");
     } catch (err) {
       setError(err.message);
       pushStatus(`Upload failed: ${err.message}`, "error");
