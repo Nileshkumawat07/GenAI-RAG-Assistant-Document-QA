@@ -1,17 +1,11 @@
-# Used to build the backend API
 fastapi
-
-# Used to call the AI model through the API
 openai
-
-# Used to read text from PDF files
 pypdf
-
-# Used to load values from the .env file
 python-dotenv
-
-# Used to support file uploads in FastAPI
 python-multipart
-
-# Used to run the FastAPI server
 uvicorn
+
+# NEW
+faiss-cpu
+sentence-transformers
+torch
