@@ -58,17 +58,6 @@ QUERY_SYNONYMS = {
     "date": ["time", "period", "duration"],
 }
 
-SECTION_ALIASES = {
-    "summary": ["summary", "overview", "abstract", "introduction", "profile", "objective"],
-    "projects": ["project", "projects"],
-    "skills": ["skill", "skills", "technical skills", "core competencies", "competencies"],
-    "experience": ["experience", "work experience", "employment", "internship", "internships"],
-    "education": ["education", "academic", "qualification", "qualifications", "studies", "study"],
-    "certifications": ["certification", "certifications", "certificate", "certificates"],
-    "requirements": ["requirements", "prerequisites", "conditions", "criteria"],
-    "steps": ["steps", "procedure", "process", "instructions"],
-}
-
 
 @dataclass
 class DocumentChunk:
@@ -145,19 +134,6 @@ class RAGService:
         document = self._get_or_load_session_document(session_id)
         if not document:
             raise ValueError("Upload a document before asking questions.")
-
-        section_answer = self._answer_section_query(question, document.text)
-        if section_answer:
-            return {
-                "answer": section_answer,
-                "sources": [
-                    {
-                        "filename": document.filename,
-                        "chunk_id": 1,
-                        "excerpt": document.text[:220],
-                    }
-                ],
-            }
 
         direct_answer = self._answer_direct_field(question, document.text)
         if direct_answer:
@@ -318,24 +294,6 @@ class RAGService:
 
         return None
 
-    def _answer_section_query(self, question: str, text: str) -> str | None:
-        section_name = self._match_section_query(question)
-        if not section_name:
-            return None
-
-        sections = self._extract_sections(text)
-        section_lines = sections.get(section_name)
-        if not section_lines:
-            return "Not in document."
-
-        formatter = getattr(self, f"_format_{section_name}_section", None)
-        if formatter:
-            formatted = formatter(section_lines)
-            if formatted:
-                return formatted
-
-        return self._format_generic_section(section_name, section_lines)
-
     def _generate_answer(self, question: str, chunks: List[DocumentChunk]) -> str:
         context = "\n\n".join(
             f"[Source {index} | {chunk.filename} | chunk {chunk.chunk_id}]\n{chunk.text}"
@@ -359,14 +317,15 @@ class RAGService:
                         "Use plain text only. "
                         "When the answer needs structure, use short title-style headings ending with a colon, "
                         "followed by clean sentences or numbered points. "
-                        "When the question asks for explanation, summary, details, steps, requirements, qualifications, lists, "
-                        "sections, or multiple items, include all important points supported by the context. "
-                        "When the document contains multiple records such as entries, jobs, projects, certifications, phases, "
-                        "requirements, sections, or checklist items, "
+                        "When the question asks for explanation, summary, details, qualifications, education, skills, "
+                        "experience, or multiple items, include all important points supported by the context. "
+                        "When the document contains multiple records such as education entries, jobs, projects, or certifications, "
                         "separate them clearly. "
                         "Give each record its own numbered subsection or title. "
                         "Keep the details for one record together under that record only. "
                         "Do not merge details from different records into the same bullet or same paragraph. "
+                        "For education answers, present each degree or diploma separately with its own institution, duration, "
+                        "location, affiliation, and any other available details. "
                         "When the question asks for a short fact, answer briefly but still include the key detail. "
                         "Keep the language clear, polished, and professional. "
                         "Do not add outside knowledge."
@@ -383,14 +342,16 @@ class RAGService:
                         "Answer Summary:\n"
                         "...\n\n"
                         "Details:\n"
-                        "1. Item or Section Name:\n"
-                        "- Key point\n"
-                        "- Key point\n\n"
-                        "2. Item or Section Name:\n"
-                        "- Key point\n"
-                        "- Key point\n\n"
-                        "If there are multiple items or sections, create a separate numbered block for each one. "
-                        "Do not force education labels such as Institution, Duration, or Location unless the document actually uses them. "
+                        "1. Record Name:\n"
+                        "Institution: ...\n"
+                        "Duration: ...\n"
+                        "Location: ...\n\n"
+                        "2. Record Name:\n"
+                        "Institution: ...\n"
+                        "Duration: ...\n"
+                        "Location: ...\n\n"
+                        "If there are multiple education items or other records, create a separate numbered block for each one. "
+                        "Do not mix the details of one record with another record. "
                         "Never use markdown symbols such as **, *, #, _, or backticks. "
                         "Do not mention any information that is not present in the context."
                     ),
@@ -425,102 +386,6 @@ class RAGService:
             normalized = re.sub(rf"\s+({re.escape(label)}:)", r"\n\1", normalized)
         normalized = re.sub(r"\n{3,}", "\n\n", normalized)
         return normalized.strip()
-
-    def _match_section_query(self, question: str) -> str | None:
-        lowered = question.lower()
-        for section_name, aliases in SECTION_ALIASES.items():
-            if any(alias in lowered for alias in aliases):
-                return section_name
-        return None
-
-    def _extract_sections(self, text: str) -> Dict[str, List[str]]:
-        lines = [line.strip() for line in text.replace("\r\n", "\n").splitlines()]
-        sections: Dict[str, List[str]] = {}
-        current_section: str | None = None
-
-        for raw_line in lines:
-            line = raw_line.strip()
-            if not line:
-                continue
-
-            matched_section = self._match_heading_line(line)
-            if matched_section:
-                current_section = matched_section
-                sections.setdefault(current_section, [])
-                continue
-
-            if current_section:
-                sections[current_section].append(line)
-
-        return sections
-
-    def _match_heading_line(self, line: str) -> str | None:
-        normalized = re.sub(r"[^a-zA-Z ]", " ", line).lower()
-        normalized = " ".join(normalized.split())
-        for section_name, aliases in SECTION_ALIASES.items():
-            if normalized in aliases:
-                return section_name
-        return None
-
-    def _format_summary_section(self, lines: List[str]) -> str:
-        cleaned_lines = [self._clean_section_line(line) for line in lines]
-        cleaned_lines = [line for line in cleaned_lines if line]
-        if not cleaned_lines:
-            return ""
-        return "Summary:\n" + "\n".join(cleaned_lines)
-
-    def _format_projects_section(self, lines: List[str]) -> str:
-        items = self._group_bulleted_records(lines)
-        return self._render_grouped_section("Projects", items, lines)
-
-    def _format_experience_section(self, lines: List[str]) -> str:
-        items = self._group_bulleted_records(lines)
-        return self._render_grouped_section("Experience", items, lines)
-
-    def _format_education_section(self, lines: List[str]) -> str:
-        items = self._group_bulleted_records(lines)
-        return self._render_grouped_section("Education", items, lines)
-
-    def _format_skills_section(self, lines: List[str]) -> str:
-        cleaned_lines = [self._clean_section_line(line) for line in lines]
-        cleaned_lines = [self._strip_bullet(line) for line in cleaned_lines if line]
-        if not cleaned_lines:
-            return ""
-        output = ["Skills:"]
-        output.extend(f"- {line}" for line in cleaned_lines)
-        return "\n".join(output)
-
-    def _format_certifications_section(self, lines: List[str]) -> str:
-        cleaned_lines = [self._clean_section_line(line) for line in lines]
-        cleaned_lines = [self._strip_bullet(line) for line in cleaned_lines if line]
-        if not cleaned_lines:
-            return ""
-        output = ["Certifications:"]
-        output.extend(f"- {line}" for line in cleaned_lines)
-        return "\n".join(output)
-
-    def _format_requirements_section(self, lines: List[str]) -> str:
-        return self._format_generic_section("requirements", lines)
-
-    def _format_steps_section(self, lines: List[str]) -> str:
-        return self._format_generic_section("steps", lines)
-
-    def _format_generic_section(self, section_name: str, lines: List[str]) -> str:
-        cleaned_lines = [self._clean_section_line(line) for line in lines]
-        cleaned_lines = [line for line in cleaned_lines if line]
-        if not cleaned_lines:
-            return ""
-
-        title = section_name.replace("_", " ").title() + ":"
-        output = [title]
-        for line in cleaned_lines:
-            if self._is_primary_bullet(line) or self._is_secondary_bullet(line):
-                output.append(f"- {self._strip_bullet(line)}")
-            elif output and output[-1].startswith("- "):
-                output[-1] = f"{output[-1]} {line}".strip()
-            else:
-                output.append(line)
-        return "\n".join(output)
 
     def _tokenize(self, text: str) -> List[str]:
         return [
@@ -851,72 +716,6 @@ class RAGService:
 
     def _normalize_chunk_line(self, line: str) -> str:
         return " ".join(line.split()).strip()
-
-    def _clean_section_line(self, line: str) -> str:
-        cleaned = " ".join(line.split()).strip()
-        cleaned = cleaned.replace("• ", "•").replace("– ", "–")
-        return cleaned
-
-    def _is_primary_bullet(self, line: str) -> bool:
-        return line.startswith("•")
-
-    def _is_secondary_bullet(self, line: str) -> bool:
-        return line.startswith("–") or line.startswith("-")
-
-    def _strip_bullet(self, line: str) -> str:
-        return re.sub(r"^[•–-]\s*", "", line).strip()
-
-    def _group_bulleted_records(self, lines: List[str]) -> List[tuple[str, List[str]]]:
-        items: List[tuple[str, List[str]]] = []
-        current_title = None
-        current_points: List[str] = []
-
-        for line in lines:
-            cleaned = self._clean_section_line(line)
-            if not cleaned:
-                continue
-
-            if self._is_primary_bullet(cleaned):
-                if current_title:
-                    items.append((current_title, current_points))
-                current_title = self._strip_bullet(cleaned)
-                current_points = []
-                continue
-
-            if self._is_secondary_bullet(cleaned):
-                if current_title:
-                    current_points.append(self._strip_bullet(cleaned))
-                continue
-
-            if current_title and current_points:
-                current_points[-1] = f"{current_points[-1]} {cleaned}".strip()
-                continue
-
-            if current_title:
-                current_points.append(cleaned)
-
-        if current_title:
-            items.append((current_title, current_points))
-
-        return items
-
-    def _render_grouped_section(
-        self,
-        title: str,
-        items: List[tuple[str, List[str]]],
-        fallback_lines: List[str],
-    ) -> str:
-        if not items:
-            return self._format_generic_section(title.lower(), fallback_lines)
-
-        output = [f"{title}:"]
-        for index, (item_title, points) in enumerate(items, start=1):
-            output.append(f"{index}. {item_title}")
-            for point in points:
-                output.append(f"- {point}")
-            output.append("")
-
-        return "\n".join(output).strip()
 
     def _split_long_line(self, line: str) -> List[str]:
         pieces = []
