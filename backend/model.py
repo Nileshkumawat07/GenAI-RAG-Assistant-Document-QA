@@ -275,7 +275,12 @@ class RAGService:
                 self._extract_name(text),
             ),
             (
-                {"location", "address", "city"},
+                {"address"},
+                "Address",
+                self._extract_address(text),
+            ),
+            (
+                {"location", "city"},
                 "Location",
                 self._extract_location(text),
             ),
@@ -484,6 +489,8 @@ class RAGService:
 
     def _extract_email(self, text: str) -> str | None:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
+        extracted_name = self._extract_name(text)
+        name_tokens = self._name_tokens(extracted_name)
 
         # Prefer lines near the top of the document or lines explicitly mentioning email.
         prioritized_lines = []
@@ -499,6 +506,7 @@ class RAGService:
 
         for candidate in candidates:
             cleaned = candidate.strip(".,;:|")
+            cleaned = self._refine_email_candidate(cleaned, name_tokens)
             if self._is_valid_email(cleaned):
                 return cleaned
 
@@ -531,6 +539,14 @@ class RAGService:
 
     def _extract_location(self, text: str) -> str | None:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
+        top_lines = lines[:8]
+
+        for line in top_lines:
+            normalized = self._normalize_inline_contact_text(line)
+            location = self._extract_location_from_line(normalized)
+            if location:
+                return location
+
         for index, line in enumerate(lines):
             if "location" in line.lower():
                 parts = line.split(":", 1)
@@ -539,11 +555,31 @@ class RAGService:
                 if index + 1 < len(lines):
                     return lines[index + 1]
 
-        city_match = re.search(
-            r"\b([A-Z][a-z]+(?: [A-Z][a-z]+)*,\s*[A-Z][a-z]+(?: [A-Z][a-z]+)*)\b",
-            text,
-        )
-        return city_match.group(1) if city_match else None
+        return None
+
+    def _extract_address(self, text: str) -> str | None:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for index, line in enumerate(lines):
+            lowered = line.lower()
+            if "address" in lowered:
+                parts = line.split(":", 1)
+                if len(parts) == 2 and parts[1].strip():
+                    return parts[1].strip()
+                if index + 1 < len(lines):
+                    next_line = lines[index + 1].strip()
+                    if next_line:
+                        return next_line
+
+        for line in lines[:8]:
+            street_match = re.search(
+                r"\b\d{1,5}\s+[A-Za-z0-9., -]+(?:road|rd|street|st|lane|ln|avenue|ave|sector|block)\b",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if street_match:
+                return street_match.group(0).strip()
+
+        return None
 
     def _normalize_inline_contact_text(self, text: str) -> str:
         normalized = text
@@ -563,6 +599,66 @@ class RAGService:
         if "." not in domain:
             return False
         return True
+
+    def _refine_email_candidate(self, email: str, name_tokens: List[str]) -> str:
+        local_part, separator, domain = email.partition("@")
+        if not separator:
+            return email
+
+        variants = [local_part]
+        for trim in range(1, min(4, len(local_part))):
+            variants.append(local_part[trim:])
+
+        best_local = local_part
+        best_score = -1
+        for variant in variants:
+            score = 0
+            variant_lower = variant.lower()
+            for token in name_tokens:
+                if token in variant_lower:
+                    score += len(token)
+            if variant_lower.startswith(tuple(name_tokens)):
+                score += 2
+            if score > best_score or (score == best_score and len(variant) < len(best_local)):
+                best_local = variant
+                best_score = score
+
+        return f"{best_local}@{domain}"
+
+    def _name_tokens(self, name: str | None) -> List[str]:
+        if not name:
+            return []
+        return [
+            token.lower()
+            for token in re.findall(r"[A-Za-z]+", name)
+            if len(token) >= 4
+        ]
+
+    def _extract_location_from_line(self, line: str) -> str | None:
+        for separator in ("|", "/", ";"):
+            parts = [part.strip() for part in line.split(separator) if part.strip()]
+            for part in parts:
+                if self._looks_like_location_value(part):
+                    return part
+
+        comma_groups = [part.strip() for part in line.split("|") if part.strip()]
+        for group in comma_groups:
+            if self._looks_like_location_value(group):
+                return group
+
+        return None
+
+    def _looks_like_location_value(self, value: str) -> bool:
+        lowered = value.lower()
+        if "@" in value or "linkedin" in lowered or "github" in lowered or "http" in lowered:
+            return False
+        if re.search(r"\d{5,}", value):
+            return False
+        location_pattern = re.fullmatch(
+            r"[A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)*(?:,\s*[A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)*){1,2}",
+            value,
+        )
+        return bool(location_pattern)
 
     def _session_dir(self, session_id: str) -> Path:
         return DOCUMENTS_DIR / session_id
