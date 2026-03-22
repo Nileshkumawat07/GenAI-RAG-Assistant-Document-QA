@@ -1,15 +1,17 @@
+# Used to build the backend API
 fastapi
+
+# Used to call the AI model through the API
 openai
+
+# Used to read text from PDF files
 pypdf
+
+# Used to load values from the .env file
 python-dotenv
+
+# Used to support file uploads in FastAPI
 python-multipart
+
+# Used to run the FastAPI server
 uvicorn
-
-faiss-cpu
-numpy
-
-# FORCE CPU torch FIRST
-torch==2.1.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-
-# Then install sentence-transformers
-sentence-transformers==2.2.2
