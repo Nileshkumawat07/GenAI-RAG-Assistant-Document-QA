@@ -9,7 +9,7 @@ ARG REACT_APP_API_BASE_URL=""
 ENV REACT_APP_API_BASE_URL=${REACT_APP_API_BASE_URL}
 RUN npm run build
 
-FROM python:3.13-slim AS runtime
+FROM python:3.10-slim AS runtime
 WORKDIR /app/backend
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
