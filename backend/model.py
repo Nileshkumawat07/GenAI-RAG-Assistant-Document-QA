@@ -251,7 +251,6 @@ class RAGService:
 
     def _answer_direct_field(self, question: str, text: str) -> Optional[str]:
         lower_question = question.lower().strip()
-        lower_text = text.lower()
 
         patterns = []
         if any(word in lower_question for word in ["name", "candidate", "person"]):
@@ -262,6 +261,15 @@ class RAGService:
             patterns.append(r"(?im)^\s*(?:phone|mobile|contact)\s*[:\-]\s*(.+)$")
         if any(word in lower_question for word in ["role", "title", "designation", "position"]):
             patterns.extend([r"(?im)^\s*(?:role|title|designation|position)\s*[:\-]\s*(.+)$"])
+        if any(word in lower_question for word in ["education", "qualification", "degree", "college", "university"]):
+            patterns.extend(
+                [
+                    r"(?im)^\s*education\s*[:\-]\s*(.+)$",
+                    r"(?im)^\s*educational background\s*[:\-]\s*(.+)$",
+                ]
+            )
+        if any(word in lower_question for word in ["skill", "skills", "technology", "technologies"]):
+            patterns.extend([r"(?im)^\s*skills\s*[:\-]\s*(.+)$", r"(?im)^\s*technical skills\s*[:\-]\s*(.+)$"])
 
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
@@ -270,6 +278,11 @@ class RAGService:
                 value = value.strip()
                 if value:
                     return value
+
+        if any(word in lower_question for word in ["education", "qualification", "degree", "skills", "experience"]):
+            section = self._extract_section(text, lower_question)
+            if section:
+                return section
 
         for keyword, synonyms in QUERY_SYNONYMS.items():
             if keyword in lower_question or any(syn in lower_question for syn in synonyms):
@@ -297,15 +310,23 @@ class RAGService:
             f"Context:\n{context}"
         )
 
-        response = self.client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": "You answer strictly from the given document context."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-        )
-        return response.choices[0].message.content or "Not in document."
+        try:
+            response = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": "You answer strictly from the given document context."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+            )
+            content = response.choices[0].message.content or ""
+            if content.strip():
+                return content
+        except Exception:
+            pass
+
+        fallback = self._extract_answer_from_context(question, retrieved)
+        return fallback or "Not in document."
 
     def _normalize_answer_format(self, answer: str) -> str:
         answer = (answer or "").replace("\r\n", "\n").strip()
@@ -335,6 +356,35 @@ class RAGService:
             start = max(end - overlap, start + 1)
 
         return chunks
+
+    def _extract_section(self, text: str, question: str) -> Optional[str]:
+        headings = []
+        if "education" in question or "qualification" in question or "degree" in question:
+            headings = ["education", "educational background", "academic background"]
+        elif "skill" in question:
+            headings = ["skills", "technical skills", "core skills"]
+        elif "experience" in question:
+            headings = ["experience", "work experience", "professional experience"]
+
+        if not headings:
+            return None
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for index, line in enumerate(lines):
+            lowered = line.lower()
+            if any(lowered.startswith(f"{heading}:") or lowered == heading for heading in headings):
+                collected = [line]
+                for next_line in lines[index + 1 : index + 6]:
+                    if re.match(r"^[A-Za-z][A-Za-z0-9 /&().,-]{0,60}:$", next_line):
+                        break
+                    collected.append(next_line)
+                return " ".join(collected).strip()
+
+        return None
+
+    def _extract_answer_from_context(self, question: str, retrieved: List[DocumentChunk]) -> Optional[str]:
+        combined = "\n".join(chunk.text for chunk in retrieved)
+        return self._answer_direct_field(question, combined)
 
     def _extract_text(self, content: bytes, filename: str) -> str:
         if filename.lower().endswith(".pdf"):
