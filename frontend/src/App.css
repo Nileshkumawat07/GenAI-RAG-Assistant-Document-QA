@@ -616,25 +616,6 @@ textarea {
   flex: 0 0 auto;
 }
 
-.object-detection-summary-section {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid #c5cae9;
-  flex: 0 0 auto;
-}
-
-.object-detection-summary-box {
-  min-height: 90px;
-  padding: 12px;
-  border-radius: 10px;
-  background: #fff;
-  border: 1px solid #c5cae9;
-  display: grid;
-  gap: 8px;
-}
-
 .detection-summary-meta {
   margin: 0;
   font-size: 12px;
@@ -684,6 +665,15 @@ textarea {
 .detection-results {
   display: grid;
   gap: 12px;
+}
+
+.detection-inline-summary {
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #c5cae9;
+  display: grid;
+  gap: 8px;
 }
 
 .detection-summary-card {
