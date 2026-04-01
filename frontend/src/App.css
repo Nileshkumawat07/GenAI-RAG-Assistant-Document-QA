@@ -350,6 +350,7 @@ textarea {
   display: flex;
   width: 100%;
   height: 100%;
+  flex: 1 1 auto;
 }
 
 .upload-preview-image {
@@ -358,6 +359,7 @@ textarea {
   height: 100%;
   object-fit: cover;
   border-radius: 10px;
+  display: block;
 }
 
 .field-label {
@@ -476,6 +478,8 @@ textarea {
   padding: 0;
   overflow: hidden;
   flex: 1 1 auto;
+  align-items: stretch;
+  justify-content: stretch;
 }
 
 .object-detection-panel-head {
