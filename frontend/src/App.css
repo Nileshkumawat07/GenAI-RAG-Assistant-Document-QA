@@ -590,6 +590,8 @@ textarea {
   gap: 8px;
   min-height: 0;
   height: 100%;
+  width: 100%;
+  align-self: stretch;
 }
 
 .object-detection-upload-shell {
@@ -597,12 +599,17 @@ textarea {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
+  max-width: none;
+  align-self: stretch;
 }
 
 .object-detection-upload-box {
+  display: flex;
   min-height: 0;
   height: 100%;
   width: 100%;
+  min-width: 100%;
+  max-width: none;
   margin-bottom: 0;
   padding: 16px;
   overflow: hidden;
@@ -612,6 +619,7 @@ textarea {
   appearance: none;
   -webkit-appearance: none;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .upload-overlay-button {
