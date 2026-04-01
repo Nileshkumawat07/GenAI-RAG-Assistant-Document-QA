@@ -260,9 +260,9 @@ textarea {
 }
 
 .content-card.object-detection-mode {
-  height: 100%;
-  flex: 1 1 auto;
-  overflow: hidden;
+  height: auto;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .content-grid {
@@ -295,7 +295,7 @@ textarea {
 }
 
 .feature-panel.object-detection-panel-root {
-  height: 100%;
+  height: auto;
 }
 
 .tool-title {
@@ -453,7 +453,6 @@ textarea {
 .object-detection-upload-card {
   gap: 10px;
   min-height: 0;
-  flex: 1 1 auto;
 }
 
 .object-detection-top-head {
@@ -484,8 +483,8 @@ textarea {
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
   gap: 12px;
   align-items: stretch;
-  height: 100%;
-  min-height: 420px;
+  height: clamp(320px, 46vh, 470px);
+  min-height: 320px;
 }
 
 .object-detection-upload-box {
