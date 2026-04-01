@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import ImageGenerationPanel from "./features/image-generation/ImageGenerationPanel";
+import ObjectDetectionPanel from "./features/object-detection/ObjectDetectionPanel";
 
 const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
 const SESSION_STORAGE_KEY = "document_assistant_session_id";
@@ -332,14 +332,14 @@ function Chat() {
   const infoMessage =
     activeSection === "document-retrieval"
       ? "Transform your documents into an instant answer workspace with fast retrieval and precise responses."
-      : "Build a separate image generation workflow here with its own prompts, controls, preview area, and output handling.";
+      : "Use Groq vision to inspect an uploaded image and return detected objects with counts and approximate locations.";
 
   return (
     <section id="workspace" className="workspace-page">
       <div className="workspace-shell">
         <aside className="workspace-sidebar">
           <h1 className="sidebar-title">Assistant</h1>
-          <p className="sidebar-description">Separate tools for retrieval and generation</p>
+          <p className="sidebar-description">Separate tools for retrieval and object detection</p>
 
           <div className="sidebar-tabs">
             <button
@@ -350,11 +350,11 @@ function Chat() {
               Document Retrieval
             </button>
             <button
-              className={`sidebar-tab ${activeSection === "image-generation" ? "active" : ""}`}
-              onClick={() => setActiveSection("image-generation")}
+              className={`sidebar-tab ${activeSection === "object-detection" ? "active" : ""}`}
+              onClick={() => setActiveSection("object-detection")}
               type="button"
             >
-              Image Generation
+              Object Detection
             </button>
           </div>
 
@@ -363,7 +363,7 @@ function Chat() {
               <h4>
                 {activeSection === "document-retrieval"
                   ? "Document Retrieval Status"
-                  : "Image Generation Status"}
+                  : "Object Detection Status"}
               </h4>
               <div className="status-feed">
                 {activeSection === "document-retrieval" ? (
@@ -374,8 +374,8 @@ function Chat() {
                   ))
                 ) : (
                   <>
-                    <p className="status-item status-info">Image generation section ready.</p>
-                    <p className="status-item status-info">Add your own prompt and model flow later.</p>
+                    <p className="status-item status-info">Object detection is ready.</p>
+                    <p className="status-item status-info">Upload an image to analyze visible objects.</p>
                   </>
                 )}
               </div>
@@ -405,7 +405,7 @@ function Chat() {
                 uploadDocument={uploadDocument}
               />
             ) : (
-              <ImageGenerationPanel />
+              <ObjectDetectionPanel />
             )}
 
             {(error || uploadStatus) && activeSection === "document-retrieval" ? (

@@ -12,6 +12,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()  # API key for the AI model
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192").strip()  # Model name used to create answers.
 
+OBJECT_DETECTION_MODEL = os.getenv(
+    "OBJECT_DETECTION_MODEL",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+).strip()  # Vision model used for object detection.
+
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "700"))  # Size of each text chunk.
 
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))  # Overlap between chunks.

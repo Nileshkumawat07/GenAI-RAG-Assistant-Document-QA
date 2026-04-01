@@ -7,13 +7,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from config import FRONTEND_ORIGIN
-from image_generation.routes import router as image_generation_router
 from model import RAGService
+from object_detection.routes import router as object_detection_router
 
 
 # Main FastAPI app used by the backend server.
 app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
-app.include_router(image_generation_router)
+app.include_router(object_detection_router)
 
 # Service object that handles document upload, indexing, and answering.
 rag_service = RAGService()
@@ -97,7 +97,7 @@ def serve_index():
 def serve_frontend_routes(full_path: str):
     # Keep API routes separate from frontend routes.
     if full_path.startswith(
-        ("health", "documents", "query", "image-generation", "openapi.json", "docs", "redoc")
+        ("health", "documents", "query", "object-detection", "openapi.json", "docs", "redoc")
     ):
         raise HTTPException(status_code=404, detail="Not found.")
 
