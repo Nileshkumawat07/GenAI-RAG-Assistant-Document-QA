@@ -388,7 +388,7 @@ function Chat() {
             <p>{infoMessage}</p>
           </div>
 
-          <div className="content-card">
+          <div className={`content-card ${activeSection === "object-detection" ? "object-detection-mode" : ""}`}>
             {activeSection === "document-retrieval" ? (
               <DocumentRetrievalPanel
                 answer={answer}

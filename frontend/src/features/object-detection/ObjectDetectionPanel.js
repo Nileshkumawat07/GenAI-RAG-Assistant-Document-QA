@@ -86,7 +86,7 @@ function ObjectDetectionPanel() {
   };
 
   return (
-    <div className="feature-panel">
+    <div className="feature-panel object-detection-panel-root">
       <div className="insight-section">
         <div className="insight-card">
           <h3 className="tool-title">Object Detection Guidance</h3>

@@ -259,6 +259,12 @@ textarea {
   overflow: hidden;
 }
 
+.content-card.object-detection-mode {
+  height: auto;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -286,6 +292,10 @@ textarea {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.feature-panel.object-detection-panel-root {
+  height: auto;
 }
 
 .tool-title {
@@ -357,9 +367,10 @@ textarea {
   max-width: 100%;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 10px;
   display: block;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .field-label {
