@@ -27,8 +27,8 @@ class ObjectDetectionService:
             "model": OBJECT_DETECTION_MODEL,
         }
 
-    def detect_objects(self, image_bytes: bytes, filename: str) -> dict:
-        media_type = self._media_type(filename)
+    def detect_objects(self, image_bytes: bytes, filename: str, content_type: str | None = None) -> dict:
+        media_type = self._media_type(filename, content_type)
         encoded = base64.b64encode(image_bytes).decode("utf-8")
         image_url = f"data:{media_type};base64,{encoded}"
 
@@ -134,7 +134,11 @@ class ObjectDetectionService:
             "objects": normalized_objects,
         }
 
-    def _media_type(self, filename: str) -> str:
+    def _media_type(self, filename: str, content_type: str | None = None) -> str:
+        normalized_content_type = (content_type or "").lower()
+        if normalized_content_type in {"image/jpeg", "image/png", "image/webp"}:
+            return normalized_content_type
+
         suffix = Path(filename).suffix.lower()
         if suffix in {".jpg", ".jpeg"}:
             return "image/jpeg"

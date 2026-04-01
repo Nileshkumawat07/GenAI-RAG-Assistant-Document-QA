@@ -1,6 +1,80 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiUrl } from "../../shared/api/http";
 
+const SUPPORTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const DIRECT_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const CONVERTIBLE_UPLOAD_TYPES = ["image/heic", "image/heif"];
+
+function hasSupportedExtension(fileName = "") {
+  return SUPPORTED_EXTENSIONS.some((extension) => fileName.toLowerCase().endsWith(extension));
+}
+
+function extensionFromType(mimeType) {
+  if (mimeType === "image/png") {
+    return ".png";
+  }
+
+  if (mimeType === "image/webp") {
+    return ".webp";
+  }
+
+  return ".jpg";
+}
+
+function renameFileWithExtension(file, mimeType) {
+  const safeType = mimeType || file.type || "image/jpeg";
+  const extension = extensionFromType(safeType);
+  const baseName = (file.name || "image").replace(/\.[^.]+$/, "") || "image";
+
+  return new File([file], `${baseName}${extension}`, {
+    type: safeType,
+    lastModified: file.lastModified,
+  });
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("This image format is not supported on this device."));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function convertImageToJpeg(file) {
+  const image = await loadImageFromFile(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", 0.92);
+  });
+
+  if (!blob) {
+    throw new Error("Image conversion failed.");
+  }
+
+  const baseName = (file.name || "mobile-photo").replace(/\.[^.]+$/, "") || "mobile-photo";
+  return new File([blob], `${baseName}.jpg`, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+}
+
 function ObjectDetectionPanel() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [error, setError] = useState("");
@@ -46,8 +120,29 @@ function ObjectDetectionPanel() {
     }
   }, [isCameraOpen]);
 
-  const handleSelectImage = (event) => {
+  const normalizeSelectedImage = async (file) => {
+    if (DIRECT_UPLOAD_TYPES.includes(file.type)) {
+      return hasSupportedExtension(file.name) ? file : renameFileWithExtension(file, file.type);
+    }
+
+    if (CONVERTIBLE_UPLOAD_TYPES.includes(file.type)) {
+      return convertImageToJpeg(file);
+    }
+
+    if (!file.type && hasSupportedExtension(file.name)) {
+      return file;
+    }
+
+    if (file.type.startsWith("image/")) {
+      return convertImageToJpeg(file);
+    }
+
+    throw new Error("Only JPG, JPEG, PNG, and WEBP files are allowed.");
+  };
+
+  const handleSelectImage = async (event) => {
     const file = event.target.files[0] || null;
+    event.target.value = "";
     setError("");
     setCameraError("");
     setResult(null);
@@ -57,22 +152,20 @@ function ObjectDetectionPanel() {
       return;
     }
 
-    const isValidType = /\.(png|jpe?g|webp)$/i.test(file.name);
-    if (!isValidType) {
-      setSelectedImage(null);
-      setError("Only JPG, JPEG, PNG, and WEBP files are allowed.");
-      return;
-    }
-
     if (file.size === 0) {
       setSelectedImage(null);
       setError("Selected image is empty.");
       return;
     }
 
-    stopCamera();
-    setSelectedImage(file);
-    event.target.value = "";
+    try {
+      const normalizedFile = await normalizeSelectedImage(file);
+      stopCamera();
+      setSelectedImage(normalizedFile);
+    } catch (err) {
+      setSelectedImage(null);
+      setError(err.message || "Only JPG, JPEG, PNG, and WEBP files are allowed.");
+    }
   };
 
   const openUploadPicker = () => {
@@ -272,6 +365,7 @@ function ObjectDetectionPanel() {
                     </div>
                   ) : (
                     <>
+                      <span className="upload-icon">+</span>
                       <strong>Choose an image</strong>
                       <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
                     </>

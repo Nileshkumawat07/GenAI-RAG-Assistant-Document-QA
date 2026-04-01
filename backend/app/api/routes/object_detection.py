@@ -14,7 +14,11 @@ def build_object_detection_router() -> APIRouter:
     @router.post("/detect")
     async def detect_objects(file: UploadFile = File(...)):
         filename = file.filename or "image"
-        if not filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+        content_type = (file.content_type or "").lower()
+        is_supported_extension = filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+        is_supported_content_type = content_type in {"image/jpeg", "image/png", "image/webp"}
+
+        if not is_supported_extension and not is_supported_content_type:
             raise HTTPException(
                 status_code=400,
                 detail="Only JPG, JPEG, PNG, and WEBP files are allowed.",
@@ -25,7 +29,7 @@ def build_object_detection_router() -> APIRouter:
             raise HTTPException(status_code=400, detail="Uploaded image is empty.")
 
         try:
-            return service.detect_objects(image_bytes, filename)
+            return service.detect_objects(image_bytes, filename, content_type)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
