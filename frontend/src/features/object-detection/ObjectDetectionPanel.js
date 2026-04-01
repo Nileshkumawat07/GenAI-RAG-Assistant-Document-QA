@@ -108,8 +108,6 @@ function ObjectDetectionPanel() {
               {previewUrl ? (
                 <div className="upload-preview-content">
                   <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
-                  <strong>{selectedImage.name}</strong>
-                  <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
                 </div>
               ) : (
                 <>
@@ -168,11 +166,6 @@ function ObjectDetectionPanel() {
             </div>
           </div>
 
-          <div className="detection-note">
-            The uploaded image appears in the upload area, and the detection
-            result appears in the right-side panel for easier comparison.
-          </div>
-
           <button
             className="primary-button"
             onClick={detectObjects}
@@ -183,22 +176,6 @@ function ObjectDetectionPanel() {
         </article>
       </div>
 
-      <div className="answer-section detection-answer-section">
-        <div className="answer-card-head">
-          <div>
-            <h3 className="tool-title">Detection Notes</h3>
-            <p className="tool-copy">Helpful guidance for reading the Groq vision output.</p>
-          </div>
-        </div>
-
-        <div className="answer-box detection-answer-box">
-          <div className="detection-note detection-empty-state">
-            Confidence shows how certain the model is, while location is an
-            approximate natural-language description rather than a drawn
-            bounding box.
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
