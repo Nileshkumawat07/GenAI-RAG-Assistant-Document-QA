@@ -38,6 +38,11 @@ class ImageGenerationService:
             if IMAGE_GENERATION_LOCAL_FILES_ONLY
             else "The SDXL Lightning pipeline downloads required model files on first request if they are not cached yet."
         )
+        performance_hint = (
+            "GPU detected. Generation should be much faster."
+            if self.device == "cuda"
+            else "GPU not detected. Image generation is running on CPU and may take a few minutes per request."
+        )
         return {
             "status": "ready",
             "message": f"Image generation route is available. {mode_message}",
@@ -47,6 +52,7 @@ class ImageGenerationService:
             "steps": IMAGE_GENERATION_STEPS,
             "local_files_only": IMAGE_GENERATION_LOCAL_FILES_ONLY,
             "device": self.device,
+            "performance_hint": performance_hint,
         }
 
     def generate_image(self, prompt: str, negative_prompt: str = "", seed: int | None = None) -> dict:

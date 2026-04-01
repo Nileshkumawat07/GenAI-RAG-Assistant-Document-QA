@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { requestJson } from "../../shared/api/http";
 
@@ -9,6 +9,29 @@ function ImageGenerationPanel() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadStatus() {
+      try {
+        const data = await requestJson("/image-generation/health", {}, "Image generation status failed.");
+        if (isMounted) {
+          setStatus(data);
+        }
+      } catch {
+        if (isMounted) {
+          setStatus(null);
+        }
+      }
+    }
+
+    loadStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const generateImage = async () => {
     if (!prompt.trim()) {
@@ -56,6 +79,7 @@ function ImageGenerationPanel() {
             Write a strong visual prompt and optionally add a negative prompt to steer the SDXL
             Lightning output away from unwanted details.
           </p>
+          {status ? <p className="tool-copy">{status.performance_hint}</p> : null}
         </div>
       </div>
 
@@ -128,7 +152,11 @@ function ImageGenerationPanel() {
                 <p><strong>XFormers:</strong> {result.xformers_enabled ? "Enabled" : "Unavailable"}</p>
               </div>
             ) : (
-              <p>Generation details will appear here after the image is created.</p>
+              <p>
+                {status
+                  ? `Current device: ${status.device}. ${status.performance_hint}`
+                  : "Generation details will appear here after the image is created."}
+              </p>
             )}
           </div>
         </article>

@@ -16,7 +16,7 @@ RUN npm run build
 # ======================
 # BACKEND RUNTIME
 # ======================
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04 AS runtime
+FROM python:3.10-slim AS runtime
 WORKDIR /app/backend
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -24,17 +24,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
     HF_HOME=/app/.cache/huggingface
 
-# System deps for faiss + torch + Python runtime
+# System deps for faiss + torch
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
     build-essential \
     gcc \
     g++ \
     libgomp1 \
-    && ln -sf /usr/bin/python3 /usr/local/bin/python \
-    && ln -sf /usr/bin/pip3 /usr/local/bin/pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements

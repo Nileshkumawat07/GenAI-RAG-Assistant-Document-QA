@@ -5,12 +5,12 @@ python-dotenv
 python-multipart
 uvicorn
 
-# Use CUDA-enabled PyTorch wheels for GPU-backed image generation containers.
---extra-index-url https://download.pytorch.org/whl/cu121
+# Use CPU-only PyTorch wheels for free-tier and non-GPU deployments.
+--extra-index-url https://download.pytorch.org/whl/cpu
 
 faiss-cpu
 sentence-transformers
-torch==2.5.1+cu121
+torch==2.5.1+cpu
 diffusers
 huggingface-hub
 safetensors
