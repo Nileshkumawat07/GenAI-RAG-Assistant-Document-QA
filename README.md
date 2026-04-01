@@ -77,8 +77,8 @@ GenAI-RAG-Assistant-Document-QA/
 
 ### Structure Notes
 
-- `backend/app` is now the main production-style backend package
-- `backend/main.py` stays as the local backend entrypoint so the existing run command still works
+- `backend/main.py` is the single backend entrypoint and app bootstrap
+- `backend/app` contains the route, config, schema, and service layers
 - `frontend/src/features` contains feature-specific UI like document retrieval and object detection
 - `frontend/src/shared` contains shared API, session, and formatting helpers
 
