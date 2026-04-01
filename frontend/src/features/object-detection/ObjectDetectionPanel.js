@@ -100,73 +100,67 @@ function ObjectDetectionPanel() {
       <div className="content-grid single-column">
         <article className="tool-card object-detection-upload-card">
           <div className="object-detection-top-head">
-            <div>
+            <div className="object-detection-head-block">
               <h3 className="tool-title">Upload Image</h3>
               <p className="tool-copy">Select an image for object detection.</p>
             </div>
 
-            <div>
-              <h3 className="tool-title">Detection Result</h3>
-              <p className="tool-copy">Detected objects returned by the Groq vision model.</p>
+            <div className="object-detection-head-block object-detection-result-head">
+              <div>
+                <h3 className="tool-title">Detection Result</h3>
+                <p className="tool-copy">Detected objects returned by the Groq vision model.</p>
+              </div>
+              <span className="answer-badge">
+                {result ? `${result.object_count} Objects` : "Waiting"}
+              </span>
             </div>
           </div>
 
           <div className="object-detection-upload-layout">
-            <div className="object-detection-left-panel">
-              <div className="object-detection-panel-head" />
-              <label className="upload-box object-detection-upload-box">
-                <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
-                {previewUrl ? (
-                  <div className="upload-preview-content">
-                    <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
-                  </div>
-                ) : (
-                  <>
-                    <span className="upload-icon">+</span>
-                    <strong>Choose an image</strong>
-                    <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
-                  </>
-                )}
-              </label>
-            </div>
+            <label className="upload-box object-detection-upload-box">
+              <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
+              {previewUrl ? (
+                <div className="upload-preview-content">
+                  <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
+                </div>
+              ) : (
+                <>
+                  <span className="upload-icon">+</span>
+                  <strong>Choose an image</strong>
+                  <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+                </>
+              )}
+            </label>
 
-            <div className="object-detection-preview-panel">
-              <div className="object-detection-panel-head detection-panel-badge-row">
-                <div />
-                <span className="answer-badge">
-                  {result ? `${result.object_count} Objects` : "Waiting"}
-                </span>
-              </div>
-              <div className="answer-box detection-answer-box detection-inline-box">
-                {error ? <p className="error-text">{error}</p> : null}
+            <div className="answer-box detection-answer-box detection-inline-box">
+              {error ? <p className="error-text">{error}</p> : null}
 
-                {result ? (
-                  <div className="detection-results">
-                    {result.objects.length ? (
-                      <div className="detection-results-grid">
-                        {result.objects.map((item, index) => (
-                          <article key={`${item.label}-${index}`} className="detection-object-card">
-                            <div className="detection-object-head">
-                              <h4>{item.label}</h4>
-                              <span className={`confidence-badge confidence-${item.confidence}`}>
-                                {item.confidence}
-                              </span>
-                            </div>
-                            <p className="detection-object-meta">Count: {item.count}</p>
-                            <p className="detection-object-meta">Location: {item.location}</p>
-                          </article>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="answer-paragraph">No clear objects were detected.</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="detection-note detection-empty-state">
-                    Run object detection and the result will appear here.
-                  </div>
-                )}
-              </div>
+              {result ? (
+                <div className="detection-results">
+                  {result.objects.length ? (
+                    <div className="detection-results-grid">
+                      {result.objects.map((item, index) => (
+                        <article key={`${item.label}-${index}`} className="detection-object-card">
+                          <div className="detection-object-head">
+                            <h4>{item.label}</h4>
+                            <span className={`confidence-badge confidence-${item.confidence}`}>
+                              {item.confidence}
+                            </span>
+                          </div>
+                          <p className="detection-object-meta">Count: {item.count}</p>
+                          <p className="detection-object-meta">Location: {item.location}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="answer-paragraph">No clear objects were detected.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="detection-note detection-empty-state">
+                  Run object detection and the result will appear here.
+                </div>
+              )}
             </div>
           </div>
 

@@ -460,10 +460,22 @@ textarea {
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
   gap: 12px;
   align-items: start;
+  margin-bottom: 8px;
 }
 
 .object-detection-top-head .tool-copy {
   margin-bottom: 0;
+}
+
+.object-detection-head-block {
+  min-width: 0;
+}
+
+.object-detection-result-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .object-detection-upload-layout {
@@ -475,13 +487,6 @@ textarea {
   min-height: 320px;
 }
 
-.object-detection-left-panel,
-.object-detection-preview-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
-}
-
 .object-detection-upload-box {
   min-height: 0;
   height: 100%;
@@ -491,16 +496,6 @@ textarea {
   flex: 1 1 auto;
   align-items: stretch;
   justify-content: stretch;
-}
-
-.object-detection-panel-head {
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-}
-
-.detection-panel-badge-row {
-  justify-content: flex-end;
 }
 
 .object-detection-inline-preview {
@@ -608,7 +603,6 @@ textarea {
 
 .detection-inline-box {
   min-height: 0;
-  flex: 1 1 auto;
   height: 100%;
 }
 
