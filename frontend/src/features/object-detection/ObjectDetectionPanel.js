@@ -215,7 +215,7 @@ function ObjectDetectionPanel() {
 
           <div className="object-detection-upload-layout">
             <div className="object-detection-input-panel">
-              <div className="object-detection-source-actions">
+              <div className="object-detection-upload-shell">
                 <label className="upload-box object-detection-upload-box">
                   <input
                     type="file"
@@ -223,7 +223,12 @@ function ObjectDetectionPanel() {
                     capture="environment"
                     onChange={handleSelectImage}
                   />
-                  {previewUrl ? (
+                  {isCameraOpen ? (
+                    <div className="camera-preview-shell object-detection-inline-camera">
+                      <video ref={videoRef} className="camera-preview" autoPlay playsInline muted />
+                      <canvas ref={canvasRef} className="camera-canvas" />
+                    </div>
+                  ) : previewUrl ? (
                     <div className="upload-preview-content">
                       <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
                     </div>
@@ -236,30 +241,25 @@ function ObjectDetectionPanel() {
                   )}
                 </label>
 
-                <div className="object-detection-camera-actions">
-                  <button
-                    className="primary-button secondary-tone camera-button"
-                    type="button"
-                    onClick={isCameraOpen ? stopCamera : startCamera}
-                    disabled={isStartingCamera}
-                  >
-                    {isStartingCamera ? "Opening Camera..." : isCameraOpen ? "Close Camera" : "Use Camera"}
-                  </button>
-                  {cameraError ? <p className="error-text">{cameraError}</p> : null}
-                </div>
+                <button
+                  className="upload-overlay-button upload-camera-button"
+                  type="button"
+                  onClick={isCameraOpen ? stopCamera : startCamera}
+                  disabled={isStartingCamera}
+                >
+                  {isStartingCamera ? "..." : isCameraOpen ? "x" : "C"}
+                </button>
+
+                {isCameraOpen ? (
+                  <div className="camera-overlay-actions">
+                    <button className="primary-button camera-overlay-button" type="button" onClick={capturePhoto}>
+                      Capture Photo
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
-              {isCameraOpen ? (
-                <div className="camera-capture-panel">
-                  <div className="camera-preview-shell">
-                    <video ref={videoRef} className="camera-preview" autoPlay playsInline muted />
-                    <canvas ref={canvasRef} className="camera-canvas" />
-                  </div>
-                  <button className="primary-button" type="button" onClick={capturePhoto}>
-                    Capture Photo
-                  </button>
-                </div>
-              ) : null}
+              {cameraError ? <p className="error-text">{cameraError}</p> : null}
             </div>
 
             <div className="answer-box detection-answer-box detection-inline-box">
