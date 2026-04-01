@@ -28,15 +28,19 @@ function ObjectDetectionPanel() {
     };
   }, [selectedImage]);
 
-  useEffect(() => () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (isCameraOpen && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
     }
   }, [isCameraOpen]);
 
@@ -64,6 +68,7 @@ function ObjectDetectionPanel() {
       return;
     }
 
+    stopCamera();
     setSelectedImage(file);
   };
 
@@ -89,7 +94,7 @@ function ObjectDetectionPanel() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "environment",
+          facingMode: { ideal: "environment" },
         },
         audio: false,
       });
@@ -99,6 +104,7 @@ function ObjectDetectionPanel() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
       }
     } catch (err) {
       setCameraError(err.message || "Camera access failed.");
@@ -106,6 +112,18 @@ function ObjectDetectionPanel() {
     } finally {
       setIsStartingCamera(false);
     }
+  };
+
+  const handleCameraButtonClick = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (isCameraOpen) {
+      stopCamera();
+      return;
+    }
+
+    await startCamera();
   };
 
   const capturePhoto = () => {
@@ -220,7 +238,6 @@ function ObjectDetectionPanel() {
                   <input
                     type="file"
                     accept=".jpg,.jpeg,.png,.webp,image/*"
-                    capture="environment"
                     onChange={handleSelectImage}
                   />
                   {isCameraOpen ? (
@@ -243,10 +260,12 @@ function ObjectDetectionPanel() {
                 <button
                   className="upload-overlay-button upload-camera-button"
                   type="button"
-                  onClick={isCameraOpen ? stopCamera : startCamera}
+                  onClick={handleCameraButtonClick}
                   disabled={isStartingCamera}
                 >
-                  <span className="camera-icon" aria-hidden="true">{isCameraOpen ? "x" : "📷"}</span>
+                  <span className="camera-icon" aria-hidden="true">
+                    {isCameraOpen ? "x" : "\uD83D\uDCF7"}
+                  </span>
                   <span className="sr-only">
                     {isStartingCamera ? "Opening camera" : isCameraOpen ? "Close camera" : "Open camera"}
                   </span>
@@ -312,7 +331,6 @@ function ObjectDetectionPanel() {
           </button>
         </article>
       </div>
-
     </div>
   );
 }
