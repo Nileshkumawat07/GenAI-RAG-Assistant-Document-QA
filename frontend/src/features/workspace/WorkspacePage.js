@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel";
+import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
@@ -96,14 +97,34 @@ function WorkspacePage() {
   const infoMessage =
     activeSection === "document-retrieval"
       ? "Transform your documents into an instant answer workspace with fast retrieval and precise responses."
-      : "Use Groq vision to inspect an uploaded image and return detected objects with counts and approximate locations.";
+      : activeSection === "object-detection"
+        ? "Use Groq vision to inspect an uploaded image and return detected objects with counts and approximate locations."
+        : "Generate images from prompts with an SDXL Lightning pipeline configured to load from your Docker-provided model cache.";
+  const statusContent =
+    activeSection === "document-retrieval" ? (
+      statusFeed.map((item) => (
+        <p key={`${item.type}-${item.text}`} className={`status-item status-${item.type}`}>
+          {item.text}
+        </p>
+      ))
+    ) : activeSection === "object-detection" ? (
+      <>
+        <p className="status-item status-info">Object detection is ready.</p>
+        <p className="status-item status-info">Upload an image to analyze visible objects.</p>
+      </>
+    ) : (
+      <>
+        <p className="status-item status-info">Image generation is ready.</p>
+        <p className="status-item status-info">Write a prompt and generate with SDXL Lightning.</p>
+      </>
+    );
 
   return (
     <section id="workspace" className="workspace-page">
       <div className="workspace-shell">
         <aside className="workspace-sidebar">
           <h1 className="sidebar-title">Assistant</h1>
-          <p className="sidebar-description">Separate tools for retrieval and object detection</p>
+          <p className="sidebar-description">Separate tools for retrieval, detection, and generation</p>
 
           <div className="sidebar-tabs">
             <button
@@ -120,6 +141,13 @@ function WorkspacePage() {
             >
               Object Detection
             </button>
+            <button
+              className={`sidebar-tab ${activeSection === "image-generation" ? "active" : ""}`}
+              onClick={() => setActiveSection("image-generation")}
+              type="button"
+            >
+              Image Generation
+            </button>
           </div>
 
           <div className="sidebar-boost-card">
@@ -127,22 +155,11 @@ function WorkspacePage() {
               <h4>
                 {activeSection === "document-retrieval"
                   ? "Document Retrieval Status"
-                  : "Object Detection Status"}
+                  : activeSection === "object-detection"
+                    ? "Object Detection Status"
+                    : "Image Generation Status"}
               </h4>
-              <div className="status-feed">
-                {activeSection === "document-retrieval" ? (
-                  statusFeed.map((item) => (
-                    <p key={`${item.type}-${item.text}`} className={`status-item status-${item.type}`}>
-                      {item.text}
-                    </p>
-                  ))
-                ) : (
-                  <>
-                    <p className="status-item status-info">Object detection is ready.</p>
-                    <p className="status-item status-info">Upload an image to analyze visible objects.</p>
-                  </>
-                )}
-              </div>
+              <div className="status-feed">{statusContent}</div>
             </div>
           </div>
         </aside>
@@ -152,7 +169,13 @@ function WorkspacePage() {
             <p>{infoMessage}</p>
           </div>
 
-          <div className={`content-card ${activeSection === "object-detection" ? "object-detection-mode" : ""}`}>
+          <div
+            className={`content-card ${
+              activeSection === "object-detection" || activeSection === "image-generation"
+                ? "object-detection-mode"
+                : ""
+            }`}
+          >
             {activeSection === "document-retrieval" ? (
               <DocumentRetrievalPanel
                 answer={answer}
@@ -168,8 +191,10 @@ function WorkspacePage() {
                 setSelectedFile={setSelectedFile}
                 uploadDocument={uploadDocument}
               />
-            ) : (
+            ) : activeSection === "object-detection" ? (
               <ObjectDetectionPanel />
+            ) : (
+              <ImageGenerationPanel />
             )}
 
             {(error || uploadStatus) && activeSection === "document-retrieval" ? (

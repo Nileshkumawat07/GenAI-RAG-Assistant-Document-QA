@@ -298,6 +298,10 @@ textarea {
   height: auto;
 }
 
+.feature-panel.image-generation-panel-root {
+  height: auto;
+}
+
 .tool-title {
   margin: 0 0 4px;
   font-size: 14px;
@@ -448,6 +452,67 @@ textarea {
   font-size: 12px;
   color: #546e7a;
   text-align: center;
+}
+
+.image-generation-grid {
+  align-items: stretch;
+}
+
+.prompt-input {
+  height: auto;
+  min-height: 120px;
+}
+
+.secondary-input {
+  min-height: 88px;
+}
+
+.seed-input {
+  height: auto;
+  min-height: 44px;
+  resize: vertical;
+}
+
+.image-result-card {
+  gap: 10px;
+}
+
+.image-generation-preview-box {
+  flex: 1 1 auto;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px dashed #9fa8da;
+  background: rgba(255, 255, 255, 0.68);
+  overflow: hidden;
+}
+
+.generated-image-preview {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.image-meta-box {
+  flex: 0 0 auto;
+  min-height: 140px;
+}
+
+.image-generation-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.image-generation-meta p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .object-detection-upload-card {

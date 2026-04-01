@@ -9,3 +9,7 @@ uvicorn
 faiss-cpu
 sentence-transformers
 torch
+diffusers
+xformers
+huggingface-hub
+safetensors

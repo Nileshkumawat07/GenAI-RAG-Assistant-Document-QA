@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.documents import build_document_router
 from app.api.routes.frontend import build_frontend_router, mount_frontend
 from app.api.routes.health import build_health_router
+from app.api.routes.image_generation import build_image_generation_router
 from app.api.routes.object_detection import build_object_detection_router
 from app.core.config import FRONTEND_ORIGIN
 from app.services.rag_service import RAGService
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router(rag_service))
     app.include_router(build_document_router(rag_service))
     app.include_router(build_object_detection_router())
+    app.include_router(build_image_generation_router())
     app.include_router(build_frontend_router(frontend_build_dir))
     return app
 
