@@ -182,6 +182,33 @@ function ObjectDetectionPanel() {
           >
             {isDetecting ? "Detecting..." : "Detect Objects"}
           </button>
+
+          <div className="object-detection-summary-section">
+            <div className="answer-card-head">
+              <div>
+                <h3 className="tool-title">Summary</h3>
+                <p className="tool-copy">Stable summary area for the current detection result.</p>
+              </div>
+              <span className="answer-badge">
+                {result ? `${result.objects.length} Labels` : "Ready"}
+              </span>
+            </div>
+
+            <div className="object-detection-summary-box">
+              {result ? (
+                <>
+                  <p className="answer-paragraph">{result.summary}</p>
+                  <p className="detection-summary-meta">
+                    Total objects counted: {result.object_count}
+                  </p>
+                </>
+              ) : (
+                <p className="answer-paragraph">
+                  Upload an image and run detection to show a stable summary here.
+                </p>
+              )}
+            </div>
+          </div>
         </article>
       </div>
 
