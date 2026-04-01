@@ -16,7 +16,6 @@ async function readJson(response) {
 
 function ObjectDetectionPanel() {
   const [selectedImage, setSelectedImage] = useState(null);
-  const [promptHint, setPromptHint] = useState("Detect the main objects in this image.");
   const [error, setError] = useState("");
   const [isDetecting, setIsDetecting] = useState(false);
   const [result, setResult] = useState(null);
@@ -131,18 +130,14 @@ function ObjectDetectionPanel() {
             )}
           </div>
 
-          <textarea
-            className="question-input"
-            value={promptHint}
-            onChange={(event) => setPromptHint(event.target.value)}
-            placeholder="Optional detection note"
-            rows={4}
-            disabled
-          />
+          <div className="detection-note">
+            The result will show a summary plus separate object cards with count,
+            confidence, and approximate location.
+          </div>
         </article>
       </div>
 
-      <div className="answer-section">
+      <div className="answer-section detection-answer-section">
         <div className="answer-card-head">
           <div>
             <h3 className="tool-title">Detection Result</h3>
@@ -153,20 +148,31 @@ function ObjectDetectionPanel() {
           </span>
         </div>
 
-        <div className="answer-box has-answer">
+        <div className="answer-box detection-answer-box">
           {error ? <p className="error-text">{error}</p> : null}
 
           {result ? (
-            <div className="answer-content">
-              <p className="answer-paragraph">{result.summary}</p>
+            <div className="detection-results">
+              <div className="detection-summary-card">
+                <p className="detection-summary-label">Summary</p>
+                <p className="answer-paragraph">{result.summary}</p>
+              </div>
+
               {result.objects.length ? (
-                <ul className="answer-list">
+                <div className="detection-results-grid">
                   {result.objects.map((item, index) => (
-                    <li key={`${item.label}-${index}`}>
-                      {item.label} | count: {item.count} | confidence: {item.confidence} | location: {item.location}
-                    </li>
+                    <article key={`${item.label}-${index}`} className="detection-object-card">
+                      <div className="detection-object-head">
+                        <h4>{item.label}</h4>
+                        <span className={`confidence-badge confidence-${item.confidence}`}>
+                          {item.confidence}
+                        </span>
+                      </div>
+                      <p className="detection-object-meta">Count: {item.count}</p>
+                      <p className="detection-object-meta">Location: {item.location}</p>
+                    </article>
                   ))}
-                </ul>
+                </div>
               ) : (
                 <p className="answer-paragraph">No clear objects were detected.</p>
               )}

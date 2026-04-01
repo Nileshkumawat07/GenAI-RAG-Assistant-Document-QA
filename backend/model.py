@@ -248,6 +248,7 @@ class RAGService:
             return None
 
         keywords = self._question_terms(question)
+        wants_contact = self._question_requests_contact(question)
         candidates = [line.strip() for line in re.split(r"[\n\r]+|(?<=[.!?])\s+", context) if line.strip()]
         if not candidates:
             return None
@@ -256,10 +257,13 @@ class RAGService:
         for candidate in candidates:
             score = self._lexical_overlap_score(keywords, candidate)
 
-            if re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", candidate):
+            # Only boost contact fields when the question is explicitly asking for them.
+            if wants_contact and re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", candidate):
                 score += 3
-            if re.search(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b", candidate):
+            if wants_contact and re.search(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b", candidate):
                 score += 2
+            if "skill" in keywords and re.search(r"\b(skill|skills|technology|technologies|tools|stack)\b", candidate, re.I):
+                score += 1.5
 
             if score > 0:
                 scored_candidates.append((score, len(candidate), candidate))
@@ -270,6 +274,13 @@ class RAGService:
         scored_candidates.sort(key=lambda item: (-item[0], item[1]))
         best = scored_candidates[0][2]
         return best.strip()
+
+    def _question_requests_contact(self, question: str) -> bool:
+        q = question.lower()
+        return any(
+            word in q
+            for word in ["contact", "email", "phone", "mobile", "number", "reach", "call"]
+        )
 
     def _build_context(self, retrieved: List[DocumentChunk]) -> str:
         if not retrieved:

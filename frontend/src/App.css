@@ -423,6 +423,17 @@ textarea {
   text-align: center;
 }
 
+.detection-note {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid #c5cae9;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #455a64;
+}
+
 .question-input:focus {
   outline: 1px solid var(--primary);
   border-color: var(--primary);
@@ -502,6 +513,14 @@ textarea {
   overflow: auto;
 }
 
+.detection-answer-section {
+  min-height: 320px;
+}
+
+.detection-answer-box {
+  min-height: 260px;
+}
+
 .answer-box p {
   margin: 0;
   font-size: 12px;
@@ -538,6 +557,94 @@ textarea {
   color: #37474f;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.detection-results {
+  display: grid;
+  gap: 12px;
+}
+
+.detection-summary-card {
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #c5cae9;
+}
+
+.detection-summary-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.detection-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.detection-object-card {
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #c5cae9;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.detection-object-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.detection-object-head h4 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--primary);
+  text-transform: capitalize;
+}
+
+.detection-object-meta {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #455a64;
+}
+
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+}
+
+.confidence-high {
+  color: #1b5e20;
+  background: rgba(27, 94, 32, 0.1);
+  border-color: rgba(27, 94, 32, 0.2);
+}
+
+.confidence-medium {
+  color: #a15c00;
+  background: rgba(255, 167, 38, 0.12);
+  border-color: rgba(255, 167, 38, 0.24);
+}
+
+.confidence-low {
+  color: #b42318;
+  background: rgba(180, 35, 24, 0.08);
+  border-color: rgba(180, 35, 24, 0.2);
 }
 
 .insight-section {
