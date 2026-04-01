@@ -7,7 +7,7 @@ function App() {
       <header className="app-header">
         <div className="app-header-inner">
           <div>
-            <p className="app-kicker">Document Assistant</p>
+            <p className="app-kicker">GenAI Assistant</p>
           </div>
           <span className="app-header-badge">Live</span>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import ImageGenerationPanel from "./features/image-generation/ImageGenerationPanel";
 
 const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
 const SESSION_STORAGE_KEY = "document_assistant_session_id";
@@ -48,7 +49,7 @@ async function requestJson(path, options, fallbackMessage) {
 function sanitizeAnswer(answer) {
   return answer
     .replace(/\r\n/g, "\n")
-    .replace(/^[•]\s*/gm, "- ")
+    .replace(/^\u2022\s*/gm, "- ")
     .replace(/\n(\d+)\.\s*\n(?=\S)/g, "\n$1. ")
     .replace(/[*_`#]+/g, "")
     .replace(/[ \t]+\n/g, "\n")
@@ -99,8 +100,8 @@ function renderAnswer(answer) {
       return;
     }
 
-    if (/^[-]\s+/.test(line) || /^•\s+/.test(line) || /^\d+\.\s+/.test(line)) {
-      listItems.push(line.replace(/^[-•]\s+/, "").replace(/^\d+\.\s+/, ""));
+    if (/^[-]\s+/.test(line) || /^\u2022\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+      listItems.push(line.replace(/^[-\u2022]\s+/, "").replace(/^\d+\.\s+/, ""));
       return;
     }
 
@@ -117,7 +118,132 @@ function renderAnswer(answer) {
   return elements.length ? elements : <p className="answer-paragraph">{cleanedAnswer}</p>;
 }
 
+function DocumentRetrievalPanel({
+  answer,
+  askQuestion,
+  hasQuestion,
+  isAsking,
+  isUploading,
+  pushStatus,
+  question,
+  selectedFile,
+  setError,
+  setQuestion,
+  setSelectedFile,
+  uploadDocument
+}) {
+  return (
+    <>
+      <div className="insight-section">
+        <div className="insight-card">
+          <h3 className="tool-title">Query Guidance</h3>
+          <p className="tool-copy">
+            Ask for names, emails, phone numbers, skills, roles, dates, or
+            project details for the clearest results. Upload one document, ask
+            one focused question, then refine the wording if you want a more
+            specific answer. A new upload replaces your current session
+            document only.
+          </p>
+        </div>
+      </div>
+
+      <div className="content-grid">
+        <article className="tool-card">
+          <h3 className="tool-title">Upload Document</h3>
+          <p className="tool-copy">Select the document you want to query.</p>
+
+          <label className="upload-box">
+            <input
+              type="file"
+              accept=".pdf,.txt"
+              onChange={(event) => {
+                const file = event.target.files[0] || null;
+                setError("");
+
+                if (!file) {
+                  setSelectedFile(null);
+                  return;
+                }
+
+                const isValidType = /\.(pdf|txt)$/i.test(file.name);
+                if (!isValidType) {
+                  setSelectedFile(null);
+                  setError("Only PDF and TXT files are allowed.");
+                  pushStatus("Invalid file selected. Only PDF and TXT files are allowed.", "error");
+                  return;
+                }
+
+                if (file.size === 0) {
+                  setSelectedFile(null);
+                  setError("Selected file is empty.");
+                  pushStatus(`Invalid file: ${file.name} is empty.`, "error");
+                  return;
+                }
+
+                setSelectedFile(file);
+                pushStatus(`Selected document: ${file.name}`);
+              }}
+            />
+            <span className="upload-icon">+</span>
+            <strong>{selectedFile ? selectedFile.name : "Choose a document"}</strong>
+            <small>Supported formats: PDF and TXT</small>
+          </label>
+
+          <button
+            className="primary-button"
+            onClick={uploadDocument}
+            disabled={!selectedFile || isUploading}
+          >
+            {isUploading ? "Uploading..." : "Upload Document"}
+          </button>
+        </article>
+
+        <article className="tool-card">
+          <h3 className="tool-title">Ask Question</h3>
+          <p className="tool-copy">Type a clear question about the uploaded file.</p>
+
+          <textarea
+            id="question-input"
+            className="question-input"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="What information do you want from this document?"
+            rows={7}
+          />
+
+          <button
+            className="primary-button secondary-tone"
+            onClick={askQuestion}
+            disabled={isAsking || !hasQuestion}
+          >
+            {isAsking ? "Generating..." : "Generate Answer"}
+          </button>
+        </article>
+      </div>
+
+      <div className="answer-section">
+        <div className="answer-card-head">
+          <div>
+            <h3 className="tool-title">Answer</h3>
+            <p className="tool-copy">Generated result for your current query.</p>
+          </div>
+          <span className="answer-badge">{answer ? "Completed" : "Waiting"}</span>
+        </div>
+
+        <div className={`answer-box ${answer ? "has-answer" : ""}`}>
+          {answer ? (
+            <div className="answer-content">{renderAnswer(answer)}</div>
+          ) : (
+            <p>Upload a document and ask a question to view the answer here.</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function Chat() {
+  const [activeSection, setActiveSection] = useState("document-retrieval");
   const [sessionId] = useState(() => getSessionId());
   const [selectedFile, setSelectedFile] = useState(null);
   const [question, setQuestion] = useState("");
@@ -127,7 +253,7 @@ function Chat() {
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [statusFeed, setStatusFeed] = useState([
-    { text: "Workspace ready.", type: "info" },
+    { text: "Document retrieval ready.", type: "info" },
     { text: "Upload a document to begin.", type: "info" }
   ]);
   const hasQuestion = question.trim().length > 0;
@@ -150,17 +276,19 @@ function Chat() {
     formData.append("file", selectedFile);
 
     try {
-      const data = await requestJson("/documents/upload", {
-        method: "POST",
-        headers: {
-          "X-Session-Id": sessionId
+      const data = await requestJson(
+        "/documents/upload",
+        {
+          method: "POST",
+          headers: {
+            "X-Session-Id": sessionId
+          },
+          body: formData
         },
-        body: formData
-      }, "Document upload failed.");
-
-      setUploadStatus(
-        `Document indexed successfully with ${data.chunks} chunks.`
+        "Document upload failed."
       );
+
+      setUploadStatus(`Document indexed successfully with ${data.chunks} chunks.`);
       pushStatus(`Document indexed successfully with ${data.chunks} chunks.`, "success");
     } catch (err) {
       setError(err.message);
@@ -179,14 +307,18 @@ function Chat() {
     pushStatus(`Question submitted: ${question.trim()}`);
 
     try {
-      const data = await requestJson("/query", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Id": sessionId
+      const data = await requestJson(
+        "/query",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Id": sessionId
+          },
+          body: JSON.stringify({ question })
         },
-        body: JSON.stringify({ question })
-      }, "Question answering failed.");
+        "Question answering failed."
+      );
 
       setAnswer(data.answer);
       pushStatus("Answer generated successfully.", "success");
@@ -197,26 +329,55 @@ function Chat() {
     }
   };
 
+  const infoMessage =
+    activeSection === "document-retrieval"
+      ? "Transform your documents into an instant answer workspace with fast retrieval and precise responses."
+      : "Build a separate image generation workflow here with its own prompts, controls, preview area, and output handling.";
+
   return (
     <section id="workspace" className="workspace-page">
       <div className="workspace-shell">
         <aside className="workspace-sidebar">
           <h1 className="sidebar-title">Assistant</h1>
-          <p className="sidebar-description">Focused document workspace</p>
+          <p className="sidebar-description">Separate tools for retrieval and generation</p>
 
           <div className="sidebar-tabs">
-            <button className="sidebar-tab active">Workspace</button>
+            <button
+              className={`sidebar-tab ${activeSection === "document-retrieval" ? "active" : ""}`}
+              onClick={() => setActiveSection("document-retrieval")}
+              type="button"
+            >
+              Document Retrieval
+            </button>
+            <button
+              className={`sidebar-tab ${activeSection === "image-generation" ? "active" : ""}`}
+              onClick={() => setActiveSection("image-generation")}
+              type="button"
+            >
+              Image Generation
+            </button>
           </div>
 
           <div className="sidebar-boost-card">
             <div className="sidebar-status">
-              <h4>Workspace Status</h4>
+              <h4>
+                {activeSection === "document-retrieval"
+                  ? "Document Retrieval Status"
+                  : "Image Generation Status"}
+              </h4>
               <div className="status-feed">
-                {statusFeed.map((item) => (
-                  <p key={`${item.type}-${item.text}`} className={`status-item status-${item.type}`}>
-                    {item.text}
-                  </p>
-                ))}
+                {activeSection === "document-retrieval" ? (
+                  statusFeed.map((item) => (
+                    <p key={`${item.type}-${item.text}`} className={`status-item status-${item.type}`}>
+                      {item.text}
+                    </p>
+                  ))
+                ) : (
+                  <>
+                    <p className="status-item status-info">Image generation section ready.</p>
+                    <p className="status-item status-info">Add your own prompt and model flow later.</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -224,120 +385,35 @@ function Chat() {
 
         <div className="workspace-content">
           <div className="info-card">
-            <p>
-              Transform your documents into an instant answer workspace with
-              fast retrieval and precise responses.
-            </p>
+            <p>{infoMessage}</p>
           </div>
 
           <div className="content-card">
-            <div className="insight-section">
-              <div className="insight-card">
-                <h3 className="tool-title">Query Guidance</h3>
-                <p className="tool-copy">
-                  Ask for names, emails, phone numbers, skills, roles, dates, or
-                  project details for the clearest results. Upload one document,
-                  ask one focused question, then refine the wording if you want a
-                  more specific answer. A new upload replaces your current session
-                  document only.
-                </p>
+            {activeSection === "document-retrieval" ? (
+              <DocumentRetrievalPanel
+                answer={answer}
+                askQuestion={askQuestion}
+                hasQuestion={hasQuestion}
+                isAsking={isAsking}
+                isUploading={isUploading}
+                pushStatus={pushStatus}
+                question={question}
+                selectedFile={selectedFile}
+                setError={setError}
+                setQuestion={setQuestion}
+                setSelectedFile={setSelectedFile}
+                uploadDocument={uploadDocument}
+              />
+            ) : (
+              <ImageGenerationPanel />
+            )}
+
+            {(error || uploadStatus) && activeSection === "document-retrieval" ? (
+              <div>
+                {error ? <p className="error-text">{error}</p> : null}
+                {uploadStatus ? <p className="success-text">{uploadStatus}</p> : null}
               </div>
-            </div>
-
-            <div className="content-grid">
-              <article className="tool-card">
-                <h3 className="tool-title">Upload Document</h3>
-                <p className="tool-copy">Select the document you want to query.</p>
-
-                <label className="upload-box">
-                  <input
-                    type="file"
-                    accept=".pdf,.txt"
-                    onChange={(event) => {
-                      const file = event.target.files[0] || null;
-                      setError("");
-
-                      if (!file) {
-                        setSelectedFile(null);
-                        return;
-                      }
-
-                      const isValidType = /\.(pdf|txt)$/i.test(file.name);
-                      if (!isValidType) {
-                        setSelectedFile(null);
-                        setError("Only PDF and TXT files are allowed.");
-                        pushStatus("Invalid file selected. Only PDF and TXT files are allowed.", "error");
-                        return;
-                      }
-
-                      if (file.size === 0) {
-                        setSelectedFile(null);
-                        setError("Selected file is empty.");
-                        pushStatus(`Invalid file: ${file.name} is empty.`, "error");
-                        return;
-                      }
-
-                      setSelectedFile(file);
-                      pushStatus(`Selected document: ${file.name}`);
-                    }}
-                  />
-                  <span className="upload-icon">+</span>
-                  <strong>{selectedFile ? selectedFile.name : "Choose a document"}</strong>
-                  <small>Supported formats: PDF and TXT</small>
-                </label>
-
-                <button
-                  className="primary-button"
-                  onClick={uploadDocument}
-                  disabled={!selectedFile || isUploading}
-                >
-                  {isUploading ? "Uploading..." : "Upload Document"}
-                </button>
-              </article>
-
-              <article className="tool-card">
-                <h3 className="tool-title">Ask Question</h3>
-                <p className="tool-copy">Type a clear question about the uploaded file.</p>
-
-               
-                <textarea
-                  id="question-input"
-                  className="question-input"
-                  value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
-                  placeholder="What information do you want from this document?"
-                  rows={7}
-                />
-
-                <button
-                  className="primary-button secondary-tone"
-                  onClick={askQuestion}
-                  disabled={isAsking || !hasQuestion}
-                >
-                  {isAsking ? "Generating..." : "Generate Answer"}
-                </button>
-              </article>
-            </div>
-
-            <div className="answer-section">
-              <div className="answer-card-head">
-                <div>
-                  <h3 className="tool-title">Answer</h3>
-                  <p className="tool-copy">Generated result for your current query.</p>
-                </div>
-                <span className="answer-badge">
-                  {answer ? "Completed" : "Waiting"}
-                </span>
-              </div>
-
-              <div className={`answer-box ${answer ? "has-answer" : ""}`}>
-                {answer ? (
-                  <div className="answer-content">{renderAnswer(answer)}</div>
-                ) : (
-                  <p>Upload a document and ask a question to view the answer here.</p>
-                )}
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
       </div>
