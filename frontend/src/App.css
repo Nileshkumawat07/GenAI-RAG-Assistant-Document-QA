@@ -604,23 +604,16 @@ textarea {
 }
 
 .object-detection-upload-box {
-  display: flex;
   min-height: 0;
   height: 100%;
-  width: 100%;
-  min-width: 100%;
-  max-width: none;
   margin-bottom: 0;
-  padding: 20px;
+  padding: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   appearance: none;
   -webkit-appearance: none;
-  text-align: center;
-  box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.62);
 }
 
 .upload-overlay-button {
@@ -708,22 +701,6 @@ textarea {
 .object-detection-inline-preview {
   min-height: 240px;
   margin-bottom: 0;
-}
-
-.object-detection-upload-box .upload-icon {
-  width: 40px;
-  height: 40px;
-  font-size: 22px;
-}
-
-.object-detection-upload-box strong {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.object-detection-upload-box small {
-  font-size: 12px;
-  color: #546e7a;
 }
 
 .detection-note {
