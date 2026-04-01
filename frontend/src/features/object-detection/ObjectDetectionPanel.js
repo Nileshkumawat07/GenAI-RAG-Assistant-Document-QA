@@ -142,11 +142,6 @@ function ObjectDetectionPanel() {
 
                 {result ? (
                   <div className="detection-results">
-                    <div className="detection-summary-card">
-                      <p className="detection-summary-label">Summary</p>
-                      <p className="answer-paragraph">{result.summary}</p>
-                    </div>
-
                     {result.objects.length ? (
                       <div className="detection-results-grid">
                         {result.objects.map((item, index) => (
