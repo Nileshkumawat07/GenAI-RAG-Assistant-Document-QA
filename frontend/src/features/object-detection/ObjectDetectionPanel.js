@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { apiUrl } from "../../shared/api/http";
 
 function ObjectDetectionPanel() {
@@ -6,18 +6,44 @@ function ObjectDetectionPanel() {
   const [error, setError] = useState("");
   const [isDetecting, setIsDetecting] = useState(false);
   const [result, setResult] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
 
-  const previewUrl = useMemo(() => {
+  useEffect(() => {
     if (!selectedImage) {
-      return "";
+      setPreviewUrl("");
+      return undefined;
     }
 
-    return URL.createObjectURL(selectedImage);
+    const objectUrl = URL.createObjectURL(selectedImage);
+    setPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
   }, [selectedImage]);
+
+  useEffect(() => () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [isCameraOpen]);
 
   const handleSelectImage = (event) => {
     const file = event.target.files[0] || null;
     setError("");
+    setCameraError("");
     setResult(null);
 
     if (!file) {
@@ -39,6 +65,90 @@ function ObjectDetectionPanel() {
     }
 
     setSelectedImage(file);
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const startCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access is not supported in this browser.");
+      return;
+    }
+
+    setIsStartingCamera(true);
+    setError("");
+    setCameraError("");
+    setResult(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+      setIsCameraOpen(true);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      setCameraError(err.message || "Camera access failed.");
+      stopCamera();
+    } finally {
+      setIsStartingCamera(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) {
+      setCameraError("Camera is not ready yet.");
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+
+    if (!width || !height) {
+      setCameraError("Camera feed is not ready yet.");
+      return;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    context.drawImage(video, 0, 0, width, height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          setCameraError("Photo capture failed.");
+          return;
+        }
+
+        const capturedFile = new File([blob], `camera-capture-${Date.now()}.jpg`, {
+          type: "image/jpeg",
+        });
+        setSelectedImage(capturedFile);
+        setError("");
+        setCameraError("");
+        setResult(null);
+        stopCamera();
+      },
+      "image/jpeg",
+      0.92
+    );
   };
 
   const detectObjects = async () => {
@@ -89,7 +199,7 @@ function ObjectDetectionPanel() {
           <div className="object-detection-top-head">
             <div className="object-detection-head-block">
               <h3 className="tool-title">Upload Image</h3>
-              <p className="tool-copy">Select an image for object detection.</p>
+              <p className="tool-copy">Select an image or use your camera for object detection.</p>
             </div>
 
             <div className="object-detection-head-block object-detection-result-head">
@@ -104,20 +214,53 @@ function ObjectDetectionPanel() {
           </div>
 
           <div className="object-detection-upload-layout">
-            <label className="upload-box object-detection-upload-box">
-              <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
-              {previewUrl ? (
-                <div className="upload-preview-content">
-                  <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
+            <div className="object-detection-input-panel">
+              <div className="object-detection-source-actions">
+                <label className="upload-box object-detection-upload-box">
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,image/*"
+                    capture="environment"
+                    onChange={handleSelectImage}
+                  />
+                  {previewUrl ? (
+                    <div className="upload-preview-content">
+                      <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
+                    </div>
+                  ) : (
+                    <>
+                      <span className="upload-icon">+</span>
+                      <strong>Choose an image</strong>
+                      <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+                    </>
+                  )}
+                </label>
+
+                <div className="object-detection-camera-actions">
+                  <button
+                    className="primary-button secondary-tone camera-button"
+                    type="button"
+                    onClick={isCameraOpen ? stopCamera : startCamera}
+                    disabled={isStartingCamera}
+                  >
+                    {isStartingCamera ? "Opening Camera..." : isCameraOpen ? "Close Camera" : "Use Camera"}
+                  </button>
+                  {cameraError ? <p className="error-text">{cameraError}</p> : null}
                 </div>
-              ) : (
-                <>
-                  <span className="upload-icon">+</span>
-                  <strong>Choose an image</strong>
-                  <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
-                </>
-              )}
-            </label>
+              </div>
+
+              {isCameraOpen ? (
+                <div className="camera-capture-panel">
+                  <div className="camera-preview-shell">
+                    <video ref={videoRef} className="camera-preview" autoPlay playsInline muted />
+                    <canvas ref={canvasRef} className="camera-canvas" />
+                  </div>
+                  <button className="primary-button" type="button" onClick={capturePhoto}>
+                    Capture Photo
+                  </button>
+                </div>
+              ) : null}
+            </div>
 
             <div className="answer-box detection-answer-box detection-inline-box">
               {error ? <p className="error-text">{error}</p> : null}

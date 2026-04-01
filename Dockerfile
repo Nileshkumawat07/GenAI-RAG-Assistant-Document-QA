@@ -22,14 +22,21 @@ WORKDIR /app/backend
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8000 \
-    HF_HOME=/app/.cache/huggingface
+    HF_HOME=/app/.cache/huggingface \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # System deps for faiss + torch
 RUN apt-get update && apt-get install -y \
     build-essential \
+    ca-certificates \
+    curl \
     gcc \
     g++ \
     libgomp1 \
+    openssl \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements

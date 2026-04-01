@@ -1,6 +1,7 @@
 import base64
 import io
 import random
+import ssl
 
 import torch
 from diffusers import EulerDiscreteScheduler, StableDiffusionXLPipeline, UNet2DConditionModel
@@ -143,6 +144,11 @@ class ImageGenerationService:
             self.pipeline = pipe
             return pipe
         except Exception as exc:
+            if isinstance(exc, ssl.SSLError):
+                raise RuntimeError(
+                    "Secure download from Hugging Face failed. "
+                    "Verify the server has outbound HTTPS access and valid CA certificates installed."
+                ) from exc
             if IMAGE_GENERATION_LOCAL_FILES_ONLY:
                 raise RuntimeError(
                     "Image generation model files are not available locally. "
