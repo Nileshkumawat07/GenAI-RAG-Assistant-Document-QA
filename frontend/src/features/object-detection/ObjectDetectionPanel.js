@@ -105,26 +105,72 @@ function ObjectDetectionPanel() {
           <div className="object-detection-upload-layout">
             <label className="upload-box object-detection-upload-box">
               <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
-              <span className="upload-icon">+</span>
-              <strong>{selectedImage ? selectedImage.name : "Choose an image"}</strong>
-              <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+              {previewUrl ? (
+                <div className="upload-preview-content">
+                  <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
+                  <strong>{selectedImage.name}</strong>
+                  <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+                </div>
+              ) : (
+                <>
+                  <span className="upload-icon">+</span>
+                  <strong>Choose an image</strong>
+                  <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+                </>
+              )}
             </label>
 
             <div className="object-detection-preview-panel">
-              <p className="tool-copy">Image preview</p>
-              <div className="image-preview-box object-detection-inline-preview">
-                {previewUrl ? (
-                  <img src={previewUrl} alt="Object detection preview" className="image-preview" />
+              <div className="answer-card-head detection-inline-head">
+                <div>
+                  <h3 className="tool-title">Detection Result</h3>
+                  <p className="tool-copy">Detected objects returned by the Groq vision model.</p>
+                </div>
+                <span className="answer-badge">
+                  {result ? `${result.object_count} Objects` : "Waiting"}
+                </span>
+              </div>
+              <div className="answer-box detection-answer-box detection-inline-box">
+                {error ? <p className="error-text">{error}</p> : null}
+
+                {result ? (
+                  <div className="detection-results">
+                    <div className="detection-summary-card">
+                      <p className="detection-summary-label">Summary</p>
+                      <p className="answer-paragraph">{result.summary}</p>
+                    </div>
+
+                    {result.objects.length ? (
+                      <div className="detection-results-grid">
+                        {result.objects.map((item, index) => (
+                          <article key={`${item.label}-${index}`} className="detection-object-card">
+                            <div className="detection-object-head">
+                              <h4>{item.label}</h4>
+                              <span className={`confidence-badge confidence-${item.confidence}`}>
+                                {item.confidence}
+                              </span>
+                            </div>
+                            <p className="detection-object-meta">Count: {item.count}</p>
+                            <p className="detection-object-meta">Location: {item.location}</p>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="answer-paragraph">No clear objects were detected.</p>
+                    )}
+                  </div>
                 ) : (
-                  <p className="image-preview-empty">Your selected image will appear here.</p>
+                  <div className="detection-note detection-empty-state">
+                    Run object detection and the result will appear here.
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
           <div className="detection-note">
-            The result will show a summary plus separate object cards with count,
-            confidence, and approximate location.
+            The uploaded image appears in the upload area, and the detection
+            result appears in the right-side panel for easier comparison.
           </div>
 
           <button
@@ -140,46 +186,17 @@ function ObjectDetectionPanel() {
       <div className="answer-section detection-answer-section">
         <div className="answer-card-head">
           <div>
-            <h3 className="tool-title">Detection Result</h3>
-            <p className="tool-copy">Detected objects returned by the Groq vision model.</p>
+            <h3 className="tool-title">Detection Notes</h3>
+            <p className="tool-copy">Helpful guidance for reading the Groq vision output.</p>
           </div>
-          <span className="answer-badge">
-            {result ? `${result.object_count} Objects` : "Waiting"}
-          </span>
         </div>
 
         <div className="answer-box detection-answer-box">
-          {error ? <p className="error-text">{error}</p> : null}
-
-          {result ? (
-            <div className="detection-results">
-              <div className="detection-summary-card">
-                <p className="detection-summary-label">Summary</p>
-                <p className="answer-paragraph">{result.summary}</p>
-              </div>
-
-              {result.objects.length ? (
-                <div className="detection-results-grid">
-                  {result.objects.map((item, index) => (
-                    <article key={`${item.label}-${index}`} className="detection-object-card">
-                      <div className="detection-object-head">
-                        <h4>{item.label}</h4>
-                        <span className={`confidence-badge confidence-${item.confidence}`}>
-                          {item.confidence}
-                        </span>
-                      </div>
-                      <p className="detection-object-meta">Count: {item.count}</p>
-                      <p className="detection-object-meta">Location: {item.location}</p>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="answer-paragraph">No clear objects were detected.</p>
-              )}
-            </div>
-          ) : (
-            <p>Upload an image and run detection to view the result here.</p>
-          )}
+          <div className="detection-note detection-empty-state">
+            Confidence shows how certain the model is, while location is an
+            approximate natural-language description rather than a drawn
+            bounding box.
+          </div>
         </div>
       </div>
     </div>

@@ -346,6 +346,21 @@ textarea {
   color: #37474f;
 }
 
+.upload-preview-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.upload-preview-image {
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 10px;
+}
+
 .field-label {
   display: block;
   margin-bottom: 4px;
@@ -550,6 +565,18 @@ textarea {
 
 .detection-answer-box {
   min-height: 260px;
+}
+
+.detection-inline-head {
+  margin-bottom: 10px;
+}
+
+.detection-inline-box {
+  min-height: 240px;
+}
+
+.detection-empty-state {
+  margin-top: 0;
 }
 
 .answer-box p {
