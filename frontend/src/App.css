@@ -598,11 +598,11 @@ textarea {
   min-height: 0;
   height: 100%;
   margin-bottom: 0;
-  padding: 0;
+  padding: 16px;
   overflow: hidden;
   flex: 1 1 auto;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: center;
+  justify-content: center;
 }
 
 .upload-overlay-button {
