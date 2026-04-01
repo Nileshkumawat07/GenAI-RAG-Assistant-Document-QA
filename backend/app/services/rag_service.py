@@ -16,6 +16,7 @@ from app.core.config import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
     DOCUMENTS_DIR,
+    EMBEDDING_MODEL_NAME,
     GROQ_API_KEY,
     GROQ_MODEL,
     TOP_K_RESULTS,
@@ -63,7 +64,7 @@ class RAGService:
 
     def _load_model(self):
         if self.embedding_model is None:
-            self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+            self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
     async def ingest(self, upload: UploadFile, session_id: str):
         content = await upload.read()

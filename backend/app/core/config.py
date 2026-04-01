@@ -19,6 +19,10 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
 TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "8"))
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000").strip()
 DOCUMENTS_DIR = Path(os.getenv("DOCUMENTS_DIR", str(BASE_DIR / "documents"))).resolve()
+EMBEDDING_MODEL_NAME = os.getenv(
+    "EMBEDDING_MODEL_NAME",
+    "all-MiniLM-L6-v2",
+).strip()
 IMAGE_GENERATION_BASE_MODEL = os.getenv(
     "IMAGE_GENERATION_BASE_MODEL",
     "stabilityai/stable-diffusion-xl-base-1.0",
