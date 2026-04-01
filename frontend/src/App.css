@@ -581,26 +581,26 @@ textarea {
 }
 
 .object-detection-input-panel {
-  display: grid;
-  grid-template-rows: auto auto;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   min-height: 0;
 }
 
 .object-detection-source-actions {
-  display: grid;
-  grid-template-rows: 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-height: 0;
 }
 
 .object-detection-upload-box {
   min-height: 0;
-  height: min(100%, 320px);
+  height: 320px;
   margin-bottom: 0;
   padding: 0;
   overflow: hidden;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   align-items: stretch;
   justify-content: stretch;
 }
