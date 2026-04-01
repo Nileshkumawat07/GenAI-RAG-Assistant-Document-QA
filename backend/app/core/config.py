@@ -37,5 +37,5 @@ IMAGE_GENERATION_WIDTH = int(os.getenv("IMAGE_GENERATION_WIDTH", "1024"))
 IMAGE_GENERATION_HEIGHT = int(os.getenv("IMAGE_GENERATION_HEIGHT", "1024"))
 IMAGE_GENERATION_LOCAL_FILES_ONLY = os.getenv(
     "IMAGE_GENERATION_LOCAL_FILES_ONLY",
-    "true",
+    "false",
 ).strip().lower() in {"1", "true", "yes", "on"}

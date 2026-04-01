@@ -99,7 +99,7 @@ function WorkspacePage() {
       ? "Transform your documents into an instant answer workspace with fast retrieval and precise responses."
       : activeSection === "object-detection"
         ? "Use Groq vision to inspect an uploaded image and return detected objects with counts and approximate locations."
-        : "Generate images from prompts with an SDXL Lightning pipeline configured to load from your Docker-provided model cache.";
+        : "Generate images from prompts with an SDXL Lightning pipeline that can use cached model files or download them on first use.";
   const statusContent =
     activeSection === "document-retrieval" ? (
       statusFeed.map((item) => (
@@ -115,7 +115,7 @@ function WorkspacePage() {
     ) : (
       <>
         <p className="status-item status-info">Image generation is ready.</p>
-        <p className="status-item status-info">Write a prompt and generate with SDXL Lightning.</p>
+        <p className="status-item status-info">Write a prompt and generate with SDXL Lightning. The first run may take longer while models load.</p>
       </>
     );
 

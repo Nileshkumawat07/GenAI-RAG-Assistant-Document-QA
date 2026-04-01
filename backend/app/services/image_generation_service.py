@@ -29,12 +29,14 @@ class ImageGenerationService:
         self.xformers_enabled = False
 
     def get_status(self) -> dict:
+        mode_message = (
+            "The SDXL Lightning pipeline loads from local model files on first request."
+            if IMAGE_GENERATION_LOCAL_FILES_ONLY
+            else "The SDXL Lightning pipeline downloads required model files on first request if they are not cached yet."
+        )
         return {
             "status": "ready",
-            "message": (
-                "Image generation route is available. "
-                "The SDXL Lightning pipeline loads from local model files on first request."
-            ),
+            "message": f"Image generation route is available. {mode_message}",
             "base_model": IMAGE_GENERATION_BASE_MODEL,
             "weights_repo": IMAGE_GENERATION_REPO,
             "weights_file": IMAGE_GENERATION_UNET_WEIGHTS,
