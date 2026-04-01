@@ -4,6 +4,8 @@ backend/__pycache__/
 frontend/node_modules/
 frontend/build/
 *.pyc
+backend/documents/*
+!backend/documents/.gitkeep
 
 # Local environment files
 .env

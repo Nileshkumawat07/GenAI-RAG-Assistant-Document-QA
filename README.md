@@ -60,16 +60,12 @@ GenAI-RAG-Assistant-Document-QA/
 |   |   |-- core/
 |   |   |-- schemas/
 |   |   `-- services/
-|   |-- config.py
 |   |-- main.py
-|   |-- model.py
-|   |-- object_detection/
 |   |-- requirements.txt
 |   `-- documents/
 |-- frontend/
 |   |-- public/
 |   |-- src/
-|   |   |-- app/
 |   |   |-- features/
 |   |   `-- shared/
 |   |-- package.json
@@ -82,8 +78,7 @@ GenAI-RAG-Assistant-Document-QA/
 ### Structure Notes
 
 - `backend/app` is now the main production-style backend package
-- `backend/main.py`, `backend/config.py`, and `backend/model.py` are kept as compatibility wrappers so the existing run commands still work
-- `frontend/src/app` contains the app shell
+- `backend/main.py` stays as the local backend entrypoint so the existing run command still works
 - `frontend/src/features` contains feature-specific UI like document retrieval and object detection
 - `frontend/src/shared` contains shared API, session, and formatting helpers
 
