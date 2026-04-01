@@ -439,6 +439,7 @@ textarea {
 
 .object-detection-upload-card {
   gap: 10px;
+  min-height: 0;
 }
 
 .object-detection-top-head {
@@ -457,7 +458,8 @@ textarea {
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
   gap: 12px;
   align-items: stretch;
-  min-height: 500px;
+  height: clamp(320px, 46vh, 470px);
+  min-height: 320px;
 }
 
 .object-detection-left-panel,
@@ -602,6 +604,7 @@ textarea {
 .object-detection-action {
   margin-top: 12px;
   position: static;
+  flex: 0 0 auto;
 }
 
 .answer-box p {
@@ -786,6 +789,7 @@ textarea {
 
   .object-detection-upload-layout {
     grid-template-columns: 1fr;
+    height: auto;
     min-height: auto;
   }
 
