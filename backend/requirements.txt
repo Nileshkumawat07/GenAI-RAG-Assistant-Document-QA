@@ -5,11 +5,12 @@ python-dotenv
 python-multipart
 uvicorn
 
-# NEW
+# Use PyTorch CPU wheels in Docker/Linux to avoid pulling large CUDA packages.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 faiss-cpu
 sentence-transformers
-torch
+torch==2.5.1+cpu
 diffusers
-xformers
 huggingface-hub
 safetensors
