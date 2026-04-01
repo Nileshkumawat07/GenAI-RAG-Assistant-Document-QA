@@ -234,7 +234,6 @@ function ObjectDetectionPanel() {
                     </div>
                   ) : (
                     <>
-                      <span className="upload-icon">+</span>
                       <strong>Choose an image</strong>
                       <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
                     </>
@@ -247,7 +246,10 @@ function ObjectDetectionPanel() {
                   onClick={isCameraOpen ? stopCamera : startCamera}
                   disabled={isStartingCamera}
                 >
-                  {isStartingCamera ? "..." : isCameraOpen ? "x" : "C"}
+                  <span className="camera-icon" aria-hidden="true">{isCameraOpen ? "x" : "📷"}</span>
+                  <span className="sr-only">
+                    {isStartingCamera ? "Opening camera" : isCameraOpen ? "Close camera" : "Open camera"}
+                  </span>
                 </button>
 
                 {isCameraOpen ? (
