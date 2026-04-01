@@ -596,17 +596,22 @@ textarea {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
 }
 
 .object-detection-upload-box {
   min-height: 0;
   height: 100%;
+  width: 100%;
   margin-bottom: 0;
   padding: 16px;
   overflow: hidden;
   flex: 1 1 auto;
   align-items: center;
   justify-content: center;
+  appearance: none;
+  -webkit-appearance: none;
+  text-align: center;
 }
 
 .upload-overlay-button {
