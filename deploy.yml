@@ -26,6 +26,7 @@
       ansible.builtin.raw: >
         docker run -d
         --name genai-container
+        --gpus all
         -p 5000:8000
         -e GROQ_API_KEY={{ groq_api_key | quote }}
         --restart unless-stopped

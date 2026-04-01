@@ -27,6 +27,10 @@ class ImageGenerationService:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.dtype = torch.float16 if self.device == "cuda" else torch.float32
         self.xformers_enabled = False
+        if self.device == "cuda":
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            torch.set_float32_matmul_precision("high")
 
     def get_status(self) -> dict:
         mode_message = (
@@ -118,15 +122,17 @@ class ImageGenerationService:
                 timestep_spacing="trailing",
             )
             pipe.set_progress_bar_config(disable=True)
-            pipe.enable_attention_slicing()
 
             if self.device == "cuda":
+                pipe.unet.to(memory_format=torch.channels_last)
                 pipe.enable_vae_slicing()
                 try:
                     pipe.enable_xformers_memory_efficient_attention()
                     self.xformers_enabled = True
                 except Exception:
                     self.xformers_enabled = False
+            else:
+                pipe.enable_attention_slicing()
 
             self.pipeline = pipe
             return pipe

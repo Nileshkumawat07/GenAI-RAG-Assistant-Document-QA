@@ -16,19 +16,25 @@ RUN npm run build
 # ======================
 # BACKEND RUNTIME
 # ======================
-FROM python:3.10-slim AS runtime
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04 AS runtime
 WORKDIR /app/backend
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    HF_HOME=/app/.cache/huggingface
 
-# ✅ IMPORTANT: system deps for faiss + torch
+# System deps for faiss + torch + Python runtime
 RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
     build-essential \
     gcc \
     g++ \
     libgomp1 \
+    && ln -sf /usr/bin/python3 /usr/local/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/local/bin/pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
@@ -37,7 +43,7 @@ COPY backend/requirements.txt ./
 # Install python deps
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ✅ OPTIONAL (recommended): pre-download embedding model
+# Optional: pre-download embedding model
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # Copy backend
@@ -48,4 +54,4 @@ COPY --from=frontend-builder /app/frontend/build /app/frontend/build
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"] 
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
