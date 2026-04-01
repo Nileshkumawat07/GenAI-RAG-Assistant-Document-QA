@@ -112,23 +112,26 @@ function ObjectDetectionPanel() {
           </div>
 
           <div className="object-detection-upload-layout">
-            <label className="upload-box object-detection-upload-box">
-              <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
-              {previewUrl ? (
-                <div className="upload-preview-content">
-                  <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
-                </div>
-              ) : (
-                <>
-                  <span className="upload-icon">+</span>
-                  <strong>Choose an image</strong>
-                  <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
-                </>
-              )}
-            </label>
+            <div className="object-detection-left-panel">
+              <div className="object-detection-panel-head" />
+              <label className="upload-box object-detection-upload-box">
+                <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
+                {previewUrl ? (
+                  <div className="upload-preview-content">
+                    <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
+                  </div>
+                ) : (
+                  <>
+                    <span className="upload-icon">+</span>
+                    <strong>Choose an image</strong>
+                    <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+                  </>
+                )}
+              </label>
+            </div>
 
             <div className="object-detection-preview-panel">
-              <div className="answer-card-head detection-inline-head">
+              <div className="object-detection-panel-head detection-panel-badge-row">
                 <div />
                 <span className="answer-badge">
                   {result ? `${result.object_count} Objects` : "Waiting"}

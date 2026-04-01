@@ -459,17 +459,29 @@ textarea {
   align-items: stretch;
 }
 
+.object-detection-left-panel,
+.object-detection-preview-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
 .object-detection-upload-box {
   min-height: 240px;
   margin-bottom: 0;
   padding: 0;
   overflow: hidden;
+  flex: 1 1 auto;
 }
 
-.object-detection-preview-panel {
+.object-detection-panel-head {
+  min-height: 46px;
   display: flex;
-  flex-direction: column;
-  min-height: 100%;
+  align-items: center;
+}
+
+.detection-panel-badge-row {
+  justify-content: flex-end;
 }
 
 .object-detection-inline-preview {
@@ -573,11 +585,6 @@ textarea {
 
 .detection-answer-box {
   min-height: 260px;
-}
-
-.detection-inline-head {
-  margin-bottom: 10px;
-  min-height: 32px;
 }
 
 .detection-inline-box {
