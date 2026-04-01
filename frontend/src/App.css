@@ -441,6 +441,17 @@ textarea {
   gap: 10px;
 }
 
+.object-detection-top-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.object-detection-top-head .tool-copy {
+  margin-bottom: 0;
+}
+
 .object-detection-upload-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
@@ -458,11 +469,7 @@ textarea {
 .object-detection-preview-panel {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-}
-
-.object-detection-preview-panel .tool-copy {
-  margin-bottom: 8px;
+  min-height: 100%;
 }
 
 .object-detection-inline-preview {
@@ -570,14 +577,22 @@ textarea {
 
 .detection-inline-head {
   margin-bottom: 10px;
+  min-height: 32px;
 }
 
 .detection-inline-box {
-  min-height: 240px;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .detection-empty-state {
   margin-top: 0;
+}
+
+.object-detection-action {
+  margin-top: 0;
+  position: sticky;
+  bottom: 0;
 }
 
 .answer-box p {
@@ -761,6 +776,10 @@ textarea {
   }
 
   .object-detection-upload-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .object-detection-top-head {
     grid-template-columns: 1fr;
   }
 }

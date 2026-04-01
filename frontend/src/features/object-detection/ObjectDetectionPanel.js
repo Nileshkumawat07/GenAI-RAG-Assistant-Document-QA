@@ -99,8 +99,17 @@ function ObjectDetectionPanel() {
 
       <div className="content-grid single-column">
         <article className="tool-card object-detection-upload-card">
-          <h3 className="tool-title">Upload Image</h3>
-          <p className="tool-copy">Select an image for object detection.</p>
+          <div className="object-detection-top-head">
+            <div>
+              <h3 className="tool-title">Upload Image</h3>
+              <p className="tool-copy">Select an image for object detection.</p>
+            </div>
+
+            <div>
+              <h3 className="tool-title">Detection Result</h3>
+              <p className="tool-copy">Detected objects returned by the Groq vision model.</p>
+            </div>
+          </div>
 
           <div className="object-detection-upload-layout">
             <label className="upload-box object-detection-upload-box">
@@ -120,10 +129,7 @@ function ObjectDetectionPanel() {
 
             <div className="object-detection-preview-panel">
               <div className="answer-card-head detection-inline-head">
-                <div>
-                  <h3 className="tool-title">Detection Result</h3>
-                  <p className="tool-copy">Detected objects returned by the Groq vision model.</p>
-                </div>
+                <div />
                 <span className="answer-badge">
                   {result ? `${result.object_count} Objects` : "Waiting"}
                 </span>
@@ -167,7 +173,7 @@ function ObjectDetectionPanel() {
           </div>
 
           <button
-            className="primary-button"
+            className="primary-button object-detection-action"
             onClick={detectObjects}
             disabled={!selectedImage || isDetecting}
           >
