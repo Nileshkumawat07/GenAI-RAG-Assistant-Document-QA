@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # ======================
 # FRONTEND BUILD
 # ======================
@@ -5,7 +7,7 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 COPY frontend/ ./
 ARG REACT_APP_API_BASE_URL=""
@@ -43,7 +45,7 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt ./
 
 # Install python deps
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 
 # Optional: pre-download embedding model
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
