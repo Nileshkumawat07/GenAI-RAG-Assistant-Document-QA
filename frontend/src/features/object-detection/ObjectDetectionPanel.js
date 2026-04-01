@@ -13,6 +13,8 @@ function ObjectDetectionPanel() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const uploadInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -70,6 +72,11 @@ function ObjectDetectionPanel() {
 
     stopCamera();
     setSelectedImage(file);
+    event.target.value = "";
+  };
+
+  const openUploadPicker = () => {
+    uploadInputRef.current?.click();
   };
 
   const stopCamera = () => {
@@ -81,8 +88,8 @@ function ObjectDetectionPanel() {
   };
 
   const startCamera = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("Camera access is not supported in this browser.");
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click();
       return;
     }
 
@@ -234,12 +241,26 @@ function ObjectDetectionPanel() {
           <div className="object-detection-upload-layout">
             <div className="object-detection-input-panel">
               <div className="object-detection-upload-shell">
-                <label className="upload-box object-detection-upload-box">
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,image/*"
-                    onChange={handleSelectImage}
-                  />
+                <input
+                  ref={uploadInputRef}
+                  className="hidden-file-input"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp"
+                  onChange={handleSelectImage}
+                />
+                <input
+                  ref={cameraInputRef}
+                  className="hidden-file-input"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleSelectImage}
+                />
+                <button
+                  className="upload-box object-detection-upload-box"
+                  type="button"
+                  onClick={openUploadPicker}
+                >
                   {isCameraOpen ? (
                     <div className="camera-preview-shell object-detection-inline-camera">
                       <video ref={videoRef} className="camera-preview" autoPlay playsInline muted />
@@ -255,7 +276,7 @@ function ObjectDetectionPanel() {
                       <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
                     </>
                   )}
-                </label>
+                </button>
 
                 <button
                   className="upload-overlay-button upload-camera-button"

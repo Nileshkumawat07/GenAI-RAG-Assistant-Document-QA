@@ -336,6 +336,10 @@ textarea {
   display: none;
 }
 
+.hidden-file-input {
+  display: none;
+}
+
 .upload-icon {
   display: inline-flex;
   width: 34px;
