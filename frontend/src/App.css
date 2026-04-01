@@ -423,6 +423,37 @@ textarea {
   text-align: center;
 }
 
+.object-detection-upload-card {
+  gap: 10px;
+}
+
+.object-detection-upload-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.object-detection-upload-box {
+  min-height: 240px;
+  margin-bottom: 0;
+}
+
+.object-detection-preview-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.object-detection-preview-panel .tool-copy {
+  margin-bottom: 8px;
+}
+
+.object-detection-inline-preview {
+  min-height: 240px;
+  margin-bottom: 0;
+}
+
 .detection-note {
   margin-top: 8px;
   padding: 10px 12px;
@@ -698,6 +729,10 @@ textarea {
   }
 
   .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .object-detection-upload-layout {
     grid-template-columns: 1fr;
   }
 }

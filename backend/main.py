@@ -82,6 +82,8 @@ def query_documents(
         return rag_service.query(payload.question.strip(), session_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/")

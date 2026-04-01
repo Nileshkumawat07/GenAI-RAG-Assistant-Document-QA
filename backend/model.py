@@ -104,7 +104,6 @@ class RAGService:
             raise ValueError("Upload document first.")
 
         retrieved = self._retrieve(question)
-
         answer = self._generate_answer(question, retrieved)
 
         return {
@@ -217,29 +216,20 @@ class RAGService:
         prompt = self._build_prompt(question, context, response_style)
 
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.responses.create(
                 model=GROQ_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a document QA assistant. "
-                            "Use only the provided document context. "
-                            "Never invent facts. "
-                            "If the context does not contain the answer, reply exactly: Not in document."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
+                input=prompt,
                 temperature=0.1,
                 top_p=0.9,
             )
-            answer = response.choices[0].message.content.strip()
+            answer = (response.output_text or "").strip()
             normalized = answer.lower().strip().rstrip(".")
             if answer and normalized != "not in document":
                 return self._clean_answer(answer)
-        except Exception:
-            pass
+        except Exception as exc:
+            if fallback_answer:
+                return self._clean_answer(fallback_answer)
+            raise RuntimeError(f"Document retrieval LLM request failed: {exc}") from exc
 
         return self._clean_answer(fallback_answer) if fallback_answer else "Not in document."
 

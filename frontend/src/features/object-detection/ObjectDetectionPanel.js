@@ -97,17 +97,35 @@ function ObjectDetectionPanel() {
         </div>
       </div>
 
-      <div className="content-grid">
-        <article className="tool-card">
+      <div className="content-grid single-column">
+        <article className="tool-card object-detection-upload-card">
           <h3 className="tool-title">Upload Image</h3>
           <p className="tool-copy">Select an image for object detection.</p>
 
-          <label className="upload-box">
-            <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
-            <span className="upload-icon">+</span>
-            <strong>{selectedImage ? selectedImage.name : "Choose an image"}</strong>
-            <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
-          </label>
+          <div className="object-detection-upload-layout">
+            <label className="upload-box object-detection-upload-box">
+              <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleSelectImage} />
+              <span className="upload-icon">+</span>
+              <strong>{selectedImage ? selectedImage.name : "Choose an image"}</strong>
+              <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+            </label>
+
+            <div className="object-detection-preview-panel">
+              <p className="tool-copy">Image preview</p>
+              <div className="image-preview-box object-detection-inline-preview">
+                {previewUrl ? (
+                  <img src={previewUrl} alt="Object detection preview" className="image-preview" />
+                ) : (
+                  <p className="image-preview-empty">Your selected image will appear here.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="detection-note">
+            The result will show a summary plus separate object cards with count,
+            confidence, and approximate location.
+          </div>
 
           <button
             className="primary-button"
@@ -116,24 +134,6 @@ function ObjectDetectionPanel() {
           >
             {isDetecting ? "Detecting..." : "Detect Objects"}
           </button>
-        </article>
-
-        <article className="tool-card">
-          <h3 className="tool-title">Image Preview</h3>
-          <p className="tool-copy">Preview the image before running detection.</p>
-
-          <div className="image-preview-box">
-            {previewUrl ? (
-              <img src={previewUrl} alt="Object detection preview" className="image-preview" />
-            ) : (
-              <p className="image-preview-empty">Your selected image will appear here.</p>
-            )}
-          </div>
-
-          <div className="detection-note">
-            The result will show a summary plus separate object cards with count,
-            confidence, and approximate location.
-          </div>
         </article>
       </div>
 
