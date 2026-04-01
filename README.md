@@ -54,20 +54,38 @@ The application provides a focused workspace for document-based question answeri
 ```text
 GenAI-RAG-Assistant-Document-QA/
 |-- backend/
+|   |-- app/
+|   |   |-- api/
+|   |   |   `-- routes/
+|   |   |-- core/
+|   |   |-- schemas/
+|   |   `-- services/
 |   |-- config.py
 |   |-- main.py
 |   |-- model.py
+|   |-- object_detection/
 |   |-- requirements.txt
 |   `-- documents/
 |-- frontend/
 |   |-- public/
 |   |-- src/
+|   |   |-- app/
+|   |   |-- features/
+|   |   `-- shared/
 |   |-- package.json
 |   `-- package-lock.json
 |-- Dockerfile
 |-- .dockerignore
 `-- README.md
 ```
+
+### Structure Notes
+
+- `backend/app` is now the main production-style backend package
+- `backend/main.py`, `backend/config.py`, and `backend/model.py` are kept as compatibility wrappers so the existing run commands still work
+- `frontend/src/app` contains the app shell
+- `frontend/src/features` contains feature-specific UI like document retrieval and object detection
+- `frontend/src/shared` contains shared API, session, and formatting helpers
 
 ## How It Works
 
@@ -126,6 +144,20 @@ Accepts a JSON payload:
 ```
 
 Returns an answer plus source excerpts from the retrieved chunks.
+
+### `GET /object-detection/health`
+
+Returns the object-detection route status and configured model.
+
+### `POST /object-detection/detect`
+
+Uploads an image and returns:
+
+- a short summary
+- detected objects
+- counts
+- approximate locations
+- confidence levels
 
 ## Environment Variables
 

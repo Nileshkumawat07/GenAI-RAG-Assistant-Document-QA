@@ -1,18 +1,5 @@
 import React, { useMemo, useState } from "react";
-
-const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
-
-function apiUrl(path) {
-  return `${API_BASE}${path}`;
-}
-
-async function readJson(response) {
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
-}
+import { apiUrl } from "../../shared/api/http";
 
 function ObjectDetectionPanel() {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -72,7 +59,7 @@ function ObjectDetectionPanel() {
         body: formData,
       });
 
-      const data = await readJson(response);
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.detail || "Object detection failed.");
       }
