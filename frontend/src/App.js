@@ -170,6 +170,24 @@ function App() {
         </div>
       </header>
 
+      {showInfoMenu ? (
+        <div className={`header-pages-panel ${isWorkspace ? "workspace-pages-panel" : ""}`}>
+          {infoPages.map((page) => (
+            <button
+              key={page.id}
+              className="header-pages-panel-button"
+              type="button"
+              onClick={() => {
+                setScreen(page.id);
+                setShowInfoMenu(false);
+              }}
+            >
+              {page.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className={`app-body ${isWorkspace ? "workspace-app-body" : ""}`}>{renderScreen()}</div>
     </main>
   );

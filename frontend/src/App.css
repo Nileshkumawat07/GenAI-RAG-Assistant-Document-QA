@@ -154,28 +154,23 @@ button {
   cursor: pointer;
 }
 
-.header-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  min-width: 180px;
-  padding: 8px;
-  display: grid;
-  gap: 6px;
-  background: #ffffff;
-  border: 1px solid rgba(42, 75, 140, 0.16);
-  box-shadow: 0 12px 28px rgba(13, 36, 76, 0.12);
-  z-index: 20;
+.header-pages-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 0 0;
 }
 
-.header-dropdown-item {
-  width: 100%;
+.workspace-pages-panel {
+  padding-top: 6px;
+}
+
+.header-pages-panel-button {
   min-height: 36px;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid rgba(42, 75, 140, 0.14);
   background: #ffffff;
   color: var(--primary-deep);
-  text-align: left;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
