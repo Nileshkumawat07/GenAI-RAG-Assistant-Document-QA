@@ -58,13 +58,7 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
 
       <form className="auth-card" onSubmit={handleSubmit}>
         <div className="auth-card-head">
-          <div>
-            <p className="auth-eyebrow">Login</p>
-            <h2>Sign in</h2>
-          </div>
-          <button className="text-link-button" type="button" onClick={onBack}>
-            Back home
-          </button>
+          <div className="login-header-spacer" aria-hidden="true" />
         </div>
 
         <label className="auth-label" htmlFor="login-identifier">
@@ -78,7 +72,6 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
           value={identifier}
           onChange={(event) => setIdentifier(event.target.value)}
         />
-        {errors.identifier ? <p className="field-error">{errors.identifier}</p> : null}
 
         <label className="auth-label" htmlFor="login-password">
           Password
@@ -100,7 +93,6 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
             {showPassword ? "Hide" : "Show"}
           </button>
         </div>
-        {errors.password ? <p className="field-error">{errors.password}</p> : null}
 
         {formError ? <p className="form-error-banner">{formError}</p> : null}
 

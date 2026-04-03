@@ -202,7 +202,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.fullName}
               onChange={(event) => setFieldValue("fullName", event.target.value)}
             />
-            {errors.fullName ? <p className="field-error">{errors.fullName}</p> : null}
 
             <label className="auth-label" htmlFor="signup-username">Username</label>
             <input
@@ -213,7 +212,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.username}
               onChange={(event) => setFieldValue("username", event.target.value)}
             />
-            {errors.username ? <p className="field-error">{errors.username}</p> : null}
 
             <label className="auth-label" htmlFor="signup-dob">Date of Birth</label>
             <input
@@ -223,7 +221,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.dateOfBirth}
               onChange={(event) => setFieldValue("dateOfBirth", event.target.value)}
             />
-            {errors.dateOfBirth ? <p className="field-error">{errors.dateOfBirth}</p> : null}
 
             <label className="auth-label" htmlFor="signup-gender">Gender</label>
             <select
@@ -237,7 +234,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               <option value="Female">Female</option>
               <option value="Other">Other</option>
             </select>
-            {errors.gender ? <p className="field-error">{errors.gender}</p> : null}
           </div>
 
           <div className="signup-section">
@@ -250,14 +246,13 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
                 className={`auth-input ${errors.email ? "input-error" : ""}`}
                 type="email"
                 placeholder="name@example.com"
-                value={formData.email}
-                onChange={(event) => setFieldValue("email", event.target.value)}
-              />
+              value={formData.email}
+              onChange={(event) => setFieldValue("email", event.target.value)}
+            />
               <button className="inline-field-button" type="button" onClick={() => sendOtp("email")}>
                 Send OTP
               </button>
             </div>
-            {errors.email ? <p className="field-error">{errors.email}</p> : null}
 
             <label className="auth-label" htmlFor="signup-password">Password</label>
             <div className="password-shell">
@@ -277,7 +272,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
-            {errors.password ? <p className="field-error">{errors.password}</p> : null}
 
             <label className="auth-label" htmlFor="signup-confirm-password">Confirm Password</label>
             <input
@@ -288,7 +282,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.confirmPassword}
               onChange={(event) => setFieldValue("confirmPassword", event.target.value)}
             />
-            {errors.confirmPassword ? <p className="field-error">{errors.confirmPassword}</p> : null}
 
             <label className="auth-label" htmlFor="signup-alt-email">Alternate Email</label>
             <input
@@ -299,7 +292,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.alternateEmail}
               onChange={(event) => setFieldValue("alternateEmail", event.target.value)}
             />
-            {errors.alternateEmail ? <p className="field-error">{errors.alternateEmail}</p> : null}
           </div>
 
           <div className="signup-section">
@@ -312,14 +304,13 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
                 className={`auth-input ${errors.mobile ? "input-error" : ""}`}
                 type="tel"
                 placeholder="10-digit mobile number"
-                value={formData.mobile}
-                onChange={(event) => setFieldValue("mobile", event.target.value.replace(/[^\d]/g, "").slice(0, 10))}
-              />
+              value={formData.mobile}
+              onChange={(event) => setFieldValue("mobile", event.target.value.replace(/[^\d]/g, "").slice(0, 10))}
+            />
               <button className="inline-field-button" type="button" onClick={() => sendOtp("mobile")}>
                 Send OTP
               </button>
             </div>
-            {errors.mobile ? <p className="field-error">{errors.mobile}</p> : null}
 
             <label className="auth-label" htmlFor="signup-security-question">Security Question</label>
             <select
@@ -333,7 +324,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               <option value="school">What was your first school?</option>
               <option value="city">Which city were you born in?</option>
             </select>
-            {errors.securityQuestion ? <p className="field-error">{errors.securityQuestion}</p> : null}
 
             <label className="auth-label" htmlFor="signup-security-answer">Answer</label>
             <input
@@ -344,7 +334,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.securityAnswer}
               onChange={(event) => setFieldValue("securityAnswer", event.target.value)}
             />
-            {errors.securityAnswer ? <p className="field-error">{errors.securityAnswer}</p> : null}
 
             <label className="auth-label" htmlFor="signup-referral">Referral Code</label>
             <input
@@ -369,7 +358,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.emailOtp}
               onChange={(event) => setFieldValue("emailOtp", event.target.value.trim())}
             />
-            {errors.emailOtp ? <p className="field-error">{errors.emailOtp}</p> : null}
 
             <label className="auth-label" htmlFor="signup-mobile-otp">Mobile OTP</label>
             <input
@@ -380,7 +368,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.mobileOtp}
               onChange={(event) => setFieldValue("mobileOtp", event.target.value.trim())}
             />
-            {errors.mobileOtp ? <p className="field-error">{errors.mobileOtp}</p> : null}
 
             <label className="auth-label" htmlFor="signup-captcha">Captcha</label>
             <div className="captcha-row">
@@ -401,7 +388,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.captchaInput}
               onChange={(event) => setFieldValue("captchaInput", event.target.value)}
             />
-            {errors.captchaInput ? <p className="field-error">{errors.captchaInput}</p> : null}
           </div>
         </div>
 
@@ -414,7 +400,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             />
             <span>I agree to the terms, privacy policy, and local demo verification flow.</span>
           </label>
-          {errors.agreeToTerms ? <p className="field-error">{errors.agreeToTerms}</p> : null}
 
           <div className="terms-panel">
             <h3>Privacy Terms & Agreement Instructions</h3>
