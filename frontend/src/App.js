@@ -13,9 +13,8 @@ import {
 import WorkspacePage from "./features/workspace/WorkspacePage";
 
 function App() {
-  const existingUser = getCurrentUser();
-  const [currentUser, setCurrentUserState] = useState(existingUser);
-  const [screen, setScreen] = useState(existingUser ? "workspace" : "home");
+  const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
+  const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
 
   const moveToWorkspace = (user) => {
     setCurrentUser(user);
@@ -91,25 +90,33 @@ function App() {
     );
   };
 
+  const isWorkspace = screen === "workspace";
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${isWorkspace ? "workspace-shell-mode" : "marketing-shell-mode"}`}>
       <header className="app-header">
         <div className="app-header-inner">
           <div>
             <p className="app-kicker">GenAI Assistant</p>
+            <h2 className="app-title">
+              {isWorkspace ? "Unified AI Workspace" : "AI Platform Home"}
+            </h2>
           </div>
-          {currentUser ? (
-            <div className="auth-header-user">
-              <span className="app-header-badge">
-                {currentUser.mode === "guest" ? "Guest Access" : currentUser.name}
-              </span>
-              <button className="auth-header-button" type="button" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          ) : (
-            <span className="app-header-badge">Live</span>
-          )}
+
+          <div className="app-header-actions">
+            {currentUser ? (
+              <div className="header-user-block">
+                <span className="app-header-badge">
+                  {currentUser.mode === "guest" ? "Guest Access" : currentUser.name}
+                </span>
+                <button className="header-logout-button" type="button" onClick={handleLogout}>
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <span className="app-header-badge">Live</span>
+            )}
+          </div>
         </div>
       </header>
 

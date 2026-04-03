@@ -14,6 +14,10 @@ function writeUsers(users) {
   window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
 }
 
+export function getRegisteredUsers() {
+  return readUsers();
+}
+
 export function getCurrentUser() {
   try {
     const raw = window.localStorage.getItem(CURRENT_USER_STORAGE_KEY);

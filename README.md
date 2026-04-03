@@ -305,6 +305,3 @@ Add your preferred license here, for example MIT, Apache-2.0, or a private/inter
 ---
 
 Built as a full-stack document question answering assistant with React, FastAPI, Groq, and Docker for local use and AWS deployment.
-
-
-
