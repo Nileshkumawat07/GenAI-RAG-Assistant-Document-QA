@@ -117,6 +117,31 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
             Create one here
           </button>
         </p>
+
+        <div className="auth-login-fill">
+          <div className="auth-login-fill-card">
+            <h3>Quick Access Options</h3>
+            <p>
+              Login with your saved account, create a new one, or continue without login to open
+              the main workspace directly.
+            </p>
+          </div>
+
+          <div className="auth-login-fill-grid">
+            <div className="auth-login-mini-card">
+              <strong>Member Login</strong>
+              <span>Use your email or username to continue with your saved local account.</span>
+            </div>
+            <div className="auth-login-mini-card">
+              <strong>Guest Entry</strong>
+              <span>Use temporary access when you want to test the project without signup.</span>
+            </div>
+            <div className="auth-login-mini-card">
+              <strong>New Account</strong>
+              <span>Move to signup if this is your first time using the assistant on this device.</span>
+            </div>
+          </div>
+        </div>
       </form>
     </section>
   );
