@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import HomePage from "./features/auth/HomePage";
 import LoginPage from "./features/auth/LoginPage";
@@ -92,15 +92,27 @@ function App() {
 
   const isWorkspace = screen === "workspace";
 
+  useEffect(() => {
+    document.body.classList.toggle("workspace-body-mode", isWorkspace);
+
+    return () => {
+      document.body.classList.remove("workspace-body-mode");
+    };
+  }, [isWorkspace]);
+
   return (
-    <main className={`app-shell ${isWorkspace ? "workspace-shell-mode" : "marketing-shell-mode"}`}>
-      <header className="app-header">
+    <main
+      className={`app-shell ${
+        isWorkspace ? "workspace-app-shell workspace-shell-mode" : "marketing-shell-mode"
+      }`}
+    >
+      <header className={`app-header ${isWorkspace ? "workspace-app-header" : ""}`}>
         <div className="app-header-inner">
           <div>
             <p className="app-kicker">GenAI Assistant</p>
-            <h2 className="app-title">
-              {isWorkspace ? "Unified AI Workspace" : "AI Platform Home"}
-            </h2>
+            {!isWorkspace ? (
+              <h2 className="app-title">AI Platform Home</h2>
+            ) : null}
           </div>
 
           <div className="app-header-actions">
@@ -120,7 +132,7 @@ function App() {
         </div>
       </header>
 
-      <div className="app-body">{renderScreen()}</div>
+      <div className={`app-body ${isWorkspace ? "workspace-app-body" : ""}`}>{renderScreen()}</div>
     </main>
   );
 }

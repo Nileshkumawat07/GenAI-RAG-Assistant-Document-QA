@@ -1556,3 +1556,288 @@ button {
     align-self: flex-start;
   }
 }
+
+body.workspace-body-mode {
+  font-family: "Segoe UI", sans-serif;
+  background: #f5f5f5;
+  color: #212121;
+  overflow: hidden;
+}
+
+body.workspace-body-mode #root {
+  height: 100vh;
+}
+
+.workspace-app-shell {
+  height: 100vh;
+  min-height: 0;
+  padding: 14px clamp(12px, 2vw, 28px);
+  gap: 8px;
+  overflow: hidden;
+}
+
+.workspace-app-header {
+  padding: 5px 15px;
+  border-radius: 0;
+  background: #1a237e;
+  border: 1px solid #1a237e;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.workspace-app-shell .app-header-inner {
+  gap: 16px;
+}
+
+.workspace-app-shell .app-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #dbe4ff;
+}
+
+.workspace-app-shell .app-header-badge,
+.workspace-app-shell .header-logout-button {
+  min-width: 58px;
+  min-height: 0;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.workspace-app-shell .app-header-badge {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.workspace-app-shell .header-logout-button {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.workspace-app-body {
+  min-height: 0;
+}
+
+body.workspace-body-mode .workspace-page {
+  width: 100%;
+  height: 100%;
+}
+
+body.workspace-body-mode .workspace-shell {
+  width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  background: #ffffff;
+  display: flex;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  border: none;
+  backdrop-filter: none;
+}
+
+body.workspace-body-mode .workspace-sidebar {
+  flex: 0 0 clamp(280px, 24vw, 360px);
+  background: #eceff1;
+  padding: 30px;
+  border-right: 1px solid #cfd8dc;
+}
+
+body.workspace-body-mode .sidebar-title {
+  margin: 0 0 12px;
+  font-size: 22px;
+  font-family: "Segoe UI", sans-serif;
+  color: #1a237e;
+}
+
+body.workspace-body-mode .sidebar-description {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: normal;
+  color: #546e7a;
+}
+
+body.workspace-body-mode .sidebar-tab {
+  min-height: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #212121;
+  border: 1px solid #ccc;
+  box-shadow: none;
+}
+
+body.workspace-body-mode .sidebar-tab.active {
+  background: #1a237e;
+  color: #fff;
+  border-color: #1a237e;
+}
+
+body.workspace-body-mode .sidebar-boost-card {
+  margin-top: 30px;
+  padding: 14px 12px;
+  background: #e8eaf6;
+  border: 1px solid #c5cae9;
+  border-radius: 10px;
+}
+
+body.workspace-body-mode .sidebar-status {
+  font-size: 13px;
+  color: #546e7a;
+}
+
+body.workspace-body-mode .sidebar-status h4 {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  text-align: center;
+  color: #1a237e;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #c5cae9;
+  border-radius: 8px;
+}
+
+body.workspace-body-mode .status-feed p {
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid #c5cae9;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+body.workspace-body-mode .workspace-content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+body.workspace-body-mode .info-card {
+  width: 100%;
+  background: #e8eaf6;
+  padding: 14px 18px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  border: none;
+}
+
+body.workspace-body-mode .info-card p {
+  margin: 0;
+  font-size: 13px;
+  color: #1a237e;
+  font-weight: 600;
+}
+
+body.workspace-body-mode .content-card {
+  margin-top: 12px;
+  background: #ffffff;
+  padding: 14px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: none;
+}
+
+body.workspace-body-mode .tool-card {
+  background: #e8eaf6;
+  padding: 12px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+body.workspace-body-mode .tool-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a237e;
+}
+
+body.workspace-body-mode .tool-copy,
+body.workspace-body-mode .answer-box p,
+body.workspace-body-mode .answer-paragraph,
+body.workspace-body-mode .answer-list,
+body.workspace-body-mode .detection-object-meta,
+body.workspace-body-mode .detection-summary-meta {
+  font-size: 12px;
+}
+
+body.workspace-body-mode .question-input {
+  width: 100%;
+  height: 108px;
+  min-height: 0;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #c5cae9;
+  background: #fff;
+  color: #212121;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+body.workspace-body-mode .question-input:focus {
+  outline: 1px solid #1a237e;
+  border-color: #1a237e;
+  box-shadow: none;
+}
+
+body.workspace-body-mode .upload-box,
+body.workspace-body-mode .placeholder-box,
+body.workspace-body-mode .image-preview-box,
+body.workspace-body-mode .image-generation-preview-box {
+  border-radius: 10px;
+  border: 1px dashed #9fa8da;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+body.workspace-body-mode .upload-icon,
+body.workspace-body-mode .upload-overlay-button {
+  border-radius: 12px;
+  border: 1px solid #c5cae9;
+}
+
+body.workspace-body-mode .primary-button {
+  min-height: 0;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #1a237e;
+  color: #fff;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+body.workspace-body-mode .primary-button:hover:not(:disabled) {
+  transform: none;
+  background: #283593;
+}
+
+body.workspace-body-mode .secondary-tone {
+  background: #263238;
+}
+
+body.workspace-body-mode .secondary-tone:hover:not(:disabled) {
+  background: #37474f;
+}
+
+body.workspace-body-mode .answer-section,
+body.workspace-body-mode .insight-card,
+body.workspace-body-mode .detection-inline-summary,
+body.workspace-body-mode .detection-summary-card,
+body.workspace-body-mode .detection-object-card,
+body.workspace-body-mode .answer-box,
+body.workspace-body-mode .detection-note,
+body.workspace-body-mode .camera-preview-shell {
+  border-radius: 10px;
+}
