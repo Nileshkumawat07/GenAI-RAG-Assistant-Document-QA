@@ -173,7 +173,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   return (
     <section className="auth-page signup-page">
       <div className="auth-showcase signup-showcase">
-        <p className="hero-kicker">Create Your Account</p>
         <h1>Start with a signup flow that feels production-ready.</h1>
         <p>
           This keeps the multi-section feel from your shared signup page, but matches the UI of

@@ -120,29 +120,30 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
 
         <div className="auth-login-fill">
           <div className="auth-login-fill-card">
-            <h3>Sign-In Support</h3>
+            <p className="auth-login-fill-eyebrow">Inside the workspace</p>
+            <h3>Launch the full AI suite right after sign in.</h3>
             <p>
-              Use your saved local account to continue, switch to signup if this is your first
-              visit, or enter the workspace directly with temporary access.
+              Open document retrieval, object detection, and image generation from the same
+              command center without changing products or pages.
             </p>
           </div>
 
           <div className="auth-login-fill-grid auth-login-support-grid">
             <div className="auth-login-mini-card">
-              <strong>Saved Account</strong>
-              <span>Use the same email or username you created on this device during signup.</span>
+              <strong>Document Q&amp;A</strong>
+              <span>Upload files, ask focused questions, and get fast answer-ready output.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>First Time Here</strong>
-              <span>Create a new account first if you have not completed the signup flow yet.</span>
+              <strong>Object Detection</strong>
+              <span>Inspect uploaded images and review detected objects in one clean workspace.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>Demo Access</strong>
-              <span>Continue without login when you want to open the project quickly for testing.</span>
+              <strong>Image Generation</strong>
+              <span>Turn prompts into visuals without leaving the same product flow.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>Password Tip</strong>
-              <span>Use Show to verify your password before login if the validation fails.</span>
+              <strong>Guest Access Ready</strong>
+              <span>Need speed first? Jump in directly with temporary access and explore now.</span>
             </div>
           </div>
         </div>
