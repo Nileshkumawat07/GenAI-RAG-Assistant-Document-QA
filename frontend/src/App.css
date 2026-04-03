@@ -463,7 +463,7 @@ button {
 }
 
 .signup-page .hero-kicker {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .signup-page .auth-showcase p {
@@ -493,11 +493,6 @@ button {
 .auth-card h2,
 .signup-card h2 {
   font-size: clamp(22px, 2.6vw, 30px);
-}
-
-.signup-page .signup-card h2 {
-  font-size: clamp(26px, 2.9vw, 34px);
-  margin-bottom: 10px;
 }
 
 .auth-label {
@@ -705,6 +700,22 @@ button {
   justify-content: flex-start;
 }
 
+.signup-page .auth-card-head {
+  min-height: 8px;
+  margin-bottom: 4px;
+}
+
+.signup-page .auth-eyebrow {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.2em;
+}
+
+.signup-header-spacer {
+  width: 100%;
+  height: 1px;
+}
+
 .signup-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -734,7 +745,7 @@ button {
 }
 
 .signup-page .auth-label {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   font-size: 11px;
 }
 
@@ -742,6 +753,26 @@ button {
   min-height: 36px;
   padding: 8px 11px;
   font-size: 12px;
+}
+
+.signup-page .signup-section .auth-input,
+.signup-page .signup-section .inline-action-field,
+.signup-page .signup-section .password-shell,
+.signup-page .signup-section .captcha-row {
+  margin-bottom: 10px;
+}
+
+.signup-page .signup-section .field-error {
+  margin-top: -4px;
+  margin-bottom: 10px;
+}
+
+.signup-page .signup-section .field-error:last-child,
+.signup-page .signup-section .auth-input:last-child,
+.signup-page .signup-section .inline-action-field:last-child,
+.signup-page .signup-section .password-shell:last-child,
+.signup-page .signup-section .captcha-row:last-child {
+  margin-bottom: 0;
 }
 
 .signup-page .inline-field-button,

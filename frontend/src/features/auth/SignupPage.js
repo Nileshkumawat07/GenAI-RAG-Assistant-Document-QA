@@ -186,13 +186,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
       <form className="signup-card" onSubmit={handleSubmit}>
         <div className="auth-card-head">
-          <div>
-            <p className="auth-eyebrow">Signup</p>
-            <h2>Create account</h2>
-          </div>
-          <button className="text-link-button" type="button" onClick={onBack}>
-            Back home
-          </button>
+          <div className="signup-header-spacer" aria-hidden="true" />
         </div>
 
         <div className="signup-grid">
