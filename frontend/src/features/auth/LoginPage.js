@@ -120,25 +120,29 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
 
         <div className="auth-login-fill">
           <div className="auth-login-fill-card">
-            <h3>Quick Access Options</h3>
+            <h3>Sign-In Support</h3>
             <p>
-              Login with your saved account, create a new one, or continue without login to open
-              the main workspace directly.
+              Use your saved local account to continue, switch to signup if this is your first
+              visit, or enter the workspace directly with temporary access.
             </p>
           </div>
 
-          <div className="auth-login-fill-grid">
+          <div className="auth-login-fill-grid auth-login-support-grid">
             <div className="auth-login-mini-card">
-              <strong>Member Login</strong>
-              <span>Use your email or username to continue with your saved local account.</span>
+              <strong>Saved Account</strong>
+              <span>Use the same email or username you created on this device during signup.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>Guest Entry</strong>
-              <span>Use temporary access when you want to test the project without signup.</span>
+              <strong>First Time Here</strong>
+              <span>Create a new account first if you have not completed the signup flow yet.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>New Account</strong>
-              <span>Move to signup if this is your first time using the assistant on this device.</span>
+              <strong>Demo Access</strong>
+              <span>Continue without login when you want to open the project quickly for testing.</span>
+            </div>
+            <div className="auth-login-mini-card">
+              <strong>Password Tip</strong>
+              <span>Use Show to verify your password before login if the validation fails.</span>
             </div>
           </div>
         </div>

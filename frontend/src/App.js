@@ -109,7 +109,6 @@ function App() {
       <header className={`app-header ${isWorkspace ? "workspace-app-header" : ""}`}>
         <div className="app-header-inner">
           <div>
-            <p className="app-kicker">GenAI Assistant</p>
             {!isWorkspace ? (
               <h2 className="app-title">AI Platform Home</h2>
             ) : null}
