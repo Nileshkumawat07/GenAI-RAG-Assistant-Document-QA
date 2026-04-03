@@ -420,12 +420,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             </button>
           </div>
 
-          <p className="auth-footnote">
-            Already have an account?{" "}
-            <button className="inline-text-button" type="button" onClick={onShowLogin}>
-              Login here
-            </button>
-          </p>
         </div>
       </form>
     </section>

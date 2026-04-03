@@ -701,23 +701,23 @@ button {
 }
 
 .signup-card {
-  padding: 18px;
+  padding: 14px 18px 18px;
   overflow: hidden;
   justify-content: flex-start;
 }
 
 .signup-page .auth-card-head {
-  min-height: 4px;
-  margin-bottom: 0;
+  min-height: 0;
+  margin-bottom: 2px;
 }
 
 .signup-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  flex: 1 1 auto;
-  min-height: 0;
-  align-content: stretch;
+  flex: 0 0 auto;
+  min-height: auto;
+  align-content: start;
 }
 
 .signup-section {
@@ -788,8 +788,8 @@ button {
 
 .signup-footer {
   display: grid;
-  gap: 10px;
-  margin-top: 0;
+  gap: 8px;
+  margin-top: 6px;
   flex: 0 0 auto;
 }
 

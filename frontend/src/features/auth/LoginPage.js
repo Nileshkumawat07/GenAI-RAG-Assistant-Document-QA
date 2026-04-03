@@ -103,13 +103,6 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
           Continue without login
         </button>
 
-        <p className="auth-footnote">
-          Need an account?{" "}
-          <button className="inline-text-button" type="button" onClick={onShowSignup}>
-            Create one here
-          </button>
-        </p>
-
         <div className="auth-login-fill">
           <div className="auth-login-fill-card">
             <p className="auth-login-fill-eyebrow">Inside the workspace</p>
