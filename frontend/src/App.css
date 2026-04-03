@@ -148,14 +148,18 @@ button {
 
 .landing-page {
   display: grid;
-  gap: 18px;
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 14px;
+  overflow: hidden;
 }
 
 .landing-hero,
 .auth-page {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  gap: 18px;
+  gap: 14px;
+  min-height: 0;
 }
 
 .landing-copy,
@@ -173,7 +177,10 @@ button {
 }
 
 .landing-copy {
-  padding: clamp(26px, 4vw, 44px);
+  padding: clamp(22px, 3.2vw, 34px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .landing-copy::before,
@@ -213,10 +220,10 @@ button {
 
 .landing-copy .hero-text,
 .auth-showcase p {
-  margin: 16px 0 0;
+  margin: 12px 0 0;
   max-width: 62ch;
   font-size: 15px;
-  line-height: 1.75;
+  line-height: 1.6;
   color: var(--muted);
 }
 
@@ -224,7 +231,7 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 28px;
+  margin-top: 20px;
 }
 
 .hero-button,
@@ -290,7 +297,7 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 28px;
+  margin-top: 18px;
 }
 
 .proof-chip,
@@ -308,16 +315,17 @@ button {
 }
 
 .landing-visual {
-  padding: clamp(22px, 3vw, 28px);
+  padding: clamp(18px, 2.4vw, 24px);
   display: grid;
-  gap: 14px;
+  gap: 12px;
   align-content: stretch;
+  min-height: 0;
 }
 
 .visual-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .visual-card,
@@ -331,10 +339,10 @@ button {
 }
 
 .visual-card {
-  padding: 20px;
+  padding: 18px;
   display: grid;
-  gap: 10px;
-  min-height: 168px;
+  gap: 8px;
+  min-height: 146px;
 }
 
 .visual-card strong {
@@ -390,13 +398,13 @@ button {
 .landing-highlights {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .highlight-card,
 .auth-helper-card,
 .terms-panel {
-  padding: 20px;
+  padding: 16px;
 }
 
 .highlight-card h3,
@@ -1421,6 +1429,12 @@ button {
   .landing-hero,
   .auth-page {
     grid-template-columns: 1fr;
+  }
+
+  .landing-page {
+    height: auto;
+    grid-template-rows: none;
+    overflow: visible;
   }
 
   .landing-highlights,
