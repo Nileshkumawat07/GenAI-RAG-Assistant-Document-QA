@@ -11,10 +11,12 @@ import {
   setCurrentUser,
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
+import InfoPages from "./features/info/InfoPages";
 
 function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
   const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
+  const [showInfoMenu, setShowInfoMenu] = useState(false);
 
   const moveToWorkspace = (user) => {
     setCurrentUser(user);
@@ -81,6 +83,10 @@ function App() {
       return <WorkspacePage />;
     }
 
+    if (screen === "about" || screen === "careers" || screen === "contact" || screen === "faqs" || screen === "pricing") {
+      return <InfoPages page={screen} />;
+    }
+
     return (
       <HomePage
         onContinue={handleGuestEntry}
@@ -91,6 +97,13 @@ function App() {
   };
 
   const isWorkspace = screen === "workspace";
+  const infoPages = [
+    { id: "about", label: "About Us" },
+    { id: "careers", label: "Careers" },
+    { id: "contact", label: "Contact Us" },
+    { id: "faqs", label: "FAQs" },
+    { id: "pricing", label: "Pricing" },
+  ];
 
   useEffect(() => {
     document.body.classList.toggle("workspace-body-mode", isWorkspace);
@@ -115,6 +128,32 @@ function App() {
           </div>
 
           <div className="app-header-actions">
+            <div className="header-menu-shell">
+              <button
+                className="header-utility-button"
+                type="button"
+                onClick={() => setShowInfoMenu((current) => !current)}
+              >
+                Pages
+              </button>
+              {showInfoMenu ? (
+                <div className="header-dropdown-menu">
+                  {infoPages.map((page) => (
+                    <button
+                      key={page.id}
+                      className="header-dropdown-item"
+                      type="button"
+                      onClick={() => {
+                        setScreen(page.id);
+                        setShowInfoMenu(false);
+                      }}
+                    >
+                      {page.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             {currentUser ? (
               <div className="header-user-block">
                 <span className="app-header-badge">
