@@ -349,7 +349,7 @@ button {
 .highlight-card,
 .auth-helper-card,
 .terms-panel {
-  border-radius: 22px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(238, 245, 255, 0.88));
   box-shadow: 0 8px 24px rgba(13, 36, 76, 0.08);
@@ -480,6 +480,10 @@ button {
   gap: 10px;
   height: 100%;
   min-height: 0;
+}
+
+.auth-page:not(.signup-page) .auth-card {
+  padding: 10px 18px 18px;
 }
 
 .auth-card-head {
@@ -766,7 +770,7 @@ button {
 
 .auth-page .auth-card-head {
   min-height: 4px;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .signup-page .inline-field-button,

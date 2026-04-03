@@ -409,8 +409,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             </p>
           </div>
 
-          {formError ? <p className="form-error-banner">{formError}</p> : null}
-
           <div className="signup-actions">
             <button className="auth-primary-button" type="submit">
               Create Account
