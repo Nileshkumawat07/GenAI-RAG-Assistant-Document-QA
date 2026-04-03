@@ -701,14 +701,14 @@ button {
 }
 
 .signup-card {
-  padding: 14px 18px 18px;
+  padding: 8px 18px 18px;
   overflow: hidden;
   justify-content: flex-start;
 }
 
 .signup-page .auth-card-head {
   min-height: 0;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .signup-grid {
@@ -731,8 +731,8 @@ button {
 
 .signup-page .signup-section h3 {
   margin: -14px -14px 10px;
-  padding: 10px 12px;
-  font-size: 16px;
+  padding: 8px 12px;
+  font-size: 15px;
   color: #ffffff;
   text-align: left;
   background: linear-gradient(135deg, #123d7a, #2d6bc0);
