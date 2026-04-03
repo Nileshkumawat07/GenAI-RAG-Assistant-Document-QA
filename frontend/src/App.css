@@ -61,7 +61,8 @@ button {
 }
 
 .marketing-shell-mode {
-  overflow: visible;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .workspace-shell-mode {
@@ -79,6 +80,10 @@ button {
   color: #ffffff;
   box-shadow: 0 14px 36px rgba(8, 28, 62, 0.22);
   backdrop-filter: blur(16px);
+}
+
+.marketing-shell-mode .app-header {
+  border-radius: 0;
 }
 
 .app-header-inner {
@@ -144,6 +149,7 @@ button {
 .landing-page,
 .auth-page {
   min-height: 100%;
+  height: 100%;
 }
 
 .landing-page {
@@ -162,6 +168,12 @@ button {
   min-height: 0;
 }
 
+.auth-page {
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  align-items: stretch;
+  overflow: hidden;
+}
+
 .landing-copy,
 .landing-visual,
 .auth-showcase,
@@ -174,6 +186,7 @@ button {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 248, 255, 0.94));
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(14px);
+  border-radius: 0;
 }
 
 .landing-copy {
@@ -405,6 +418,7 @@ button {
 .auth-helper-card,
 .terms-panel {
   padding: 16px;
+  border-radius: 4px;
 }
 
 .highlight-card h3,
@@ -417,11 +431,17 @@ button {
   color: var(--primary-deep);
 }
 
+.signup-section h3 {
+  font-size: 16px;
+}
+
 .auth-showcase {
-  padding: 28px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  height: 100%;
+  min-height: 0;
 }
 
 .signup-showcase {
@@ -430,28 +450,30 @@ button {
 
 .auth-card,
 .signup-card {
-  padding: 26px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
 }
 
 .auth-card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 6px;
+  gap: 12px;
+  margin-bottom: 2px;
 }
 
 .auth-card h2,
 .signup-card h2 {
-  font-size: clamp(26px, 3vw, 34px);
+  font-size: clamp(22px, 2.6vw, 30px);
 }
 
 .auth-label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -462,9 +484,9 @@ button {
 .auth-input,
 .question-input {
   width: 100%;
-  min-height: 46px;
-  padding: 12px 14px;
-  border-radius: 15px;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.94);
   color: var(--text);
@@ -512,10 +534,10 @@ button {
 .inline-field-button {
   flex: 0 0 auto;
   min-width: 108px;
-  min-height: 46px;
+  min-height: 40px;
   padding: 0 14px;
   border: none;
-  border-radius: 14px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
@@ -535,8 +557,8 @@ button {
 }
 
 .form-error-banner {
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 10px 12px;
+  border-radius: 4px;
   background: rgba(180, 35, 24, 0.08);
   border: 1px solid rgba(180, 35, 24, 0.14);
 }
@@ -549,12 +571,12 @@ button {
 .auth-secondary-button,
 .primary-button {
   width: 100%;
-  min-height: 48px;
+  min-height: 42px;
   padding: 0 14px;
-  border-radius: 16px;
+  border-radius: 4px;
   border: 1px solid transparent;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -565,31 +587,37 @@ button {
   text-align: center;
 }
 
+.signup-page .auth-showcase p {
+  line-height: 1.5;
+}
+
 .signup-page {
   align-items: stretch;
 }
 
 .signup-card {
-  padding: 24px;
+  padding: 16px;
 }
 
 .signup-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .signup-section {
-  padding: 18px;
-  border-radius: 22px;
+  padding: 12px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: rgba(248, 251, 255, 0.92);
 }
 
 .signup-footer {
   display: grid;
-  gap: 12px;
-  margin-top: 4px;
+  gap: 8px;
+  margin-top: 0;
 }
 
 .terms-check {
@@ -606,9 +634,9 @@ button {
   align-items: center;
   justify-content: center;
   min-width: 108px;
-  min-height: 46px;
+  min-height: 40px;
   padding: 0 16px;
-  border-radius: 14px;
+  border-radius: 4px;
   background: linear-gradient(135deg, rgba(18, 61, 122, 0.12), rgba(18, 61, 122, 0.04));
   border: 1px solid rgba(18, 61, 122, 0.14);
   color: var(--primary-deep);
@@ -619,7 +647,7 @@ button {
 .signup-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .workspace-page {
