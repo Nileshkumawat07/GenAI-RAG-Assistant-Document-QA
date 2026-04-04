@@ -37,6 +37,30 @@ function calculateAge(dateOfBirth) {
   return age;
 }
 
+function formatFirebaseMessage(message, type) {
+  const normalized = (message || "").toLowerCase();
+
+  if (type === "email") {
+    if (normalized.includes("auth/operation-not-allowed")) {
+      return "Enable Email Link sign-in in Firebase Authentication > Email/Password.";
+    }
+    if (normalized.includes("auth/too-many-requests")) {
+      return "Firebase temporarily blocked repeated email verification requests. Wait and try again.";
+    }
+  }
+
+  if (type === "mobile") {
+    if (normalized.includes("auth/too-many-requests")) {
+      return "Firebase temporarily blocked repeated mobile OTP requests for this number. Wait and try again.";
+    }
+    if (normalized.includes("auth/invalid-verification-code") || normalized.includes("auth/code-expired")) {
+      return "Wrong OTP.";
+    }
+  }
+
+  return message || "Verification failed.";
+}
+
 function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
@@ -50,7 +74,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [mobileCooldown, setMobileCooldown] = useState(0);
   const [mobileConfirmation, setMobileConfirmation] = useState(null);
   const [captchaCode, setCaptchaCode] = useState(() => buildCaptcha());
-  const [otpStatus, setOtpStatus] = useState("");
   const [emailStatus, setEmailStatus] = useState("Waiting for email action.");
   const [mobileStatus, setMobileStatus] = useState("Waiting for mobile action.");
   const [errors, setErrors] = useState({});
@@ -92,10 +115,9 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         setEmailVerificationSent(true);
         setEmailVerified(true);
         setEmailStatus("Verified successfully from email link.");
-        setOtpStatus("Email verified successfully.");
       })
       .catch((error) => {
-        setEmailStatus(error.message || "Email link verification failed.");
+        setEmailStatus(formatFirebaseMessage(error.message, "email"));
       });
 
     return () => {
@@ -141,14 +163,12 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const sendOtp = async (type) => {
     if (type === "email") {
       if (emailCooldown > 0) {
-        setOtpStatus(`Email link resend available in ${emailCooldown}s.`);
         setEmailStatus(`Resend locked for ${emailCooldown}s.`);
         return;
       }
 
       if (!EMAIL_PATTERN.test(formData.email.trim())) {
         setErrors((current) => ({ ...current, email: "Enter a valid email before requesting verification." }));
-        setOtpStatus("Enter a valid email to send the verification link.");
         setEmailStatus("Enter a valid email address.");
         return;
       }
@@ -159,25 +179,21 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         setEmailVerificationSent(true);
         setEmailVerified(false);
         setEmailCooldown(30);
-        setOtpStatus("Verification email sent successfully.");
         setEmailStatus("Verification link sent.");
       } catch (error) {
-        const message = error.message || "Failed to send verification email.";
-        setOtpStatus(message);
+        const message = formatFirebaseMessage(error.message, "email");
         setEmailStatus(message);
       }
       return;
     }
 
     if (mobileCooldown > 0) {
-      setOtpStatus(`Mobile OTP resend available in ${mobileCooldown}s.`);
       setMobileStatus(`Resend locked for ${mobileCooldown}s.`);
       return;
     }
 
     if (!MOBILE_PATTERN.test(formData.mobile.trim())) {
       setErrors((current) => ({ ...current, mobile: "Enter a valid 10-digit mobile number first." }));
-      setOtpStatus("Enter a valid mobile number to send the mobile OTP.");
       setMobileStatus("Enter a valid mobile number.");
       return;
     }
@@ -192,11 +208,9 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       setMobileOtpSent(true);
       setMobileVerified(false);
       setMobileCooldown(30);
-      setOtpStatus("Mobile OTP sent successfully.");
       setMobileStatus("OTP sent.");
     } catch (error) {
-      const message = error.message || "Failed to send mobile OTP.";
-      setOtpStatus(message);
+      const message = formatFirebaseMessage(error.message, "mobile");
       setMobileOtpSent(false);
       setMobileConfirmation(null);
       setMobileStatus(message);
@@ -207,7 +221,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const checkEmailVerification = async () => {
     if (!EMAIL_PATTERN.test(formData.email.trim())) {
       setErrors((current) => ({ ...current, email: "Enter a valid email before verifying." }));
-      setOtpStatus("Enter a valid email to verify.");
       setEmailStatus("Enter a valid email address.");
       return;
     }
@@ -217,13 +230,12 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       await checkFirebaseEmailVerification(formData.email.trim());
       setEmailVerified(true);
       setErrors((current) => ({ ...current, emailVerification: "", email: "" }));
-      setOtpStatus("Email verified successfully.");
       setEmailStatus("Verified successfully.");
     } catch (error) {
       setEmailVerified(false);
-      setErrors((current) => ({ ...current, emailVerification: error.message }));
-      setOtpStatus(error.message);
-      setEmailStatus(error.message);
+      const message = formatFirebaseMessage(error.message, "email");
+      setErrors((current) => ({ ...current, emailVerification: message }));
+      setEmailStatus(message);
     } finally {
       setEmailVerifying(false);
     }
@@ -233,7 +245,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     if (!mobileConfirmation) {
       const message = "Send the mobile OTP first.";
       setErrors((current) => ({ ...current, mobileOtp: message }));
-      setOtpStatus(message);
       setMobileStatus(message);
       return;
     }
@@ -241,7 +252,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     if (!formData.mobileOtp.trim()) {
       const message = "Enter the mobile OTP first.";
       setErrors((current) => ({ ...current, mobileOtp: message }));
-      setOtpStatus(message);
       setMobileStatus(message);
       return;
     }
@@ -251,16 +261,11 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       await verifyFirebaseOtp(mobileConfirmation, formData.mobileOtp.trim());
       setMobileVerified(true);
       setErrors((current) => ({ ...current, mobileOtp: "" }));
-      setOtpStatus("Mobile verified successfully.");
       setMobileStatus("Verified successfully.");
     } catch (error) {
-      const rawMessage = error.message || "Mobile OTP verification failed.";
-      const message = rawMessage.toLowerCase().includes("invalid") || rawMessage.toLowerCase().includes("code")
-        ? "Wrong OTP."
-        : rawMessage;
+      const message = formatFirebaseMessage(error.message, "mobile");
       setMobileVerified(false);
       setErrors((current) => ({ ...current, mobileOtp: message }));
-      setOtpStatus(message);
       setMobileStatus(message);
     } finally {
       setMobileVerifying(false);
@@ -361,12 +366,14 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       }
 
       setEmailVerified(true);
-      setOtpStatus("Email and mobile verification completed successfully.");
+      setEmailStatus("Verified successfully.");
+      setMobileStatus("Verified successfully.");
       onSubmit(formData);
     } catch (error) {
-      const message = error.message || "Verification failed.";
+      const message = formatFirebaseMessage(error.message, "email");
       setFormError(message);
       setErrors((current) => ({ ...current, emailVerification: message }));
+      setEmailStatus(message);
     }
   };
 
@@ -384,7 +391,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             {helperLines.map((line) => (
               <p key={line}>{line}</p>
             ))}
-            {otpStatus ? <p className="verification-helper-action">Action: {otpStatus}</p> : null}
           </div>
         </div>
       </div>
