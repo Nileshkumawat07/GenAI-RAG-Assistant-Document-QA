@@ -1,0 +1,44 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: genai-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - backend/.env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    volumes:
+      - huggingface_cache:/app/.cache/huggingface
+
+  mysql:
+    image: mysql:8.4
+    container_name: genai-mysql
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    env_file:
+      - mysql/mysql.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  huggingface_cache:
+  mysql_data:

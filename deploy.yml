@@ -4,17 +4,28 @@
   vars:
     groq_api_key: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
     frontend_origin: "{{ frontend_origin | default(lookup('env', 'FRONTEND_ORIGIN'), true) }}"
+    mysql_root_password: "{{ mysql_root_password | default(lookup('env', 'MYSQL_ROOT_PASSWORD'), true) }}"
+    mysql_database: "{{ mysql_database | default(lookup('env', 'MYSQL_DATABASE'), true) }}"
+    mysql_user: "{{ mysql_user | default(lookup('env', 'MYSQL_USER'), true) }}"
+    mysql_password: "{{ mysql_password | default(lookup('env', 'MYSQL_PASSWORD'), true) }}"
 
   pre_tasks:
     - name: Ensure required runtime secrets are provided
       ansible.builtin.assert:
         that:
           - groq_api_key | length > 0
-        fail_msg: "Missing one or more required runtime env vars for Groq."
+          - mysql_root_password | length > 0
+          - mysql_database | length > 0
+          - mysql_user | length > 0
+          - mysql_password | length > 0
+        fail_msg: "Missing one or more required runtime env vars for Groq or MySQL."
 
   tasks:
     - name: Pull latest image
       ansible.builtin.raw: docker pull nilesh9890/genai-rag:latest
+
+    - name: Pull latest MySQL image
+      ansible.builtin.raw: docker pull mysql:8.4
 
     - name: Remove existing app container if present
       ansible.builtin.raw: >
@@ -23,17 +34,63 @@
         fi
       changed_when: false
 
+    - name: Remove existing MySQL container if present
+      ansible.builtin.raw: >
+        if docker container inspect genai-mysql >/dev/null 2>&1; then
+          docker rm -f genai-mysql;
+        fi
+      changed_when: false
+
+    - name: Ensure MySQL data volume exists
+      ansible.builtin.raw: >
+        if ! docker volume inspect mysql_data >/dev/null 2>&1; then
+          docker volume create mysql_data;
+        fi
+      changed_when: false
+
+    - name: Run MySQL container
+      ansible.builtin.raw: >
+        docker run -d
+        --name genai-mysql
+        -p 3306:3306
+        -v mysql_data:/var/lib/mysql
+        -e MYSQL_ROOT_PASSWORD={{ mysql_root_password | quote }}
+        -e MYSQL_DATABASE={{ mysql_database | quote }}
+        -e MYSQL_USER={{ mysql_user | quote }}
+        -e MYSQL_PASSWORD={{ mysql_password | quote }}
+        --restart unless-stopped
+        mysql:8.4
+        --default-authentication-plugin=mysql_native_password
+        --character-set-server=utf8mb4
+        --collation-server=utf8mb4_unicode_ci
+      no_log: true
+
+    - name: Wait for MySQL to be ready
+      ansible.builtin.raw: >
+        docker exec genai-mysql
+        mysqladmin ping -h 127.0.0.1 -uroot -p'{{ mysql_root_password }}' --silent
+      register: mysql_ready
+      retries: 12
+      delay: 10
+      until: mysql_ready.rc == 0
+      changed_when: false
+      no_log: true
+
     - name: Run container
       ansible.builtin.raw: >
         docker run -d
         --name genai-container
         -p 5000:8000
+        --link genai-mysql:mysql
         -v genai-hf-cache:/app/.cache/huggingface
         -e GROQ_API_KEY={{ groq_api_key | quote }}
         -e FRONTEND_ORIGIN={{ frontend_origin | default('http://localhost:3000', true) | quote }}
         --restart unless-stopped
         nilesh9890/genai-rag:latest
       no_log: true
+
+    - name: Verify MySQL container running
+      ansible.builtin.raw: docker ps --filter name=genai-mysql
 
     - name: Verify container running
       ansible.builtin.raw: docker ps --filter name=genai-container

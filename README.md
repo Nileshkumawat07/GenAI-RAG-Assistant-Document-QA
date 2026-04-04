@@ -228,6 +228,69 @@ Then open:
 http://localhost:8000
 ```
 
+## Docker Compose With MySQL
+
+This repository now includes a separate MySQL service through Docker Compose without changing the current application logic.
+
+The app will still run exactly as it does today, and MySQL will be available alongside it for future persistence work.
+
+### Files added for MySQL
+
+- `docker-compose.yml`: starts the current app container and a MySQL container together
+- `mysql/mysql.env.example`: sample MySQL credentials file
+- `mysql/init/`: optional SQL init scripts folder for future schema setup
+
+### One-time setup
+
+1. Copy the MySQL env template:
+
+```bash
+copy mysql\mysql.env.example mysql\mysql.env
+```
+
+2. Open `mysql/mysql.env` and set your passwords:
+
+```env
+MYSQL_ROOT_PASSWORD=your_root_password
+MYSQL_DATABASE=genai_app
+MYSQL_USER=genai_user
+MYSQL_PASSWORD=your_app_password
+```
+
+3. Make sure `backend/.env` already contains your current app values like `GROQ_API_KEY`.
+
+### Start app + MySQL together
+
+```bash
+docker compose up --build -d
+```
+
+### Stop the stack
+
+```bash
+docker compose down
+```
+
+### Service endpoints
+
+- App: `http://localhost:8000`
+- MySQL from your host machine: `localhost:3306`
+- MySQL from the app container/network: `mysql:3306`
+
+### Default MySQL connection values
+
+- Host: `localhost`
+- Port: `3306`
+- Database: value of `MYSQL_DATABASE`
+- Username: value of `MYSQL_USER`
+- Password: value of `MYSQL_PASSWORD`
+
+### Notes
+
+- MySQL data is persisted in the Docker volume `mysql_data`
+- Hugging Face model cache is persisted in the Docker volume `huggingface_cache`
+- The current project does not yet read or write MySQL data, so this setup is non-breaking and ready for future integration
+
 ## AWS Deployment
 
 This repository is structured to deploy cleanly to container-based AWS services such as:

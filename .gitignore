@@ -12,3 +12,4 @@ backend/documents/*
 .env.*
 backend/.env
 !backend/.env.example
+mysql/mysql.env
