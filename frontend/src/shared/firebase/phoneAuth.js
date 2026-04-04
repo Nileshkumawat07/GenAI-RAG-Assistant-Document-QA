@@ -15,10 +15,12 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 let recaptchaVerifier = null;
+let recaptchaContainerElement = null;
 
 export async function sendFirebaseOtp(phoneNumber, containerId) {
   await resetFirebaseRecaptcha(containerId);
-  const verifier = new RecaptchaVerifier(auth, containerId, {
+  const actualContainerId = ensureRecaptchaContainer(containerId);
+  const verifier = new RecaptchaVerifier(auth, actualContainerId, {
     size: "invisible",
   });
   recaptchaVerifier = verifier;
@@ -41,10 +43,33 @@ export async function resetFirebaseRecaptcha(containerId) {
     }
   }
 
+  if (recaptchaContainerElement?.parentNode) {
+    recaptchaContainerElement.parentNode.removeChild(recaptchaContainerElement);
+  }
+  recaptchaContainerElement = null;
+
   if (containerId && typeof document !== "undefined") {
     const container = document.getElementById(containerId);
     if (container) {
       container.innerHTML = "";
     }
   }
+}
+
+function ensureRecaptchaContainer(containerId) {
+  if (typeof document === "undefined") {
+    return containerId;
+  }
+
+  const hostElement = document.getElementById(containerId);
+  if (!hostElement) {
+    return containerId;
+  }
+
+  const childElement = document.createElement("div");
+  childElement.id = `${containerId}-inner-${Date.now()}`;
+  hostElement.innerHTML = "";
+  hostElement.appendChild(childElement);
+  recaptchaContainerElement = childElement;
+  return childElement.id;
 }
