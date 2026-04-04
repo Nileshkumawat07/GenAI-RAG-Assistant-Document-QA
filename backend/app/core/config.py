@@ -43,3 +43,17 @@ IMAGE_GENERATION_LOCAL_FILES_ONLY = os.getenv(
     "IMAGE_GENERATION_LOCAL_FILES_ONLY",
     "false",
 ).strip().lower() in {"1", "true", "yes", "on"}
+
+AWS_REGION = os.getenv("AWS_REGION", "").strip()
+SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL", "").strip()
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "").strip()
+
+OTP_LENGTH = int(os.getenv("OTP_LENGTH", "6"))
+OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "600"))
+OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "30"))
+OTP_DEFAULT_COUNTRY_CODE = os.getenv("OTP_DEFAULT_COUNTRY_CODE", "+91").strip() or "+91"

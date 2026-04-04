@@ -1,14 +1,12 @@
 import React, { useState } from "react";
 
+import { requestJson } from "../../shared/api/http";
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_PATTERN = /^\d{10}$/;
 
 function buildCaptcha() {
   return Math.random().toString(36).slice(2, 7).toUpperCase();
-}
-
-function createOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 function calculateAge(dateOfBirth) {
@@ -34,8 +32,8 @@ function calculateAge(dateOfBirth) {
 function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
-  const [emailOtpCode, setEmailOtpCode] = useState("");
-  const [mobileOtpCode, setMobileOtpCode] = useState("");
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [mobileOtpSent, setMobileOtpSent] = useState(false);
   const [captchaCode, setCaptchaCode] = useState(() => buildCaptcha());
   const [otpStatus, setOtpStatus] = useState("");
   const [errors, setErrors] = useState({});
@@ -59,38 +57,72 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   });
 
   const helperStatus =
-    otpStatus || "Use Send OTP to generate temporary verification codes for this local demo.";
+    otpStatus || "Use Send OTP to deliver verification codes to the provided email and mobile number.";
 
   const setFieldValue = (field, value) => {
+    if (field === "email") {
+      setEmailOtpSent(false);
+    }
+
+    if (field === "mobile") {
+      setMobileOtpSent(false);
+    }
+
     setFormData((current) => ({
       ...current,
       [field]: value,
     }));
   };
 
-  const sendOtp = (type) => {
+  const sendOtp = async (type) => {
     if (type === "email") {
       if (!EMAIL_PATTERN.test(formData.email.trim())) {
         setErrors((current) => ({ ...current, email: "Enter a valid email before requesting OTP." }));
-        setOtpStatus("Enter a valid email to generate the email OTP.");
+        setOtpStatus("Enter a valid email to send the email OTP.");
         return;
       }
 
-      const otp = createOtp();
-      setEmailOtpCode(otp);
-      setOtpStatus(`Demo email OTP generated: ${otp}`);
+      try {
+        const response = await requestJson(
+          "/auth/otp/email/send",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: formData.email.trim() }),
+          },
+          "Failed to send email OTP.",
+        );
+        setErrors((current) => ({ ...current, email: "", emailOtp: "" }));
+        setEmailOtpSent(true);
+        setOtpStatus(response.message || "Email OTP sent successfully.");
+      } catch (error) {
+        setOtpStatus(error.message);
+      }
       return;
     }
 
     if (!MOBILE_PATTERN.test(formData.mobile.trim())) {
       setErrors((current) => ({ ...current, mobile: "Enter a valid 10-digit mobile number first." }));
-      setOtpStatus("Enter a valid mobile number to generate the mobile OTP.");
+      setOtpStatus("Enter a valid mobile number to send the mobile OTP.");
       return;
     }
 
-    const otp = createOtp();
-    setMobileOtpCode(otp);
-    setOtpStatus(`Demo mobile OTP generated: ${otp}`);
+    try {
+      const response = await requestJson(
+        "/auth/otp/mobile/send",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mobile: formData.mobile.trim() }),
+        },
+        "Failed to send mobile OTP.",
+      );
+      setErrors((current) => ({ ...current, mobile: "", mobileOtp: "" }));
+      setMobileOtpSent(true);
+      setOtpStatus(response.message || "Mobile OTP sent successfully.");
+    } catch (error) {
+      setOtpStatus(error.message);
+    }
   };
 
   const validate = () => {
@@ -130,16 +162,20 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     if (!formData.securityQuestion) nextErrors.securityQuestion = "Choose a security question.";
     if (!formData.securityAnswer.trim()) nextErrors.securityAnswer = "Security answer is required.";
 
-    if (!emailOtpCode) {
+    if (!emailOtpSent) {
       nextErrors.emailOtp = "Generate and enter the email OTP.";
-    } else if (formData.emailOtp.trim() !== emailOtpCode) {
-      nextErrors.emailOtp = "Email OTP does not match.";
     }
 
-    if (!mobileOtpCode) {
+    if (!mobileOtpSent) {
       nextErrors.mobileOtp = "Generate and enter the mobile OTP.";
-    } else if (formData.mobileOtp.trim() !== mobileOtpCode) {
-      nextErrors.mobileOtp = "Mobile OTP does not match.";
+    }
+
+    if (!formData.emailOtp.trim()) {
+      nextErrors.emailOtp = "Email OTP is required.";
+    }
+
+    if (!formData.mobileOtp.trim()) {
+      nextErrors.mobileOtp = "Mobile OTP is required.";
     }
 
     if (formData.captchaInput.trim().toUpperCase() !== captchaCode) {
@@ -151,7 +187,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     return nextErrors;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     const nextErrors = validate();
@@ -164,9 +200,50 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
     try {
       setFormError("");
+      try {
+        await requestJson(
+          "/auth/otp/email/verify",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: formData.email.trim(),
+              otp: formData.emailOtp.trim(),
+            }),
+          },
+          "Email OTP verification failed.",
+        );
+      } catch (error) {
+        const message = error.message || "Email OTP verification failed.";
+        setFormError(message);
+        setErrors((current) => ({ ...current, emailOtp: message }));
+        return;
+      }
+
+      try {
+        await requestJson(
+          "/auth/otp/mobile/verify",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mobile: formData.mobile.trim(),
+              otp: formData.mobileOtp.trim(),
+            }),
+          },
+          "Mobile OTP verification failed.",
+        );
+      } catch (error) {
+        const message = error.message || "Mobile OTP verification failed.";
+        setFormError(message);
+        setErrors((current) => ({ ...current, mobileOtp: message }));
+        return;
+      }
+
+      setOtpStatus("Email and mobile OTP verified successfully.");
       onSubmit(formData);
     } catch (error) {
-      setFormError(error.message);
+      setFormError(error.message || "Verification failed.");
     }
   };
 
@@ -179,7 +256,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
           this AI project and adds proper front-end validation throughout.
         </p>
         <div className="auth-helper-card">
-          <strong>Demo verification helper</strong>
+          <strong>Verification helper</strong>
           <p>{helperStatus}</p>
         </div>
       </div>
@@ -398,14 +475,14 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               checked={formData.agreeToTerms}
               onChange={(event) => setFieldValue("agreeToTerms", event.target.checked)}
             />
-            <span>I agree to the terms, privacy policy, and local demo verification flow.</span>
+            <span>I agree to the terms, privacy policy, and verification flow.</span>
           </label>
 
           <div className="terms-panel">
             <h3>Privacy Terms & Agreement Instructions</h3>
             <p>
-              This front-end flow stores demo users locally in your browser so you can experience a
-              realistic onboarding journey before wiring real backend authentication.
+              This front-end flow stores users locally in your browser after successful verification
+              so you can continue using the existing onboarding journey.
             </p>
           </div>
 
