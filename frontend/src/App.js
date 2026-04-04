@@ -158,7 +158,6 @@ function App() {
   useEffect(() => {
     const initialRoute = getRouteFromHash();
     navigateTo(initialRoute.screen, initialRoute.infoPage, "replace");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -179,7 +178,6 @@ function App() {
       window.removeEventListener("popstate", syncFromBrowserRoute);
       window.removeEventListener("hashchange", syncFromBrowserRoute);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
