@@ -11,16 +11,17 @@ import {
   setCurrentUser,
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
-import InfoPages from "./features/info/InfoPages";
 
 function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
   const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
   const [showInfoMenu, setShowInfoMenu] = useState(false);
+  const [selectedInfoPage, setSelectedInfoPage] = useState(null);
 
   const moveToWorkspace = (user) => {
     setCurrentUser(user);
     setCurrentUserState(user);
+    setSelectedInfoPage(null);
     setScreen("workspace");
   };
 
@@ -53,6 +54,7 @@ function App() {
   const handleLogout = () => {
     clearCurrentUser();
     setCurrentUserState(null);
+    setSelectedInfoPage(null);
     setScreen("home");
   };
 
@@ -80,11 +82,7 @@ function App() {
     }
 
     if (screen === "workspace") {
-      return <WorkspacePage />;
-    }
-
-    if (screen === "about" || screen === "careers" || screen === "contact" || screen === "faqs" || screen === "pricing") {
-      return <InfoPages page={screen} />;
+      return <WorkspacePage selectedInfoPage={selectedInfoPage} />;
     }
 
     return (
@@ -129,6 +127,15 @@ function App() {
 
           <div className="app-header-actions">
             <div className="header-menu-shell">
+              {selectedInfoPage ? (
+                <button
+                  className="header-utility-button"
+                  type="button"
+                  onClick={() => setSelectedInfoPage(null)}
+                >
+                  Assistant
+                </button>
+              ) : null}
               <button
                 className="header-utility-button"
                 type="button"
@@ -144,7 +151,8 @@ function App() {
                       className="header-dropdown-item"
                       type="button"
                       onClick={() => {
-                        setScreen(page.id);
+                        setSelectedInfoPage(page.id);
+                        setScreen("workspace");
                         setShowInfoMenu(false);
                       }}
                     >
@@ -169,24 +177,6 @@ function App() {
           </div>
         </div>
       </header>
-
-      {showInfoMenu ? (
-        <div className={`header-pages-panel ${isWorkspace ? "workspace-pages-panel" : ""}`}>
-          {infoPages.map((page) => (
-            <button
-              key={page.id}
-              className="header-pages-panel-button"
-              type="button"
-              onClick={() => {
-                setScreen(page.id);
-                setShowInfoMenu(false);
-              }}
-            >
-              {page.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
 
       <div className={`app-body ${isWorkspace ? "workspace-app-body" : ""}`}>{renderScreen()}</div>
     </main>
