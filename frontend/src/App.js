@@ -197,7 +197,7 @@ function App() {
             <div className="app-brand-copy">
               {!isWorkspace ? <p className="app-kicker">Professional AI Platform</p> : null}
               <div className="app-brand-title-row">
-                <h2 className="app-title">{isWorkspace ? "Unified AI Workspace" : "AI Platform Home"}</h2>
+                <h2 className="app-title">{isWorkspace ? "Unified AI Workspace" : "Professional AI Platform"}</h2>
                 {!isWorkspace ? <span className="app-brand-mini-tag">Trusted Platform</span> : null}
               </div>
             </div>
