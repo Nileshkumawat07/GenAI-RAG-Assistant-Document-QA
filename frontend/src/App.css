@@ -161,34 +161,48 @@ button {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 210px;
-  padding: 8px;
+  min-width: 290px;
+  padding: 10px;
   display: grid;
-  gap: 6px;
-  background: #ffffff;
-  border: 1px solid rgba(42, 75, 140, 0.16);
-  box-shadow: 0 12px 28px rgba(13, 36, 76, 0.12);
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 255, 0.98));
+  border: 1px solid rgba(42, 75, 140, 0.18);
+  box-shadow: 0 18px 40px rgba(13, 36, 76, 0.18);
   z-index: 30;
   border-radius: 8px;
 }
 
 .header-dropdown-item {
   width: 100%;
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 52px;
+  padding: 10px 12px;
   border: 1px solid rgba(42, 75, 140, 0.14);
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.94);
   color: var(--primary-deep);
   text-align: left;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   border-radius: 6px;
+  display: grid;
+  gap: 3px;
 }
 
-.header-dropdown-item:hover,
-.profile-button:hover {
-  background: rgba(255, 255, 255, 0.14);
+.header-dropdown-item:hover {
+  background: linear-gradient(180deg, rgba(233, 241, 255, 0.96), rgba(242, 247, 255, 0.98));
+  border-color: rgba(42, 75, 140, 0.22);
+}
+
+.header-dropdown-title {
+  color: var(--primary-deep);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.header-dropdown-copy {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .profile-button {
@@ -198,6 +212,10 @@ button {
   color: #ffffff;
   cursor: pointer;
   padding: 0 12px 0 8px;
+}
+
+.profile-button:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .profile-button-avatar,
@@ -226,9 +244,9 @@ button {
   padding: 10px;
   display: grid;
   gap: 8px;
-  background: #ffffff;
-  border: 1px solid rgba(42, 75, 140, 0.16);
-  box-shadow: 0 12px 28px rgba(13, 36, 76, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 255, 0.98));
+  border: 1px solid rgba(42, 75, 140, 0.18);
+  box-shadow: 0 18px 40px rgba(13, 36, 76, 0.18);
   z-index: 30;
   border-radius: 8px;
 }
@@ -258,6 +276,14 @@ button {
 }
 
 .profile-dropdown-meta span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profile-dropdown-summary {
+  display: grid;
+  gap: 4px;
+  padding: 6px 4px 2px;
   color: var(--muted);
   font-size: 12px;
 }

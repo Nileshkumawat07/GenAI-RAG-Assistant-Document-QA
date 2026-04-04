@@ -97,11 +97,11 @@ function App() {
 
   const isWorkspace = screen === "workspace";
   const infoPages = [
-    { id: "about", label: "About Us" },
-    { id: "careers", label: "Careers" },
-    { id: "contact", label: "Contact Us" },
-    { id: "faqs", label: "FAQs" },
-    { id: "pricing", label: "Pricing" },
+    { id: "about", label: "About Us", copy: "Company story, mission, leadership, and milestones" },
+    { id: "careers", label: "Careers", copy: "Open roles, hiring flow, and work culture" },
+    { id: "contact", label: "Contact Us", copy: "Inquiry forms, support paths, and response details" },
+    { id: "faqs", label: "FAQs", copy: "General, billing, technical, and account answers" },
+    { id: "pricing", label: "Pricing", copy: "Plans, tiers, notes, and subscription options" },
   ];
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
 
@@ -164,7 +164,8 @@ function App() {
                         setShowInfoMenu(false);
                       }}
                     >
-                      {page.label}
+                      <span className="header-dropdown-title">{page.label}</span>
+                      <span className="header-dropdown-copy">{page.copy}</span>
                     </button>
                   ))}
                 </div>
@@ -216,6 +217,10 @@ function App() {
                     >
                       Settings
                     </button>
+                    <div className="profile-dropdown-summary">
+                      <span>Plan: {currentUser.mode === "guest" ? "Guest Access" : "Pro Member"}</span>
+                      <span>Status: Active</span>
+                    </div>
                     <button className="header-dropdown-item" type="button" onClick={handleLogout}>
                       Logout
                     </button>

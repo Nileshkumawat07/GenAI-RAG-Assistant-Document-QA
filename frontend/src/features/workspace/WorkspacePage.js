@@ -278,6 +278,7 @@ const INFO_PAGE_CONFIG = {
       { id: "overview", label: "Overview", heading: "Profile Overview" },
       { id: "account", label: "Account", heading: "Account Details" },
       { id: "subscription", label: "Subscription", heading: "Subscription & Billing" },
+      { id: "usage", label: "Usage", heading: "Workspace Usage" },
       { id: "activity", label: "Activity", heading: "Recent Activity" },
       { id: "security", label: "Security", heading: "Security & Access" },
     ],
@@ -298,6 +299,7 @@ const INFO_PAGE_CONFIG = {
       { id: "notifications", label: "Notifications", heading: "Notifications" },
       { id: "billing", label: "Billing", heading: "Billing" },
       { id: "region", label: "Region", heading: "Region" },
+      { id: "support", label: "Support", heading: "Support" },
       { id: "terms", label: "Terms", heading: "Terms" },
       { id: "reset", label: "Reset", heading: "Reset" },
     ],
@@ -465,13 +467,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
                 { title: "Date of Birth", text: "15 Aug 1999" },
                 { title: "Gender", text: "Not specified" },
               ]
-            : activeInfoTab === "subscription"
+          : activeInfoTab === "subscription"
               ? [
                   { title: "Current Plan", text: "Pro - Rs999/month" },
                   { title: "Billing Cycle", text: "Monthly" },
                   { title: "Next Renewal", text: "04 May 2026" },
                   { title: "Payment Method", text: "Visa ending in 4242" },
                 ]
+              : activeInfoTab === "usage"
+                ? [
+                    { title: "Documents Processed", text: "128 this month" },
+                    { title: "Images Generated", text: "46 this month" },
+                    { title: "Detection Runs", text: "31 this month" },
+                    { title: "Storage Used", text: "2.4 GB of 10 GB" },
+                  ]
               : activeInfoTab === "activity"
                 ? [
                     { title: "Latest Login", text: "Jaipur, India - 2026-04-04 05:50" },
@@ -720,6 +729,32 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
           );
         }
 
+        if (activeInfoTab === "support") {
+          return (
+            <div className="workspace-form-stack">
+              <div className="workspace-info-grid">
+                <div className="workspace-mini-card">
+                  <h4>Help Center</h4>
+                  <p>Browse guides, onboarding help, and workspace how-to articles.</p>
+                </div>
+                <div className="workspace-mini-card">
+                  <h4>Priority Support</h4>
+                  <p>Reach the support team for billing, technical, and account assistance.</p>
+                </div>
+                <div className="workspace-mini-card">
+                  <h4>Feature Requests</h4>
+                  <p>Submit product ideas and improvement requests for future releases.</p>
+                </div>
+                <div className="workspace-mini-card">
+                  <h4>Release Updates</h4>
+                  <p>See recent improvements, fixes, and updates across the assistant.</p>
+                </div>
+              </div>
+              <button className="primary-button" type="button">Open Support Center</button>
+            </div>
+          );
+        }
+
         if (activeInfoTab === "terms") {
           return (
             <div className="workspace-form-stack">
@@ -874,20 +909,22 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
               )}
           </div>
 
-          <div className="sidebar-boost-card">
-            <div className="sidebar-status">
-              <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : "Image Generation Status"}</h4>
-              <div className="status-feed">
-                {infoConfig
-                  ? infoConfig.statusItems.map((item) => (
-                      <p key={item} className="status-item status-info">
-                        {item}
-                      </p>
-                    ))
-                  : statusContent}
+          {selectedInfoPage !== "settings" ? (
+            <div className="sidebar-boost-card">
+              <div className="sidebar-status">
+                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : "Image Generation Status"}</h4>
+                <div className="status-feed">
+                  {infoConfig
+                    ? infoConfig.statusItems.map((item) => (
+                        <p key={item} className="status-item status-info">
+                          {item}
+                        </p>
+                      ))
+                    : statusContent}
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </aside>
 
         <div className="workspace-content">
