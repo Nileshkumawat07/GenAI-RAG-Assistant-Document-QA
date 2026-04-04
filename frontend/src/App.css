@@ -994,6 +994,19 @@ button {
   margin-bottom: 10px;
 }
 
+.signup-page .inline-action-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.signup-page .inline-action-field .auth-input,
+.signup-page .inline-action-field .inline-field-button {
+  width: 100%;
+  min-width: 0;
+}
+
 .signup-page .signup-section .auth-input:last-child,
 .signup-page .signup-section .inline-action-field:last-child,
 .signup-page .signup-section .password-shell:last-child,
@@ -1011,6 +1024,11 @@ button {
 .signup-page .auth-secondary-button {
   min-height: 36px;
   font-size: 12px;
+}
+
+.signup-page .inline-field-button {
+  height: 36px;
+  padding: 0 10px;
 }
 
 .verification-button {
