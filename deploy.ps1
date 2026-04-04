@@ -37,7 +37,44 @@ if ([string]::IsNullOrWhiteSpace($GroqApiKey)) {
     throw "GROQ_API_KEY cannot be empty."
 }
 
+$requiredEnvKeys = @(
+    "AWS_REGION",
+    "SES_FROM_EMAIL",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_PHONE_NUMBER",
+    "FRONTEND_ORIGIN",
+    "OTP_DEFAULT_COUNTRY_CODE"
+)
+
+if (Test-Path $backendEnvPath) {
+    foreach ($line in Get-Content $backendEnvPath) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) {
+            continue
+        }
+
+        $parts = $line -split "=", 2
+        if ($parts.Count -ne 2) {
+            continue
+        }
+
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim()
+        if ($key) {
+            [System.Environment]::SetEnvironmentVariable($key, $value, "Process")
+        }
+    }
+}
+
 $env:GROQ_API_KEY = $GroqApiKey
+
+foreach ($key in $requiredEnvKeys) {
+    if ([string]::IsNullOrWhiteSpace([System.Environment]::GetEnvironmentVariable($key, "Process"))) {
+        throw "$key is missing. Add it to backend/.env before deploying."
+    }
+}
 
 Write-Host "Deploying application with inventory.ini and deploy.yml..."
 ansible-playbook -i $inventoryPath $playbookPath
