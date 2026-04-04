@@ -22,25 +22,44 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const EMAIL_SECRET_STORAGE_KEY = "firebase_email_verification_secrets";
 
 let recaptchaVerifier = null;
 let recaptchaContainerElement = null;
 
 export async function sendFirebaseEmailVerification(email, password) {
-  if (!password) {
-    throw new Error("Create your password before sending the verification email.");
+  const normalizedEmail = email.trim().toLowerCase();
+  const currentUser = auth.currentUser;
+  if (currentUser?.email === normalizedEmail) {
+    await sendEmailVerification(currentUser);
+    return currentUser;
   }
+
+  const storedSecret = getStoredEmailSecret(normalizedEmail);
+  const chosenSecret = password?.trim() || storedSecret || buildTemporarySecret();
 
   let credential;
 
   try {
-    credential = await createUserWithEmailAndPassword(auth, email, password);
+    credential = await createUserWithEmailAndPassword(auth, normalizedEmail, chosenSecret);
   } catch (error) {
     if (error?.code !== "auth/email-already-in-use") {
       throw error;
     }
 
-    credential = await signInWithEmailAndPassword(auth, email, password);
+    try {
+      credential = await signInWithEmailAndPassword(auth, normalizedEmail, chosenSecret);
+    } catch (signInError) {
+      if (password?.trim() && password.trim() !== chosenSecret) {
+        credential = await signInWithEmailAndPassword(auth, normalizedEmail, password.trim());
+      } else {
+        throw signInError;
+      }
+    }
+  }
+
+  if (!password?.trim()) {
+    storeEmailSecret(normalizedEmail, chosenSecret);
   }
 
   await sendEmailVerification(credential.user);
@@ -48,8 +67,19 @@ export async function sendFirebaseEmailVerification(email, password) {
 }
 
 export async function checkFirebaseEmailVerification(email) {
-  const currentUser = auth.currentUser;
-  if (!currentUser || currentUser.email !== email) {
+  const normalizedEmail = email.trim().toLowerCase();
+  let currentUser = auth.currentUser;
+  if (!currentUser || currentUser.email !== normalizedEmail) {
+    const storedSecret = getStoredEmailSecret(normalizedEmail);
+    if (!storedSecret) {
+      throw new Error("Send the verification email first.");
+    }
+
+    const credential = await signInWithEmailAndPassword(auth, normalizedEmail, storedSecret);
+    currentUser = credential.user;
+  }
+
+  if (!currentUser || currentUser.email !== normalizedEmail) {
     throw new Error("Send the verification email first.");
   }
 
@@ -69,6 +99,39 @@ export async function resetFirebaseEmailVerification(email = "") {
 
   if (!email || currentUser.email === email) {
     await signOut(auth);
+  }
+}
+
+function buildTemporarySecret() {
+  return `Tmp!${Math.random().toString(36).slice(2, 10)}9Z`;
+}
+
+function getStoredEmailSecret(email) {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    const raw = window.localStorage.getItem(EMAIL_SECRET_STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    return map[email] || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeEmailSecret(email, secret) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(EMAIL_SECRET_STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    map[email] = secret;
+    window.localStorage.setItem(EMAIL_SECRET_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore storage failures and continue with the active auth session.
   }
 }
 

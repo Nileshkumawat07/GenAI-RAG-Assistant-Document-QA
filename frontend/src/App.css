@@ -1013,6 +1013,20 @@ button {
   font-size: 12px;
 }
 
+.verification-button {
+  margin-bottom: 14px;
+}
+
+.verification-row {
+  align-items: stretch;
+  margin-top: 2px;
+}
+
+.otp-verify-button {
+  min-width: 88px;
+  padding: 0 12px;
+}
+
 .signup-page .captcha-box {
   min-height: 36px;
   font-size: 12px;

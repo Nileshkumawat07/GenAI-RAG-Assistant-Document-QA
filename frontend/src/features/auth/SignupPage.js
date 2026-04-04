@@ -42,6 +42,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [mobileOtpSent, setMobileOtpSent] = useState(false);
+  const [mobileVerified, setMobileVerified] = useState(false);
   const [mobileConfirmation, setMobileConfirmation] = useState(null);
   const [captchaCode, setCaptchaCode] = useState(() => buildCaptcha());
   const [otpStatus, setOtpStatus] = useState("");
@@ -66,7 +67,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   });
 
   const helperStatus =
-    otpStatus || "Use the email link and mobile OTP to complete verification.";
+    otpStatus || "Use the email link and the mobile verify button to complete verification.";
 
   useEffect(() => {
     return () => {
@@ -75,7 +76,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   }, []);
 
   const setFieldValue = (field, value) => {
-    if (field === "email" || field === "password") {
+    if (field === "email") {
       setEmailVerificationSent(false);
       setEmailVerified(false);
       resetFirebaseEmailVerification().catch(() => {});
@@ -83,6 +84,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
     if (field === "mobile") {
       setMobileOtpSent(false);
+      setMobileVerified(false);
       setMobileConfirmation(null);
       resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     }
@@ -127,6 +129,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       setErrors((current) => ({ ...current, mobile: "", mobileOtp: "" }));
       setMobileConfirmation(response);
       setMobileOtpSent(true);
+      setMobileVerified(false);
       setOtpStatus("Mobile OTP sent successfully.");
     } catch (error) {
       const message = error.message || "Failed to send mobile OTP.";
@@ -153,6 +156,34 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       setEmailVerified(false);
       setErrors((current) => ({ ...current, emailVerification: error.message }));
       setOtpStatus(error.message);
+    }
+  };
+
+  const verifyMobileOtp = async () => {
+    if (!mobileConfirmation) {
+      const message = "Send the mobile OTP first.";
+      setErrors((current) => ({ ...current, mobileOtp: message }));
+      setOtpStatus(message);
+      return;
+    }
+
+    if (!formData.mobileOtp.trim()) {
+      const message = "Enter the mobile OTP first.";
+      setErrors((current) => ({ ...current, mobileOtp: message }));
+      setOtpStatus(message);
+      return;
+    }
+
+    try {
+      await verifyFirebaseOtp(mobileConfirmation, formData.mobileOtp.trim());
+      setMobileVerified(true);
+      setErrors((current) => ({ ...current, mobileOtp: "" }));
+      setOtpStatus("Mobile verified successfully.");
+    } catch (error) {
+      const message = error.message || "Mobile OTP verification failed.";
+      setMobileVerified(false);
+      setErrors((current) => ({ ...current, mobileOtp: message }));
+      setOtpStatus(message);
     }
   };
 
@@ -207,6 +238,8 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
     if (!formData.mobileOtp.trim()) {
       nextErrors.mobileOtp = "Mobile OTP is required.";
+    } else if (!mobileVerified) {
+      nextErrors.mobileOtp = "Click Verify after entering the mobile OTP.";
     }
 
     if (formData.captchaInput.trim().toUpperCase() !== captchaCode) {
@@ -240,10 +273,8 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         return;
       }
 
-      try {
-        await verifyFirebaseOtp(mobileConfirmation, formData.mobileOtp.trim());
-      } catch (error) {
-        const message = error.message || "Mobile OTP verification failed.";
+      if (!mobileVerified) {
+        const message = "Verify the mobile OTP before creating the account.";
         setFormError(message);
         setErrors((current) => ({ ...current, mobileOtp: message }));
         return;
@@ -442,7 +473,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             <label className="auth-label" htmlFor="signup-email-verify-button">Email Verification</label>
             <button
               id="signup-email-verify-button"
-              className={`inline-field-button email-verify-button ${errors.emailVerification ? "input-error" : ""}`}
+              className={`inline-field-button email-verify-button verification-button ${errors.emailVerification ? "input-error" : ""}`}
               type="button"
               onClick={checkEmailVerification}
               disabled={emailVerified}
@@ -451,14 +482,27 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             </button>
 
             <label className="auth-label" htmlFor="signup-mobile-otp">Mobile OTP</label>
-            <input
-              id="signup-mobile-otp"
-              className={`auth-input ${errors.mobileOtp ? "input-error" : ""}`}
-              type="text"
-              placeholder="Enter mobile OTP"
-              value={formData.mobileOtp}
-              onChange={(event) => setFieldValue("mobileOtp", event.target.value.trim())}
-            />
+            <div className="inline-action-field verification-row">
+              <input
+                id="signup-mobile-otp"
+                className={`auth-input ${errors.mobileOtp ? "input-error" : ""}`}
+                type="text"
+                placeholder="Enter mobile OTP"
+                value={formData.mobileOtp}
+                onChange={(event) => {
+                  setMobileVerified(false);
+                  setFieldValue("mobileOtp", event.target.value.trim());
+                }}
+              />
+              <button
+                className="inline-field-button otp-verify-button"
+                type="button"
+                onClick={verifyMobileOtp}
+                disabled={mobileVerified}
+              >
+                {mobileVerified ? "Verified" : "Verify"}
+              </button>
+            </div>
 
             <label className="auth-label" htmlFor="signup-captcha">Captcha</label>
             <div className="captcha-row">
