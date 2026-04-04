@@ -145,9 +145,6 @@ function App() {
     { id: "faqs", label: "FAQs", copy: "General, billing, technical, and account answers" },
     { id: "pricing", label: "Pricing", copy: "Plans, tiers, notes, and subscription options" },
   ];
-  const headerHighlights = isWorkspace
-    ? ["Secure workspace", "Multi-tool AI suite", "Member-ready experience"]
-    : ["Enterprise-ready AI", "Fast onboarding", "Unified smart workspace"];
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
 
   useEffect(() => {
@@ -201,19 +198,7 @@ function App() {
               <p className="app-kicker">{isWorkspace ? "Unified AI Workspace" : "Professional AI Platform"}</p>
               <div className="app-brand-title-row">
                 <h2 className="app-title">{isWorkspace ? "GenAI RAG Assistant" : "AI Platform Home"}</h2>
-                <span className="app-brand-status">Live Suite</span>
-              </div>
-              <p className="app-brand-description">
-                {isWorkspace
-                  ? "Document intelligence, image generation, and visual analysis in one focused product workspace."
-                  : "A polished product entry point with clear branding, stronger trust signals, and a modern SaaS feel."}
-              </p>
-              <div className="app-header-highlights" aria-label="Platform highlights">
-                {headerHighlights.map((item) => (
-                  <span key={item} className="app-header-highlight">
-                    {item}
-                  </span>
-                ))}
+                <span className="app-brand-mini-tag">{isWorkspace ? "AI Suite" : "Trusted Platform"}</span>
               </div>
             </div>
           </div>

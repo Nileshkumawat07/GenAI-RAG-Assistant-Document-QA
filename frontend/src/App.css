@@ -96,22 +96,22 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
 }
 
 .app-header-brand {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .app-brand-mark {
   position: relative;
-  flex: 0 0 54px;
-  width: 54px;
-  height: 54px;
-  border-radius: 18px;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
@@ -124,9 +124,9 @@ button {
 }
 
 .app-brand-mark-core {
-  inset: 17px;
+  inset: 12px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(182, 213, 255, 0.92));
-  box-shadow: 0 8px 18px rgba(5, 15, 35, 0.16);
+  box-shadow: 0 6px 12px rgba(5, 15, 35, 0.16);
 }
 
 .app-brand-mark-orbit {
@@ -134,38 +134,38 @@ button {
 }
 
 .app-brand-mark-orbit-one {
-  inset: 8px 11px;
+  inset: 6px 8px;
 }
 
 .app-brand-mark-orbit-two {
-  inset: 11px 8px;
+  inset: 8px 6px;
 }
 
 .app-brand-copy {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 1px;
 }
 
 .app-brand-title-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
-.app-brand-status {
+.app-brand-mini-tag {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
+  min-height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.92);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -180,37 +180,10 @@ button {
 
 .app-title {
   margin: 0;
-  font-size: clamp(18px, 2vw, 24px);
+  font-size: clamp(16px, 1.8vw, 21px);
   font-family: "Space Grotesk", "Manrope", sans-serif;
   font-weight: 700;
   letter-spacing: -0.03em;
-}
-
-.app-brand-description {
-  margin: 0;
-  max-width: 64ch;
-  font-size: 13px;
-  line-height: 1.55;
-  color: rgba(226, 236, 255, 0.82);
-}
-
-.app-header-highlights {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.app-header-highlight {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 11px;
-  font-weight: 700;
 }
 
 .app-header-actions,
@@ -1999,12 +1972,8 @@ button {
   }
 
   .app-brand-mark {
-    width: 48px;
-    height: 48px;
-  }
-
-  .app-brand-description {
-    font-size: 12px;
+    width: 38px;
+    height: 38px;
   }
 
   .app-header-actions {
