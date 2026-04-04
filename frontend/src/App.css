@@ -67,10 +67,12 @@ button {
 
 .workspace-shell-mode {
   height: 100vh;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .app-header {
+  position: relative;
+  z-index: 40;
   width: 100%;
   margin: 0 auto;
   padding: 8px 18px;
