@@ -19,11 +19,27 @@ function App() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
 
+  const applyRouteState = (nextScreen, nextInfoPage = null) => {
+    setScreen(nextScreen);
+    setSelectedInfoPage(nextInfoPage);
+    setShowInfoMenu(false);
+    setShowProfileMenu(false);
+  };
+
+  const navigateTo = (nextScreen, nextInfoPage = null, mode = "push") => {
+    const state = { screen: nextScreen, infoPage: nextInfoPage };
+    if (mode === "replace") {
+      window.history.replaceState(state, "", window.location.href);
+    } else {
+      window.history.pushState(state, "", window.location.href);
+    }
+    applyRouteState(nextScreen, nextInfoPage);
+  };
+
   const moveToWorkspace = (user) => {
     setCurrentUser(user);
     setCurrentUserState(user);
-    setSelectedInfoPage(null);
-    setScreen("workspace");
+    navigateTo("workspace", null);
   };
 
   const handleSignup = (formData) => {
@@ -55,17 +71,16 @@ function App() {
   const handleLogout = () => {
     clearCurrentUser();
     setCurrentUserState(null);
-    setSelectedInfoPage(null);
-    setScreen("home");
+    navigateTo("home", null);
   };
 
   const renderScreen = () => {
     if (screen === "login") {
       return (
         <LoginPage
-          onBack={() => setScreen("home")}
+          onBack={() => navigateTo("home")}
           onBypass={handleGuestEntry}
-          onShowSignup={() => setScreen("signup")}
+          onShowSignup={() => navigateTo("signup")}
           onSubmit={handleLogin}
         />
       );
@@ -74,9 +89,9 @@ function App() {
     if (screen === "signup") {
       return (
         <SignupPage
-          onBack={() => setScreen("home")}
+          onBack={() => navigateTo("home")}
           onBypass={handleGuestEntry}
-          onShowLogin={() => setScreen("login")}
+          onShowLogin={() => navigateTo("login")}
           onSubmit={handleSignup}
         />
       );
@@ -89,8 +104,8 @@ function App() {
     return (
       <HomePage
         onContinue={handleGuestEntry}
-        onLogin={() => setScreen("login")}
-        onSignup={() => setScreen("signup")}
+        onLogin={() => navigateTo("login")}
+        onSignup={() => navigateTo("signup")}
       />
     );
   };
@@ -113,6 +128,27 @@ function App() {
     };
   }, [isWorkspace]);
 
+  useEffect(() => {
+    const initialInfoPage = getCurrentUser() ? null : null;
+    navigateTo(getCurrentUser() ? "workspace" : "home", initialInfoPage, "replace");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const state = event.state;
+      if (state?.screen) {
+        applyRouteState(state.screen, state.infoPage || null);
+        return;
+      }
+
+      applyRouteState(getCurrentUser() ? "workspace" : "home", null);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   return (
     <main
       className={`app-shell ${
@@ -128,108 +164,95 @@ function App() {
           </div>
 
           <div className="app-header-actions">
-            <div className="header-menu-shell">
-              {selectedInfoPage ? (
-                <button
-                  className="header-utility-button"
-                  type="button"
-                  onClick={() => {
-                    setSelectedInfoPage(null);
-                    setShowInfoMenu(false);
-                  }}
-                >
-                  Assistant
-                </button>
-              ) : null}
-              <button
-                className="header-utility-button"
-                type="button"
-                onClick={() => {
-                  setShowProfileMenu(false);
-                  setShowInfoMenu((current) => !current);
-                }}
-              >
-                Pages
-              </button>
-              {showInfoMenu ? (
-                <div className="header-dropdown-menu">
-                  {infoPages.map((page) => (
+            {isWorkspace ? (
+              <>
+                <div className="header-menu-shell">
+                  {selectedInfoPage ? (
                     <button
-                      key={page.id}
-                      className="header-dropdown-item"
+                      className="header-utility-button"
                       type="button"
-                      onClick={() => {
-                        setSelectedInfoPage(page.id);
-                        setScreen("workspace");
-                        setShowInfoMenu(false);
-                      }}
+                      onClick={() => navigateTo("workspace", null)}
                     >
-                      <span className="header-dropdown-title">{page.label}</span>
-                      <span className="header-dropdown-copy">{page.copy}</span>
+                      Assistant
                     </button>
-                  ))}
+                  ) : null}
+                  <button
+                    className="header-utility-button"
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      setShowInfoMenu((current) => !current);
+                    }}
+                  >
+                    Pages
+                  </button>
+                  {showInfoMenu ? (
+                    <div className="header-dropdown-menu">
+                      {infoPages.map((page) => (
+                        <button
+                          key={page.id}
+                          className="header-dropdown-item"
+                          type="button"
+                          onClick={() => navigateTo("workspace", page.id)}
+                        >
+                          <span className="header-dropdown-title">{page.label}</span>
+                          <span className="header-dropdown-copy">{page.copy}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-            {currentUser ? (
-              <div className="header-user-block">
-                <button
-                  className="profile-button"
-                  type="button"
-                  onClick={() => {
-                    setShowInfoMenu(false);
-                    setShowProfileMenu((current) => !current);
-                  }}
-                >
-                  <span className="profile-button-avatar">{profileInitial}</span>
-                  <span className="profile-button-text">
-                    {currentUser.mode === "guest" ? "Guest Access" : currentUser.name}
-                  </span>
-                </button>
-                {showProfileMenu ? (
-                  <div className="profile-dropdown-menu">
-                    <div className="profile-dropdown-head">
-                      <div className="profile-dropdown-avatar">{profileInitial}</div>
-                      <div className="profile-dropdown-meta">
-                        <strong>{currentUser.mode === "guest" ? "Guest Access" : currentUser.name}</strong>
-                        <span>{currentUser.email}</span>
+                {currentUser ? (
+                  <div className="header-user-block">
+                    <button
+                      className="profile-button"
+                      type="button"
+                      onClick={() => {
+                        setShowInfoMenu(false);
+                        setShowProfileMenu((current) => !current);
+                      }}
+                    >
+                      <span className="profile-button-avatar">{profileInitial}</span>
+                      <span className="profile-button-text">
+                        {currentUser.mode === "guest" ? "Guest Access" : currentUser.name}
+                      </span>
+                    </button>
+                    {showProfileMenu ? (
+                      <div className="profile-dropdown-menu">
+                        <div className="profile-dropdown-head">
+                          <div className="profile-dropdown-avatar">{profileInitial}</div>
+                          <div className="profile-dropdown-meta">
+                            <strong>{currentUser.mode === "guest" ? "Guest Access" : currentUser.name}</strong>
+                            <span>{currentUser.email}</span>
+                          </div>
+                        </div>
+                        <button
+                          className="header-dropdown-item"
+                          type="button"
+                          onClick={() => navigateTo("workspace", "profile")}
+                        >
+                          Profile
+                        </button>
+                        <button
+                          className="header-dropdown-item"
+                          type="button"
+                          onClick={() => navigateTo("workspace", "settings")}
+                        >
+                          Settings
+                        </button>
+                        <div className="profile-dropdown-summary">
+                          <span>Plan: {currentUser.mode === "guest" ? "Guest Access" : "Pro Member"}</span>
+                          <span>Status: Active</span>
+                        </div>
+                        <button className="header-dropdown-item" type="button" onClick={handleLogout}>
+                          Logout
+                        </button>
                       </div>
-                    </div>
-                    <button
-                      className="header-dropdown-item"
-                      type="button"
-                      onClick={() => {
-                        setSelectedInfoPage("profile");
-                        setScreen("workspace");
-                        setShowProfileMenu(false);
-                      }}
-                    >
-                      Profile
-                    </button>
-                    <button
-                      className="header-dropdown-item"
-                      type="button"
-                      onClick={() => {
-                        setSelectedInfoPage("settings");
-                        setScreen("workspace");
-                        setShowProfileMenu(false);
-                      }}
-                    >
-                      Settings
-                    </button>
-                    <div className="profile-dropdown-summary">
-                      <span>Plan: {currentUser.mode === "guest" ? "Guest Access" : "Pro Member"}</span>
-                      <span>Status: Active</span>
-                    </div>
-                    <button className="header-dropdown-item" type="button" onClick={handleLogout}>
-                      Logout
-                    </button>
+                    ) : null}
                   </div>
                 ) : null}
-              </div>
-            ) : (
-              <span className="app-header-badge">Live</span>
-            )}
+              </>
+            ) : null}
           </div>
         </div>
       </header>

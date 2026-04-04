@@ -169,7 +169,7 @@ button {
   border: 1px solid rgba(42, 75, 140, 0.18);
   box-shadow: 0 18px 40px rgba(13, 36, 76, 0.18);
   z-index: 30;
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .header-dropdown-item {
@@ -183,7 +183,7 @@ button {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 0;
   display: grid;
   gap: 3px;
 }
@@ -248,7 +248,7 @@ button {
   border: 1px solid rgba(42, 75, 140, 0.18);
   box-shadow: 0 18px 40px rgba(13, 36, 76, 0.18);
   z-index: 30;
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .profile-dropdown-head {
