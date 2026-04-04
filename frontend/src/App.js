@@ -27,6 +27,11 @@ function App() {
     return nextInfoPage ? `#/workspace/${nextInfoPage}` : "#/workspace";
   };
 
+  const buildRouteUrl = (nextScreen, nextInfoPage = null) => {
+    const nextHash = buildRouteHash(nextScreen, nextInfoPage);
+    return `${window.location.pathname}${window.location.search}${nextHash}`;
+  };
+
   const getRouteFromHash = () => {
     const fallbackScreen = getCurrentUser() ? "workspace" : "home";
     const hash = window.location.hash.replace(/^#\/?/, "");
@@ -54,11 +59,11 @@ function App() {
 
   const navigateTo = (nextScreen, nextInfoPage = null, mode = "push") => {
     const state = { screen: nextScreen, infoPage: nextInfoPage };
-    const nextHash = buildRouteHash(nextScreen, nextInfoPage);
+    const nextUrl = buildRouteUrl(nextScreen, nextInfoPage);
     if (mode === "replace") {
-      window.history.replaceState(state, "", nextHash);
+      window.history.replaceState(state, "", nextUrl);
     } else {
-      window.history.pushState(state, "", nextHash);
+      window.history.pushState(state, "", nextUrl);
     }
     applyRouteState(nextScreen, nextInfoPage);
   };

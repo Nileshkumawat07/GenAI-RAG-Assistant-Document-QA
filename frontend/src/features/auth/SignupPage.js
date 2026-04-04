@@ -115,9 +115,12 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         setEmailVerificationSent(true);
         setEmailVerified(true);
         setEmailStatus("Verified successfully from email link.");
+        setEmailVerifying(false);
+        window.history.replaceState(window.history.state, "", `${window.location.pathname}#/signup`);
       })
       .catch((error) => {
         setEmailStatus(formatFirebaseMessage(error.message, "email"));
+        setEmailVerifying(false);
       });
 
     return () => {
