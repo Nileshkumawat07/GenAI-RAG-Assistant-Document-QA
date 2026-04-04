@@ -129,10 +129,10 @@ class OTPService:
         if not self._ses_client:
             raise OTPServiceError("Email OTP is not configured on the server.")
 
-        subject = "Your verification OTP"
+        subject = "Unified AI Workspace OTP"
         body = (
-            f"Your verification OTP is {code}. "
-            f"It will expire in {OTP_TTL_SECONDS // 60} minutes."
+            f"Unified AI Workspace verification code: {code}. "
+            f"This code expires in {OTP_TTL_SECONDS // 60} minutes."
         )
 
         try:
@@ -146,8 +146,9 @@ class OTPService:
                         "Html": {
                             "Data": (
                                 "<html><body>"
-                                f"<p>Your verification OTP is <strong>{code}</strong>.</p>"
-                                f"<p>It will expire in {OTP_TTL_SECONDS // 60} minutes.</p>"
+                                "<p>Unified AI Workspace verification code:</p>"
+                                f"<p><strong>{code}</strong></p>"
+                                f"<p>This code expires in {OTP_TTL_SECONDS // 60} minutes.</p>"
                                 "</body></html>"
                             )
                         },
@@ -163,7 +164,10 @@ class OTPService:
 
         try:
             self._twilio_client.messages.create(
-                body=f"Your verification OTP is {code}. It expires in {OTP_TTL_SECONDS // 60} minutes.",
+                body=(
+                    f"Unified AI Workspace OTP: {code}. "
+                    f"Valid for {OTP_TTL_SECONDS // 60} minutes."
+                ),
                 from_=TWILIO_PHONE_NUMBER,
                 to=destination,
             )
