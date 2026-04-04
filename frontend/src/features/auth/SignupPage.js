@@ -41,11 +41,17 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [formError, setFormError] = useState("");
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [emailVerifying, setEmailVerifying] = useState(false);
+  const [emailCooldown, setEmailCooldown] = useState(0);
   const [mobileOtpSent, setMobileOtpSent] = useState(false);
   const [mobileVerified, setMobileVerified] = useState(false);
+  const [mobileVerifying, setMobileVerifying] = useState(false);
+  const [mobileCooldown, setMobileCooldown] = useState(0);
   const [mobileConfirmation, setMobileConfirmation] = useState(null);
   const [captchaCode, setCaptchaCode] = useState(() => buildCaptcha());
   const [otpStatus, setOtpStatus] = useState("");
+  const [emailStatus, setEmailStatus] = useState("Waiting for email action.");
+  const [mobileStatus, setMobileStatus] = useState("Waiting for mobile action.");
   const [errors, setErrors] = useState({});
   const recaptchaContainerId = useRef(`firebase-phone-recaptcha-${Math.random().toString(36).slice(2, 10)}`);
   const [formData, setFormData] = useState({
@@ -66,8 +72,13 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     agreeToTerms: false,
   });
 
-  const helperStatus =
-    otpStatus || "Use the email link and the mobile verify button to complete verification.";
+  const helperStatus = [
+    `Email: ${emailStatus}${emailCooldown > 0 ? ` Resend in ${emailCooldown}s.` : ""}`,
+    `Mobile: ${mobileStatus}${mobileCooldown > 0 ? ` Resend in ${mobileCooldown}s.` : ""}`,
+    otpStatus ? `Action: ${otpStatus}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   useEffect(() => {
     return () => {
@@ -75,16 +86,31 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (emailCooldown <= 0 && mobileCooldown <= 0) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setEmailCooldown((current) => (current > 0 ? current - 1 : 0));
+      setMobileCooldown((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [emailCooldown, mobileCooldown]);
+
   const setFieldValue = (field, value) => {
     if (field === "email") {
       setEmailVerificationSent(false);
       setEmailVerified(false);
+      setEmailStatus("Waiting for email action.");
       resetFirebaseEmailVerification().catch(() => {});
     }
 
     if (field === "mobile") {
       setMobileOtpSent(false);
       setMobileVerified(false);
+      setMobileStatus("Waiting for mobile action.");
       setMobileConfirmation(null);
       resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     }
@@ -97,9 +123,16 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
   const sendOtp = async (type) => {
     if (type === "email") {
+      if (emailCooldown > 0) {
+        setOtpStatus(`Email link resend available in ${emailCooldown}s.`);
+        setEmailStatus(`Resend locked for ${emailCooldown}s.`);
+        return;
+      }
+
       if (!EMAIL_PATTERN.test(formData.email.trim())) {
         setErrors((current) => ({ ...current, email: "Enter a valid email before requesting verification." }));
         setOtpStatus("Enter a valid email to send the verification link.");
+        setEmailStatus("Enter a valid email address.");
         return;
       }
 
@@ -108,16 +141,27 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         setErrors((current) => ({ ...current, email: "", emailVerification: "" }));
         setEmailVerificationSent(true);
         setEmailVerified(false);
+        setEmailCooldown(30);
         setOtpStatus("Verification email sent successfully.");
+        setEmailStatus("Verification link sent.");
       } catch (error) {
-        setOtpStatus(error.message || "Failed to send verification email.");
+        const message = error.message || "Failed to send verification email.";
+        setOtpStatus(message);
+        setEmailStatus(message);
       }
+      return;
+    }
+
+    if (mobileCooldown > 0) {
+      setOtpStatus(`Mobile OTP resend available in ${mobileCooldown}s.`);
+      setMobileStatus(`Resend locked for ${mobileCooldown}s.`);
       return;
     }
 
     if (!MOBILE_PATTERN.test(formData.mobile.trim())) {
       setErrors((current) => ({ ...current, mobile: "Enter a valid 10-digit mobile number first." }));
       setOtpStatus("Enter a valid mobile number to send the mobile OTP.");
+      setMobileStatus("Enter a valid mobile number.");
       return;
     }
 
@@ -130,12 +174,15 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       setMobileConfirmation(response);
       setMobileOtpSent(true);
       setMobileVerified(false);
+      setMobileCooldown(30);
       setOtpStatus("Mobile OTP sent successfully.");
+      setMobileStatus("OTP sent.");
     } catch (error) {
       const message = error.message || "Failed to send mobile OTP.";
       setOtpStatus(message);
       setMobileOtpSent(false);
       setMobileConfirmation(null);
+      setMobileStatus(message);
       resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     }
   };
@@ -144,18 +191,24 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     if (!EMAIL_PATTERN.test(formData.email.trim())) {
       setErrors((current) => ({ ...current, email: "Enter a valid email before verifying." }));
       setOtpStatus("Enter a valid email to verify.");
+      setEmailStatus("Enter a valid email address.");
       return;
     }
 
     try {
+      setEmailVerifying(true);
       await checkFirebaseEmailVerification(formData.email.trim());
       setEmailVerified(true);
       setErrors((current) => ({ ...current, emailVerification: "", email: "" }));
       setOtpStatus("Email verified successfully.");
+      setEmailStatus("Verified successfully.");
     } catch (error) {
       setEmailVerified(false);
       setErrors((current) => ({ ...current, emailVerification: error.message }));
       setOtpStatus(error.message);
+      setEmailStatus(error.message);
+    } finally {
+      setEmailVerifying(false);
     }
   };
 
@@ -164,6 +217,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       const message = "Send the mobile OTP first.";
       setErrors((current) => ({ ...current, mobileOtp: message }));
       setOtpStatus(message);
+      setMobileStatus(message);
       return;
     }
 
@@ -171,19 +225,28 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       const message = "Enter the mobile OTP first.";
       setErrors((current) => ({ ...current, mobileOtp: message }));
       setOtpStatus(message);
+      setMobileStatus(message);
       return;
     }
 
     try {
+      setMobileVerifying(true);
       await verifyFirebaseOtp(mobileConfirmation, formData.mobileOtp.trim());
       setMobileVerified(true);
       setErrors((current) => ({ ...current, mobileOtp: "" }));
       setOtpStatus("Mobile verified successfully.");
+      setMobileStatus("Verified successfully.");
     } catch (error) {
-      const message = error.message || "Mobile OTP verification failed.";
+      const rawMessage = error.message || "Mobile OTP verification failed.";
+      const message = rawMessage.toLowerCase().includes("invalid") || rawMessage.toLowerCase().includes("code")
+        ? "Wrong OTP."
+        : rawMessage;
       setMobileVerified(false);
       setErrors((current) => ({ ...current, mobileOtp: message }));
       setOtpStatus(message);
+      setMobileStatus(message);
+    } finally {
+      setMobileVerifying(false);
     }
   };
 
@@ -369,8 +432,13 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
                 value={formData.email}
                 onChange={(event) => setFieldValue("email", event.target.value)}
               />
-              <button className="inline-field-button" type="button" onClick={() => sendOtp("email")}>
-                Send Link
+              <button
+                className="inline-field-button"
+                type="button"
+                onClick={() => sendOtp("email")}
+                disabled={emailCooldown > 0}
+              >
+                {emailCooldown > 0 ? `Send in ${emailCooldown}s` : "Send Link"}
               </button>
             </div>
 
@@ -427,8 +495,13 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
               value={formData.mobile}
               onChange={(event) => setFieldValue("mobile", event.target.value.replace(/[^\d]/g, "").slice(0, 10))}
             />
-              <button className="inline-field-button" type="button" onClick={() => sendOtp("mobile")}>
-                Send OTP
+              <button
+                className="inline-field-button"
+                type="button"
+                onClick={() => sendOtp("mobile")}
+                disabled={mobileCooldown > 0}
+              >
+                {mobileCooldown > 0 ? `Send in ${mobileCooldown}s` : "Send OTP"}
               </button>
             </div>
             <div id={recaptchaContainerId.current} />
@@ -470,17 +543,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
           <div className="signup-section">
             <h3>Verification</h3>
 
-            <label className="auth-label" htmlFor="signup-email-verify-button">Email Verification</label>
-            <button
-              id="signup-email-verify-button"
-              className={`inline-field-button email-verify-button verification-button ${errors.emailVerification ? "input-error" : ""}`}
-              type="button"
-              onClick={checkEmailVerification}
-              disabled={emailVerified}
-            >
-              {emailVerified ? "Verified" : "Verify"}
-            </button>
-
             <label className="auth-label" htmlFor="signup-mobile-otp">Mobile OTP</label>
             <div className="inline-action-field verification-row">
               <input
@@ -498,9 +560,24 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
                 className="inline-field-button otp-verify-button"
                 type="button"
                 onClick={verifyMobileOtp}
-                disabled={mobileVerified}
+                disabled={mobileVerified || mobileVerifying}
               >
+                {mobileVerifying ? <span className="button-spinner" aria-hidden="true" /> : null}
                 {mobileVerified ? "Verified" : "Verify"}
+              </button>
+            </div>
+
+            <label className="auth-label" htmlFor="signup-email-verify-button">Email Verification</label>
+            <div className="verification-button-row">
+              <button
+                id="signup-email-verify-button"
+                className={`inline-field-button email-verify-button verification-button ${errors.emailVerification ? "input-error" : ""}`}
+                type="button"
+                onClick={checkEmailVerification}
+                disabled={emailVerified || emailVerifying}
+              >
+                {emailVerifying ? <span className="button-spinner" aria-hidden="true" /> : null}
+                {emailVerified ? "Verified" : "Verify"}
               </button>
             </div>
 

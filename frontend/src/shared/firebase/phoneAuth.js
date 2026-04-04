@@ -30,9 +30,14 @@ let recaptchaContainerElement = null;
 export async function sendFirebaseEmailVerification(email, password) {
   const normalizedEmail = email.trim().toLowerCase();
   const currentUser = auth.currentUser;
-  if (currentUser?.email === normalizedEmail) {
-    await sendEmailVerification(currentUser);
-    return currentUser;
+  if (currentUser && currentUser.email !== normalizedEmail) {
+    await signOut(auth);
+  }
+
+  const refreshedUser = auth.currentUser;
+  if (refreshedUser?.email === normalizedEmail) {
+    await sendEmailVerification(refreshedUser);
+    return refreshedUser;
   }
 
   const storedSecret = getStoredEmailSecret(normalizedEmail);
@@ -53,7 +58,9 @@ export async function sendFirebaseEmailVerification(email, password) {
       if (password?.trim() && password.trim() !== chosenSecret) {
         credential = await signInWithEmailAndPassword(auth, normalizedEmail, password.trim());
       } else {
-        throw signInError;
+        throw new Error(
+          "Firebase could not verify this email session. Try a different email or enter the password used for this email once."
+        );
       }
     }
   }
