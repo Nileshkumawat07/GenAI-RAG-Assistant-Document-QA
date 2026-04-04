@@ -5,7 +5,7 @@ function HomePage({ onLogin, onSignup, onContinue }) {
     <section className="landing-page">
       <div className="landing-hero">
         <div className="landing-copy">
-          <p className="hero-kicker">AI Workspace Platform</p>
+          <p className="hero-kicker">Professional AI Platform</p>
           <h1>One intelligent dashboard for documents, images, and real-time visual understanding.</h1>
           <p className="hero-text">
             Launch your assistant from a modern home page, onboard with polished login and signup
@@ -33,8 +33,8 @@ function HomePage({ onLogin, onSignup, onContinue }) {
 
         <div className="landing-visual">
           <div className="visual-card visual-card-primary">
-            <span className="visual-label">Live AI Suite</span>
-            <strong>Document Q&A</strong>
+            <span className="visual-label">Trusted Platform</span>
+            <strong>AI Platform Home</strong>
             <p>Upload files, index them fast, and ask targeted questions with answer-ready output.</p>
           </div>
           <div className="visual-grid">
