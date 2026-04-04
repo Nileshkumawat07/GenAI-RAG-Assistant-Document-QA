@@ -1,11 +1,10 @@
 import { initializeApp } from "firebase/app";
 import {
-  createUserWithEmailAndPassword,
   getAuth,
+  isSignInWithEmailLink,
   RecaptchaVerifier,
-  reload,
-  sendEmailVerification,
-  signInWithEmailAndPassword,
+  sendSignInLinkToEmail,
+  signInWithEmailLink,
   signInWithPhoneNumber,
   signOut,
 } from "firebase/auth";
@@ -22,123 +21,70 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const EMAIL_SECRET_STORAGE_KEY = "firebase_email_verification_secrets";
+const EMAIL_LINK_STORAGE_KEY = "firebase_email_link_target";
+const EMAIL_VERIFIED_STORAGE_KEY = "firebase_verified_email_map";
 
 let recaptchaVerifier = null;
 let recaptchaContainerElement = null;
 
-export async function sendFirebaseEmailVerification(email, password) {
+export async function sendFirebaseEmailVerification(email) {
   const normalizedEmail = email.trim().toLowerCase();
-  const currentUser = auth.currentUser;
-  if (currentUser && currentUser.email !== normalizedEmail) {
-    await signOut(auth);
-  }
-
-  const refreshedUser = auth.currentUser;
-  if (refreshedUser?.email === normalizedEmail) {
-    await sendEmailVerification(refreshedUser);
-    return refreshedUser;
-  }
-
-  const storedSecret = getStoredEmailSecret(normalizedEmail);
-  const chosenSecret = password?.trim() || storedSecret || buildTemporarySecret();
-
-  let credential;
+  const actionCodeSettings = {
+    url: `${window.location.origin}${window.location.pathname}#/signup`,
+    handleCodeInApp: true,
+  };
 
   try {
-    credential = await createUserWithEmailAndPassword(auth, normalizedEmail, chosenSecret);
+    await sendSignInLinkToEmail(auth, normalizedEmail, actionCodeSettings);
   } catch (error) {
-    if (error?.code !== "auth/email-already-in-use") {
-      throw error;
+    if (error?.code === "auth/invalid-continue-uri" || error?.code === "auth/unauthorized-continue-uri") {
+      throw new Error("Add this app URL to Firebase authorized domains before sending the email link.");
     }
-
-    try {
-      credential = await signInWithEmailAndPassword(auth, normalizedEmail, chosenSecret);
-    } catch (signInError) {
-      if (password?.trim() && password.trim() !== chosenSecret) {
-        credential = await signInWithEmailAndPassword(auth, normalizedEmail, password.trim());
-      } else {
-        throw new Error(
-          "Firebase could not verify this email session. Try a different email or enter the password used for this email once."
-        );
-      }
-    }
+    throw error;
   }
 
-  if (!password?.trim()) {
-    storeEmailSecret(normalizedEmail, chosenSecret);
+  storeEmailForLink(normalizedEmail);
+  setEmailVerifiedState(normalizedEmail, false);
+  return normalizedEmail;
+}
+
+export async function consumeFirebaseEmailVerificationLink(currentUrl) {
+  if (!isSignInWithEmailLink(auth, currentUrl)) {
+    return null;
   }
 
-  await sendEmailVerification(credential.user);
-  return credential.user;
+  const storedEmail = getStoredEmailForLink();
+  if (!storedEmail) {
+    throw new Error("Open the email link on the same device where you requested it.");
+  }
+
+  const result = await signInWithEmailLink(auth, storedEmail, currentUrl);
+  setEmailVerifiedState(storedEmail, true);
+  clearEmailForLink();
+  await signOut(auth);
+  return result.user?.email || storedEmail;
 }
 
 export async function checkFirebaseEmailVerification(email) {
   const normalizedEmail = email.trim().toLowerCase();
-  let currentUser = auth.currentUser;
-  if (!currentUser || currentUser.email !== normalizedEmail) {
-    const storedSecret = getStoredEmailSecret(normalizedEmail);
-    if (!storedSecret) {
-      throw new Error("Send the verification email first.");
-    }
-
-    const credential = await signInWithEmailAndPassword(auth, normalizedEmail, storedSecret);
-    currentUser = credential.user;
-  }
-
-  if (!currentUser || currentUser.email !== normalizedEmail) {
-    throw new Error("Send the verification email first.");
-  }
-
-  await reload(currentUser);
-  if (!currentUser.emailVerified) {
+  if (!isEmailVerifiedState(normalizedEmail)) {
     throw new Error("Open the email link first, then click Verify.");
   }
 
-  return currentUser;
+  return normalizedEmail;
 }
 
 export async function resetFirebaseEmailVerification(email = "") {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (normalizedEmail) {
+    setEmailVerifiedState(normalizedEmail, false);
+  }
+
+  clearEmailForLink();
+
   const currentUser = auth.currentUser;
-  if (!currentUser) {
-    return;
-  }
-
-  if (!email || currentUser.email === email) {
+  if (currentUser) {
     await signOut(auth);
-  }
-}
-
-function buildTemporarySecret() {
-  return `Tmp!${Math.random().toString(36).slice(2, 10)}9Z`;
-}
-
-function getStoredEmailSecret(email) {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  try {
-    const raw = window.localStorage.getItem(EMAIL_SECRET_STORAGE_KEY);
-    const map = raw ? JSON.parse(raw) : {};
-    return map[email] || "";
-  } catch {
-    return "";
-  }
-}
-
-function storeEmailSecret(email, secret) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(EMAIL_SECRET_STORAGE_KEY);
-    const map = raw ? JSON.parse(raw) : {};
-    map[email] = secret;
-    window.localStorage.setItem(EMAIL_SECRET_STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    // Ignore storage failures and continue with the active auth session.
   }
 }
 
@@ -197,4 +143,56 @@ function ensureRecaptchaContainer(containerId) {
   hostElement.appendChild(childElement);
   recaptchaContainerElement = childElement;
   return childElement.id;
+}
+
+function storeEmailForLink(email) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, email);
+}
+
+function getStoredEmailForLink() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(EMAIL_LINK_STORAGE_KEY) || "";
+}
+
+function clearEmailForLink() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
+}
+
+function readVerifiedEmailMap() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(EMAIL_VERIFIED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setEmailVerifiedState(email, verified) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const map = readVerifiedEmailMap();
+  map[email] = verified;
+  window.localStorage.setItem(EMAIL_VERIFIED_STORAGE_KEY, JSON.stringify(map));
+}
+
+function isEmailVerifiedState(email) {
+  const map = readVerifiedEmailMap();
+  return Boolean(map[email]);
 }

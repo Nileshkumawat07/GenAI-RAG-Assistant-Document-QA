@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import {
   checkFirebaseEmailVerification,
+  consumeFirebaseEmailVerificationLink,
   resetFirebaseEmailVerification,
   resetFirebaseRecaptcha,
   sendFirebaseEmailVerification,
@@ -72,15 +73,31 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     agreeToTerms: false,
   });
 
-  const helperStatus = [
+  const helperLines = [
     `Email: ${emailStatus}${emailCooldown > 0 ? ` Resend in ${emailCooldown}s.` : ""}`,
     `Mobile: ${mobileStatus}${mobileCooldown > 0 ? ` Resend in ${mobileCooldown}s.` : ""}`,
-    otpStatus ? `Action: ${otpStatus}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ];
 
   useEffect(() => {
+    consumeFirebaseEmailVerificationLink(window.location.href)
+      .then((verifiedEmail) => {
+        if (!verifiedEmail) {
+          return;
+        }
+
+        setFormData((current) => ({
+          ...current,
+          email: verifiedEmail,
+        }));
+        setEmailVerificationSent(true);
+        setEmailVerified(true);
+        setEmailStatus("Verified successfully from email link.");
+        setOtpStatus("Email verified successfully.");
+      })
+      .catch((error) => {
+        setEmailStatus(error.message || "Email link verification failed.");
+      });
+
     return () => {
       resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     };
@@ -137,7 +154,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       }
 
       try {
-        await sendFirebaseEmailVerification(formData.email.trim(), formData.password);
+        await sendFirebaseEmailVerification(formData.email.trim());
         setErrors((current) => ({ ...current, email: "", emailVerification: "" }));
         setEmailVerificationSent(true);
         setEmailVerified(false);
@@ -363,7 +380,12 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         </p>
         <div className="auth-helper-card">
           <strong>Verification helper</strong>
-          <p>{helperStatus}</p>
+          <div className="verification-helper-lines">
+            {helperLines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+            {otpStatus ? <p className="verification-helper-action">Action: {otpStatus}</p> : null}
+          </div>
         </div>
       </div>
 
@@ -568,7 +590,10 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             </div>
 
             <label className="auth-label" htmlFor="signup-email-verify-button">Email Verification</label>
-            <div className="verification-button-row">
+            <div className="inline-action-field verification-row email-verification-row">
+              <div className="verification-status-box">
+                {emailVerified ? "Email verified." : "Open email link, then click Verify."}
+              </div>
               <button
                 id="signup-email-verify-button"
                 className={`inline-field-button email-verify-button verification-button ${errors.emailVerification ? "input-error" : ""}`}
