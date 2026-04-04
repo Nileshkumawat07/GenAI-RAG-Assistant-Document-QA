@@ -3,10 +3,6 @@
   gather_facts: false
   vars:
     groq_api_key: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
-    aws_region: "{{ aws_region | default(lookup('env', 'AWS_REGION'), true) }}"
-    ses_from_email: "{{ ses_from_email | default(lookup('env', 'SES_FROM_EMAIL'), true) }}"
-    aws_access_key_id: "{{ aws_access_key_id | default(lookup('env', 'AWS_ACCESS_KEY_ID'), true) }}"
-    aws_secret_access_key: "{{ aws_secret_access_key | default(lookup('env', 'AWS_SECRET_ACCESS_KEY'), true) }}"
     frontend_origin: "{{ frontend_origin | default(lookup('env', 'FRONTEND_ORIGIN'), true) }}"
 
   pre_tasks:
@@ -14,11 +10,7 @@
       ansible.builtin.assert:
         that:
           - groq_api_key | length > 0
-          - aws_region | length > 0
-          - ses_from_email | length > 0
-          - aws_access_key_id | length > 0
-          - aws_secret_access_key | length > 0
-        fail_msg: "Missing one or more required runtime env vars for Groq or SES."
+        fail_msg: "Missing one or more required runtime env vars for Groq."
 
   tasks:
     - name: Pull latest image
@@ -39,10 +31,6 @@
         -v genai-hf-cache:/app/.cache/huggingface
         -e GROQ_API_KEY={{ groq_api_key | quote }}
         -e FRONTEND_ORIGIN={{ frontend_origin | default('http://localhost:3000', true) | quote }}
-        -e AWS_REGION={{ aws_region | quote }}
-        -e SES_FROM_EMAIL={{ ses_from_email | quote }}
-        -e AWS_ACCESS_KEY_ID={{ aws_access_key_id | quote }}
-        -e AWS_SECRET_ACCESS_KEY={{ aws_secret_access_key | quote }}
         --restart unless-stopped
         nilesh9890/genai-rag:latest
       no_log: true

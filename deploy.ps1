@@ -38,10 +38,6 @@ if ([string]::IsNullOrWhiteSpace($GroqApiKey)) {
 }
 
 $requiredEnvKeys = @(
-    "AWS_REGION",
-    "SES_FROM_EMAIL",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
     "FRONTEND_ORIGIN"
 )
 

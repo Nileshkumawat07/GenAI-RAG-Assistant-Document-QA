@@ -1,5 +1,14 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  getAuth,
+  RecaptchaVerifier,
+  reload,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signInWithPhoneNumber,
+  signOut,
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAgDtCP4pQ81Kgtly1r7_vaUK8l7-Rgfjs",
@@ -16,6 +25,52 @@ const auth = getAuth(app);
 
 let recaptchaVerifier = null;
 let recaptchaContainerElement = null;
+
+export async function sendFirebaseEmailVerification(email, password) {
+  if (!password) {
+    throw new Error("Create your password before sending the verification email.");
+  }
+
+  let credential;
+
+  try {
+    credential = await createUserWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    if (error?.code !== "auth/email-already-in-use") {
+      throw error;
+    }
+
+    credential = await signInWithEmailAndPassword(auth, email, password);
+  }
+
+  await sendEmailVerification(credential.user);
+  return credential.user;
+}
+
+export async function checkFirebaseEmailVerification(email) {
+  const currentUser = auth.currentUser;
+  if (!currentUser || currentUser.email !== email) {
+    throw new Error("Send the verification email first.");
+  }
+
+  await reload(currentUser);
+  if (!currentUser.emailVerified) {
+    throw new Error("Open the email link first, then click Verify.");
+  }
+
+  return currentUser;
+}
+
+export async function resetFirebaseEmailVerification(email = "") {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return;
+  }
+
+  if (!email || currentUser.email === email) {
+    await signOut(auth);
+  }
+}
 
 export async function sendFirebaseOtp(phoneNumber, containerId) {
   await resetFirebaseRecaptcha(containerId);

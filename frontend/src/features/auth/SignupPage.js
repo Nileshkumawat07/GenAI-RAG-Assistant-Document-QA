@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { requestJson } from "../../shared/api/http";
-import { resetFirebaseRecaptcha, sendFirebaseOtp, verifyFirebaseOtp } from "../../shared/firebase/phoneAuth";
+import {
+  checkFirebaseEmailVerification,
+  resetFirebaseEmailVerification,
+  resetFirebaseRecaptcha,
+  sendFirebaseEmailVerification,
+  sendFirebaseOtp,
+  verifyFirebaseOtp,
+} from "../../shared/firebase/phoneAuth";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_PATTERN = /^\d{10}$/;
@@ -33,7 +39,8 @@ function calculateAge(dateOfBirth) {
 function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
-  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [mobileOtpSent, setMobileOtpSent] = useState(false);
   const [mobileConfirmation, setMobileConfirmation] = useState(null);
   const [captchaCode, setCaptchaCode] = useState(() => buildCaptcha());
@@ -53,14 +60,13 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     securityQuestion: "",
     securityAnswer: "",
     referralCode: "",
-    emailOtp: "",
     mobileOtp: "",
     captchaInput: "",
     agreeToTerms: false,
   });
 
   const helperStatus =
-    otpStatus || "Use Send OTP to deliver verification codes to the provided email and mobile number.";
+    otpStatus || "Use the email link and mobile OTP to complete verification.";
 
   useEffect(() => {
     return () => {
@@ -69,8 +75,10 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   }, []);
 
   const setFieldValue = (field, value) => {
-    if (field === "email") {
-      setEmailOtpSent(false);
+    if (field === "email" || field === "password") {
+      setEmailVerificationSent(false);
+      setEmailVerified(false);
+      resetFirebaseEmailVerification().catch(() => {});
     }
 
     if (field === "mobile") {
@@ -88,26 +96,19 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const sendOtp = async (type) => {
     if (type === "email") {
       if (!EMAIL_PATTERN.test(formData.email.trim())) {
-        setErrors((current) => ({ ...current, email: "Enter a valid email before requesting OTP." }));
-        setOtpStatus("Enter a valid email to send the email OTP.");
+        setErrors((current) => ({ ...current, email: "Enter a valid email before requesting verification." }));
+        setOtpStatus("Enter a valid email to send the verification link.");
         return;
       }
 
       try {
-        const response = await requestJson(
-          "/auth/otp/email/send",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: formData.email.trim() }),
-          },
-          "Failed to send email OTP.",
-        );
-        setErrors((current) => ({ ...current, email: "", emailOtp: "" }));
-        setEmailOtpSent(true);
-        setOtpStatus(response.message || "Email OTP sent successfully.");
+        await sendFirebaseEmailVerification(formData.email.trim(), formData.password);
+        setErrors((current) => ({ ...current, email: "", emailVerification: "" }));
+        setEmailVerificationSent(true);
+        setEmailVerified(false);
+        setOtpStatus("Verification email sent successfully.");
       } catch (error) {
-        setOtpStatus(error.message);
+        setOtpStatus(error.message || "Failed to send verification email.");
       }
       return;
     }
@@ -133,6 +134,25 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       setMobileOtpSent(false);
       setMobileConfirmation(null);
       resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
+    }
+  };
+
+  const checkEmailVerification = async () => {
+    if (!EMAIL_PATTERN.test(formData.email.trim())) {
+      setErrors((current) => ({ ...current, email: "Enter a valid email before verifying." }));
+      setOtpStatus("Enter a valid email to verify.");
+      return;
+    }
+
+    try {
+      await checkFirebaseEmailVerification(formData.email.trim());
+      setEmailVerified(true);
+      setErrors((current) => ({ ...current, emailVerification: "", email: "" }));
+      setOtpStatus("Email verified successfully.");
+    } catch (error) {
+      setEmailVerified(false);
+      setErrors((current) => ({ ...current, emailVerification: error.message }));
+      setOtpStatus(error.message);
     }
   };
 
@@ -173,16 +193,16 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     if (!formData.securityQuestion) nextErrors.securityQuestion = "Choose a security question.";
     if (!formData.securityAnswer.trim()) nextErrors.securityAnswer = "Security answer is required.";
 
-    if (!emailOtpSent) {
-      nextErrors.emailOtp = "Generate and enter the email OTP.";
+    if (!emailVerificationSent) {
+      nextErrors.emailVerification = "Send the verification email first.";
+    }
+
+    if (!emailVerified) {
+      nextErrors.emailVerification = "Open the email link and click Verify.";
     }
 
     if (!mobileOtpSent) {
       nextErrors.mobileOtp = "Generate and enter the mobile OTP.";
-    }
-
-    if (!formData.emailOtp.trim()) {
-      nextErrors.emailOtp = "Email OTP is required.";
     }
 
     if (!formData.mobileOtp.trim()) {
@@ -211,25 +231,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
     try {
       setFormError("");
-      try {
-        await requestJson(
-          "/auth/otp/email/verify",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: formData.email.trim(),
-              otp: formData.emailOtp.trim(),
-            }),
-          },
-          "Email OTP verification failed.",
-        );
-      } catch (error) {
-        const message = error.message || "Email OTP verification failed.";
-        setFormError(message);
-        setErrors((current) => ({ ...current, emailOtp: message }));
-        return;
-      }
+      await checkFirebaseEmailVerification(formData.email.trim());
 
       if (!mobileConfirmation) {
         const message = "Please send the mobile OTP again.";
@@ -247,10 +249,13 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         return;
       }
 
-      setOtpStatus("Email and mobile OTP verified successfully.");
+      setEmailVerified(true);
+      setOtpStatus("Email and mobile verification completed successfully.");
       onSubmit(formData);
     } catch (error) {
-      setFormError(error.message || "Verification failed.");
+      const message = error.message || "Verification failed.";
+      setFormError(message);
+      setErrors((current) => ({ ...current, emailVerification: message }));
     }
   };
 
@@ -330,11 +335,11 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
                 className={`auth-input ${errors.email ? "input-error" : ""}`}
                 type="email"
                 placeholder="name@example.com"
-              value={formData.email}
-              onChange={(event) => setFieldValue("email", event.target.value)}
-            />
+                value={formData.email}
+                onChange={(event) => setFieldValue("email", event.target.value)}
+              />
               <button className="inline-field-button" type="button" onClick={() => sendOtp("email")}>
-                Send OTP
+                Send Link
               </button>
             </div>
 
@@ -434,15 +439,16 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
           <div className="signup-section">
             <h3>Verification</h3>
 
-            <label className="auth-label" htmlFor="signup-email-otp">Email OTP</label>
-            <input
-              id="signup-email-otp"
-              className={`auth-input ${errors.emailOtp ? "input-error" : ""}`}
-              type="text"
-              placeholder="Enter email OTP"
-              value={formData.emailOtp}
-              onChange={(event) => setFieldValue("emailOtp", event.target.value.trim())}
-            />
+            <label className="auth-label" htmlFor="signup-email-verify-button">Email Verification</label>
+            <button
+              id="signup-email-verify-button"
+              className={`inline-field-button email-verify-button ${errors.emailVerification ? "input-error" : ""}`}
+              type="button"
+              onClick={checkEmailVerification}
+              disabled={emailVerified}
+            >
+              {emailVerified ? "Verified" : "Verify"}
+            </button>
 
             <label className="auth-label" htmlFor="signup-mobile-otp">Mobile OTP</label>
             <input
