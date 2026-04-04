@@ -19,6 +19,32 @@ function App() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
 
+  const buildRouteHash = (nextScreen, nextInfoPage = null) => {
+    if (nextScreen !== "workspace") {
+      return `#/${nextScreen}`;
+    }
+
+    return nextInfoPage ? `#/workspace/${nextInfoPage}` : "#/workspace";
+  };
+
+  const getRouteFromHash = () => {
+    const fallbackScreen = getCurrentUser() ? "workspace" : "home";
+    const hash = window.location.hash.replace(/^#\/?/, "");
+
+    if (!hash) {
+      return { screen: fallbackScreen, infoPage: null };
+    }
+
+    const [routeScreen, routeInfoPage] = hash.split("/");
+    const allowedScreens = new Set(["home", "login", "signup", "workspace"]);
+    const nextScreen = allowedScreens.has(routeScreen) ? routeScreen : fallbackScreen;
+
+    return {
+      screen: nextScreen,
+      infoPage: nextScreen === "workspace" ? routeInfoPage || null : null,
+    };
+  };
+
   const applyRouteState = (nextScreen, nextInfoPage = null) => {
     setScreen(nextScreen);
     setSelectedInfoPage(nextInfoPage);
@@ -28,10 +54,11 @@ function App() {
 
   const navigateTo = (nextScreen, nextInfoPage = null, mode = "push") => {
     const state = { screen: nextScreen, infoPage: nextInfoPage };
+    const nextHash = buildRouteHash(nextScreen, nextInfoPage);
     if (mode === "replace") {
-      window.history.replaceState(state, "", window.location.href);
+      window.history.replaceState(state, "", nextHash);
     } else {
-      window.history.pushState(state, "", window.location.href);
+      window.history.pushState(state, "", nextHash);
     }
     applyRouteState(nextScreen, nextInfoPage);
   };
@@ -129,24 +156,30 @@ function App() {
   }, [isWorkspace]);
 
   useEffect(() => {
-    const initialInfoPage = getCurrentUser() ? null : null;
-    navigateTo(getCurrentUser() ? "workspace" : "home", initialInfoPage, "replace");
+    const initialRoute = getRouteFromHash();
+    navigateTo(initialRoute.screen, initialRoute.infoPage, "replace");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const handlePopState = (event) => {
+    const syncFromBrowserRoute = (event) => {
       const state = event.state;
       if (state?.screen) {
         applyRouteState(state.screen, state.infoPage || null);
         return;
       }
 
-      applyRouteState(getCurrentUser() ? "workspace" : "home", null);
+      const routeFromHash = getRouteFromHash();
+      applyRouteState(routeFromHash.screen, routeFromHash.infoPage);
     };
 
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("popstate", syncFromBrowserRoute);
+    window.addEventListener("hashchange", syncFromBrowserRoute);
+    return () => {
+      window.removeEventListener("popstate", syncFromBrowserRoute);
+      window.removeEventListener("hashchange", syncFromBrowserRoute);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
