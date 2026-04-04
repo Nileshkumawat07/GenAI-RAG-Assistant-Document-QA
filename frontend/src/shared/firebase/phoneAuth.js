@@ -1,10 +1,11 @@
 import { initializeApp } from "firebase/app";
 import {
+  createUserWithEmailAndPassword,
   getAuth,
-  isSignInWithEmailLink,
   RecaptchaVerifier,
-  sendSignInLinkToEmail,
-  signInWithEmailLink,
+  reload,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signOut,
 } from "firebase/auth";
@@ -21,70 +22,63 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const EMAIL_LINK_STORAGE_KEY = "firebase_email_link_target";
-const EMAIL_VERIFIED_STORAGE_KEY = "firebase_verified_email_map";
 
 let recaptchaVerifier = null;
 let recaptchaContainerElement = null;
 
-export async function sendFirebaseEmailVerification(email) {
+export async function sendFirebaseEmailVerification(email, password) {
   const normalizedEmail = email.trim().toLowerCase();
-  const continueUrl = new URL(`${window.location.origin}${window.location.pathname}`);
-  continueUrl.searchParams.set("email", normalizedEmail);
-  continueUrl.hash = "/signup";
-  const actionCodeSettings = {
-    url: continueUrl.toString(),
-    handleCodeInApp: true,
-  };
+  const normalizedPassword = password.trim();
+
+  if (!normalizedPassword) {
+    throw new Error("Enter the password first, then send the email verification link.");
+  }
+
+  let credential;
 
   try {
-    await sendSignInLinkToEmail(auth, normalizedEmail, actionCodeSettings);
+    credential = await createUserWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
   } catch (error) {
-    if (error?.code === "auth/invalid-continue-uri" || error?.code === "auth/unauthorized-continue-uri") {
-      throw new Error("Add this app URL to Firebase authorized domains before sending the email link.");
+    if (error?.code !== "auth/email-already-in-use") {
+      throw error;
+    }
+
+    try {
+      credential = await signInWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
+    } catch {
+      throw new Error("Use the correct password for this email before sending the verification link again.");
+    }
+  }
+
+  try {
+    await sendEmailVerification(credential.user);
+  } catch (error) {
+    if (error?.code === "auth/too-many-requests") {
+      throw new Error("Firebase temporarily blocked repeated email verification requests. Wait and try again.");
     }
     throw error;
   }
 
-  storeEmailForLink(normalizedEmail);
-  setEmailVerifiedState(normalizedEmail, false);
-  return normalizedEmail;
-}
-
-export async function consumeFirebaseEmailVerificationLink(currentUrl) {
-  if (!isSignInWithEmailLink(auth, currentUrl)) {
-    return null;
-  }
-
-  const storedEmail = getEmailFromVerificationLink(currentUrl) || getStoredEmailForLink();
-  if (!storedEmail) {
-    throw new Error("The email address could not be read from the verification link.");
-  }
-
-  const result = await signInWithEmailLink(auth, storedEmail, currentUrl);
-  setEmailVerifiedState(storedEmail, true);
-  clearEmailForLink();
-  await signOut(auth);
-  return result.user?.email || storedEmail;
+  return credential.user;
 }
 
 export async function checkFirebaseEmailVerification(email) {
   const normalizedEmail = email.trim().toLowerCase();
-  if (!isEmailVerifiedState(normalizedEmail)) {
-    throw new Error("Open the email link first, then click Verify.");
+  const currentUser = auth.currentUser;
+
+  if (!currentUser || currentUser.email !== normalizedEmail) {
+    throw new Error("Send the email verification link first.");
   }
 
-  return normalizedEmail;
+  await reload(currentUser);
+  if (!currentUser.emailVerified) {
+    throw new Error("Open the verification link from the email first, then click Verify.");
+  }
+
+  return currentUser;
 }
 
-export async function resetFirebaseEmailVerification(email = "") {
-  const normalizedEmail = email.trim().toLowerCase();
-  if (normalizedEmail) {
-    setEmailVerifiedState(normalizedEmail, false);
-  }
-
-  clearEmailForLink();
-
+export async function resetFirebaseEmailVerification() {
   const currentUser = auth.currentUser;
   if (currentUser) {
     await signOut(auth);
@@ -146,81 +140,4 @@ function ensureRecaptchaContainer(containerId) {
   hostElement.appendChild(childElement);
   recaptchaContainerElement = childElement;
   return childElement.id;
-}
-
-function storeEmailForLink(email) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, email);
-}
-
-function getStoredEmailForLink() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return window.localStorage.getItem(EMAIL_LINK_STORAGE_KEY) || "";
-}
-
-function clearEmailForLink() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
-}
-
-function getEmailFromVerificationLink(currentUrl) {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  try {
-    const url = new URL(currentUrl);
-    const directEmail = url.searchParams.get("email");
-    if (directEmail) {
-      return directEmail.trim().toLowerCase();
-    }
-
-    const continueUrl = url.searchParams.get("continueUrl");
-    if (!continueUrl) {
-      return "";
-    }
-
-    const nestedUrl = new URL(continueUrl);
-    const nestedEmail = nestedUrl.searchParams.get("email");
-    return nestedEmail ? nestedEmail.trim().toLowerCase() : "";
-  } catch {
-    return "";
-  }
-}
-
-function readVerifiedEmailMap() {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  try {
-    const raw = window.localStorage.getItem(EMAIL_VERIFIED_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function setEmailVerifiedState(email, verified) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const map = readVerifiedEmailMap();
-  map[email] = verified;
-  window.localStorage.setItem(EMAIL_VERIFIED_STORAGE_KEY, JSON.stringify(map));
-}
-
-function isEmailVerifiedState(email) {
-  const map = readVerifiedEmailMap();
-  return Boolean(map[email]);
 }

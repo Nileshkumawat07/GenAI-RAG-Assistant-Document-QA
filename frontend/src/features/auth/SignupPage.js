@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 
 import {
   checkFirebaseEmailVerification,
-  consumeFirebaseEmailVerificationLink,
   resetFirebaseEmailVerification,
   resetFirebaseRecaptcha,
   sendFirebaseEmailVerification,
@@ -102,27 +101,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   ];
 
   useEffect(() => {
-    consumeFirebaseEmailVerificationLink(window.location.href)
-      .then((verifiedEmail) => {
-        if (!verifiedEmail) {
-          return;
-        }
-
-        setFormData((current) => ({
-          ...current,
-          email: verifiedEmail,
-        }));
-        setEmailVerificationSent(true);
-        setEmailVerified(true);
-        setEmailStatus("Verified successfully from email link.");
-        setEmailVerifying(false);
-        window.history.replaceState(window.history.state, "", `${window.location.pathname}#/signup`);
-      })
-      .catch((error) => {
-        setEmailStatus(formatFirebaseMessage(error.message, "email"));
-        setEmailVerifying(false);
-      });
-
     return () => {
       resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     };
@@ -177,12 +155,12 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       }
 
       try {
-        await sendFirebaseEmailVerification(formData.email.trim());
+        await sendFirebaseEmailVerification(formData.email.trim(), formData.password);
         setErrors((current) => ({ ...current, email: "", emailVerification: "" }));
         setEmailVerificationSent(true);
         setEmailVerified(false);
         setEmailCooldown(30);
-        setEmailStatus("Verification link sent.");
+        setEmailStatus("Verification email sent. Open the email link, then click Verify.");
       } catch (error) {
         const message = formatFirebaseMessage(error.message, "email");
         setEmailStatus(message);
