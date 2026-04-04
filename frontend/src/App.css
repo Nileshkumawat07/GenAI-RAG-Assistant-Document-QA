@@ -1039,19 +1039,6 @@ button {
   padding: 0 12px;
 }
 
-.verification-status-box {
-  flex: 1 1 auto;
-  min-height: 36px;
-  padding: 8px 11px;
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.94);
-  color: var(--muted);
-  border-radius: 4px;
-  font-size: 12px;
-}
-
 .email-verify-button,
 .otp-verify-button {
   display: inline-flex;

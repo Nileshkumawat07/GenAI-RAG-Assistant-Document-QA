@@ -29,8 +29,11 @@ let recaptchaContainerElement = null;
 
 export async function sendFirebaseEmailVerification(email) {
   const normalizedEmail = email.trim().toLowerCase();
+  const continueUrl = new URL(`${window.location.origin}${window.location.pathname}`);
+  continueUrl.searchParams.set("email", normalizedEmail);
+  continueUrl.hash = "/signup";
   const actionCodeSettings = {
-    url: `${window.location.origin}${window.location.pathname}#/signup`,
+    url: continueUrl.toString(),
     handleCodeInApp: true,
   };
 
@@ -53,9 +56,9 @@ export async function consumeFirebaseEmailVerificationLink(currentUrl) {
     return null;
   }
 
-  const storedEmail = getStoredEmailForLink();
+  const storedEmail = getEmailFromVerificationLink(currentUrl) || getStoredEmailForLink();
   if (!storedEmail) {
-    throw new Error("Open the email link on the same device where you requested it.");
+    throw new Error("The email address could not be read from the verification link.");
   }
 
   const result = await signInWithEmailLink(auth, storedEmail, currentUrl);
@@ -167,6 +170,31 @@ function clearEmailForLink() {
   }
 
   window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
+}
+
+function getEmailFromVerificationLink(currentUrl) {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    const url = new URL(currentUrl);
+    const directEmail = url.searchParams.get("email");
+    if (directEmail) {
+      return directEmail.trim().toLowerCase();
+    }
+
+    const continueUrl = url.searchParams.get("continueUrl");
+    if (!continueUrl) {
+      return "";
+    }
+
+    const nestedUrl = new URL(continueUrl);
+    const nestedEmail = nestedUrl.searchParams.get("email");
+    return nestedEmail ? nestedEmail.trim().toLowerCase() : "";
+  } catch {
+    return "";
+  }
 }
 
 function readVerifiedEmailMap() {

@@ -596,10 +596,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
             </div>
 
             <label className="auth-label" htmlFor="signup-email-verify-button">Email Verification</label>
-            <div className="inline-action-field verification-row email-verification-row">
-              <div className="verification-status-box">
-                {emailVerified ? "Email verified." : "Open email link, then click Verify."}
-              </div>
+            <div className="verification-button-row email-verification-row">
               <button
                 id="signup-email-verify-button"
                 className={`inline-field-button email-verify-button verification-button ${errors.emailVerification ? "input-error" : ""}`}
