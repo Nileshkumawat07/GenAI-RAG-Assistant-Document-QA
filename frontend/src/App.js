@@ -16,6 +16,7 @@ function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
   const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
   const [showInfoMenu, setShowInfoMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
 
   const moveToWorkspace = (user) => {
@@ -82,7 +83,7 @@ function App() {
     }
 
     if (screen === "workspace") {
-      return <WorkspacePage selectedInfoPage={selectedInfoPage} />;
+      return <WorkspacePage currentUser={currentUser} selectedInfoPage={selectedInfoPage} />;
     }
 
     return (
@@ -102,6 +103,7 @@ function App() {
     { id: "faqs", label: "FAQs" },
     { id: "pricing", label: "Pricing" },
   ];
+  const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
 
   useEffect(() => {
     document.body.classList.toggle("workspace-body-mode", isWorkspace);
@@ -131,7 +133,10 @@ function App() {
                 <button
                   className="header-utility-button"
                   type="button"
-                  onClick={() => setSelectedInfoPage(null)}
+                  onClick={() => {
+                    setSelectedInfoPage(null);
+                    setShowInfoMenu(false);
+                  }}
                 >
                   Assistant
                 </button>
@@ -139,7 +144,10 @@ function App() {
               <button
                 className="header-utility-button"
                 type="button"
-                onClick={() => setShowInfoMenu((current) => !current)}
+                onClick={() => {
+                  setShowProfileMenu(false);
+                  setShowInfoMenu((current) => !current);
+                }}
               >
                 Pages
               </button>
@@ -164,12 +172,55 @@ function App() {
             </div>
             {currentUser ? (
               <div className="header-user-block">
-                <span className="app-header-badge">
-                  {currentUser.mode === "guest" ? "Guest Access" : currentUser.name}
-                </span>
-                <button className="header-logout-button" type="button" onClick={handleLogout}>
-                  Logout
+                <button
+                  className="profile-button"
+                  type="button"
+                  onClick={() => {
+                    setShowInfoMenu(false);
+                    setShowProfileMenu((current) => !current);
+                  }}
+                >
+                  <span className="profile-button-avatar">{profileInitial}</span>
+                  <span className="profile-button-text">
+                    {currentUser.mode === "guest" ? "Guest Access" : currentUser.name}
+                  </span>
                 </button>
+                {showProfileMenu ? (
+                  <div className="profile-dropdown-menu">
+                    <div className="profile-dropdown-head">
+                      <div className="profile-dropdown-avatar">{profileInitial}</div>
+                      <div className="profile-dropdown-meta">
+                        <strong>{currentUser.mode === "guest" ? "Guest Access" : currentUser.name}</strong>
+                        <span>{currentUser.email}</span>
+                      </div>
+                    </div>
+                    <button
+                      className="header-dropdown-item"
+                      type="button"
+                      onClick={() => {
+                        setSelectedInfoPage("profile");
+                        setScreen("workspace");
+                        setShowProfileMenu(false);
+                      }}
+                    >
+                      Profile
+                    </button>
+                    <button
+                      className="header-dropdown-item"
+                      type="button"
+                      onClick={() => {
+                        setSelectedInfoPage("settings");
+                        setScreen("workspace");
+                        setShowProfileMenu(false);
+                      }}
+                    >
+                      Settings
+                    </button>
+                    <button className="header-dropdown-item" type="button" onClick={handleLogout}>
+                      Logout
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <span className="app-header-badge">Live</span>
