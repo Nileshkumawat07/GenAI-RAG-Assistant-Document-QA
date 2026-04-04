@@ -42,11 +42,7 @@ $requiredEnvKeys = @(
     "SES_FROM_EMAIL",
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
-    "TWILIO_ACCOUNT_SID",
-    "TWILIO_AUTH_TOKEN",
-    "TWILIO_PHONE_NUMBER",
-    "FRONTEND_ORIGIN",
-    "OTP_DEFAULT_COUNTRY_CODE"
+    "FRONTEND_ORIGIN"
 )
 
 if (Test-Path $backendEnvPath) {

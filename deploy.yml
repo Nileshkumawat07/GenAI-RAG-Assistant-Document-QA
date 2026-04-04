@@ -7,11 +7,7 @@
     ses_from_email: "{{ ses_from_email | default(lookup('env', 'SES_FROM_EMAIL'), true) }}"
     aws_access_key_id: "{{ aws_access_key_id | default(lookup('env', 'AWS_ACCESS_KEY_ID'), true) }}"
     aws_secret_access_key: "{{ aws_secret_access_key | default(lookup('env', 'AWS_SECRET_ACCESS_KEY'), true) }}"
-    twilio_account_sid: "{{ twilio_account_sid | default(lookup('env', 'TWILIO_ACCOUNT_SID'), true) }}"
-    twilio_auth_token: "{{ twilio_auth_token | default(lookup('env', 'TWILIO_AUTH_TOKEN'), true) }}"
-    twilio_phone_number: "{{ twilio_phone_number | default(lookup('env', 'TWILIO_PHONE_NUMBER'), true) }}"
     frontend_origin: "{{ frontend_origin | default(lookup('env', 'FRONTEND_ORIGIN'), true) }}"
-    otp_default_country_code: "{{ otp_default_country_code | default(lookup('env', 'OTP_DEFAULT_COUNTRY_CODE'), true) }}"
 
   pre_tasks:
     - name: Ensure required runtime secrets are provided
@@ -22,10 +18,7 @@
           - ses_from_email | length > 0
           - aws_access_key_id | length > 0
           - aws_secret_access_key | length > 0
-          - twilio_account_sid | length > 0
-          - twilio_auth_token | length > 0
-          - twilio_phone_number | length > 0
-        fail_msg: "Missing one or more required runtime env vars for Groq, SES, or Twilio."
+        fail_msg: "Missing one or more required runtime env vars for Groq or SES."
 
   tasks:
     - name: Pull latest image
@@ -50,10 +43,6 @@
         -e SES_FROM_EMAIL={{ ses_from_email | quote }}
         -e AWS_ACCESS_KEY_ID={{ aws_access_key_id | quote }}
         -e AWS_SECRET_ACCESS_KEY={{ aws_secret_access_key | quote }}
-        -e TWILIO_ACCOUNT_SID={{ twilio_account_sid | quote }}
-        -e TWILIO_AUTH_TOKEN={{ twilio_auth_token | quote }}
-        -e TWILIO_PHONE_NUMBER={{ twilio_phone_number | quote }}
-        -e OTP_DEFAULT_COUNTRY_CODE={{ otp_default_country_code | default('+91', true) | quote }}
         --restart unless-stopped
         nilesh9890/genai-rag:latest
       no_log: true

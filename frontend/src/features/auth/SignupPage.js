@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { requestJson } from "../../shared/api/http";
+import { resetFirebaseRecaptcha, sendFirebaseOtp, verifyFirebaseOtp } from "../../shared/firebase/phoneAuth";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_PATTERN = /^\d{10}$/;
@@ -34,9 +35,11 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [formError, setFormError] = useState("");
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [mobileOtpSent, setMobileOtpSent] = useState(false);
+  const [mobileConfirmation, setMobileConfirmation] = useState(null);
   const [captchaCode, setCaptchaCode] = useState(() => buildCaptcha());
   const [otpStatus, setOtpStatus] = useState("");
   const [errors, setErrors] = useState({});
+  const recaptchaContainerId = useRef(`firebase-phone-recaptcha-${Math.random().toString(36).slice(2, 10)}`);
   const [formData, setFormData] = useState({
     fullName: "",
     username: "",
@@ -59,6 +62,12 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const helperStatus =
     otpStatus || "Use Send OTP to deliver verification codes to the provided email and mobile number.";
 
+  useEffect(() => {
+    return () => {
+      resetFirebaseRecaptcha().catch(() => {});
+    };
+  }, []);
+
   const setFieldValue = (field, value) => {
     if (field === "email") {
       setEmailOtpSent(false);
@@ -66,6 +75,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
     if (field === "mobile") {
       setMobileOtpSent(false);
+      setMobileConfirmation(null);
     }
 
     setFormData((current) => ({
@@ -108,20 +118,19 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     }
 
     try {
-      const response = await requestJson(
-        "/auth/otp/mobile/send",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mobile: formData.mobile.trim() }),
-        },
-        "Failed to send mobile OTP.",
+      const response = await sendFirebaseOtp(
+        `+91${formData.mobile.trim()}`,
+        recaptchaContainerId.current,
       );
       setErrors((current) => ({ ...current, mobile: "", mobileOtp: "" }));
+      setMobileConfirmation(response);
       setMobileOtpSent(true);
-      setOtpStatus(response.message || "Mobile OTP sent successfully.");
+      setOtpStatus("Mobile OTP sent successfully.");
     } catch (error) {
-      setOtpStatus(error.message);
+      const message = error.message || "Failed to send mobile OTP.";
+      setOtpStatus(message);
+      setMobileOtpSent(false);
+      setMobileConfirmation(null);
     }
   };
 
@@ -220,19 +229,15 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
         return;
       }
 
+      if (!mobileConfirmation) {
+        const message = "Please send the mobile OTP again.";
+        setFormError(message);
+        setErrors((current) => ({ ...current, mobileOtp: message }));
+        return;
+      }
+
       try {
-        await requestJson(
-          "/auth/otp/mobile/verify",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mobile: formData.mobile.trim(),
-              otp: formData.mobileOtp.trim(),
-            }),
-          },
-          "Mobile OTP verification failed.",
-        );
+        await verifyFirebaseOtp(mobileConfirmation, formData.mobileOtp.trim());
       } catch (error) {
         const message = error.message || "Mobile OTP verification failed.";
         setFormError(message);
@@ -388,6 +393,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
                 Send OTP
               </button>
             </div>
+            <div id={recaptchaContainerId.current} />
 
             <label className="auth-label" htmlFor="signup-security-question">Security Question</label>
             <select
