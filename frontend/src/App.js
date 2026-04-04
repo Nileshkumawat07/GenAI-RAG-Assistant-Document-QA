@@ -145,6 +145,9 @@ function App() {
     { id: "faqs", label: "FAQs", copy: "General, billing, technical, and account answers" },
     { id: "pricing", label: "Pricing", copy: "Plans, tiers, notes, and subscription options" },
   ];
+  const headerHighlights = isWorkspace
+    ? ["Secure workspace", "Multi-tool AI suite", "Member-ready experience"]
+    : ["Enterprise-ready AI", "Fast onboarding", "Unified smart workspace"];
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
 
   useEffect(() => {
@@ -188,10 +191,31 @@ function App() {
     >
       <header className={`app-header ${isWorkspace ? "workspace-app-header" : ""}`}>
         <div className="app-header-inner">
-          <div>
-            {!isWorkspace ? (
-              <h2 className="app-title">AI Platform Home</h2>
-            ) : null}
+          <div className="app-header-brand">
+            <div className="app-brand-mark" aria-hidden="true">
+              <span className="app-brand-mark-core" />
+              <span className="app-brand-mark-orbit app-brand-mark-orbit-one" />
+              <span className="app-brand-mark-orbit app-brand-mark-orbit-two" />
+            </div>
+            <div className="app-brand-copy">
+              <p className="app-kicker">{isWorkspace ? "Unified AI Workspace" : "Professional AI Platform"}</p>
+              <div className="app-brand-title-row">
+                <h2 className="app-title">{isWorkspace ? "GenAI RAG Assistant" : "AI Platform Home"}</h2>
+                <span className="app-brand-status">Live Suite</span>
+              </div>
+              <p className="app-brand-description">
+                {isWorkspace
+                  ? "Document intelligence, image generation, and visual analysis in one focused product workspace."
+                  : "A polished product entry point with clear branding, stronger trust signals, and a modern SaaS feel."}
+              </p>
+              <div className="app-header-highlights" aria-label="Platform highlights">
+                {headerHighlights.map((item) => (
+                  <span key={item} className="app-header-highlight">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="app-header-actions">

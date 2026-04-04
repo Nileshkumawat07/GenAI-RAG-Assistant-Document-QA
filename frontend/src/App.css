@@ -96,7 +96,77 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 20px;
+}
+
+.app-header-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 16px;
+}
+
+.app-brand-mark {
+  position: relative;
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.app-brand-mark-core,
+.app-brand-mark-orbit {
+  position: absolute;
+  border-radius: 999px;
+}
+
+.app-brand-mark-core {
+  inset: 17px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(182, 213, 255, 0.92));
+  box-shadow: 0 8px 18px rgba(5, 15, 35, 0.16);
+}
+
+.app-brand-mark-orbit {
+  border: 1px solid rgba(255, 255, 255, 0.42);
+}
+
+.app-brand-mark-orbit-one {
+  inset: 8px 11px;
+}
+
+.app-brand-mark-orbit-two {
+  inset: 11px 8px;
+}
+
+.app-brand-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.app-brand-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-brand-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .app-kicker {
@@ -110,10 +180,37 @@ button {
 
 .app-title {
   margin: 0;
-  font-size: clamp(16px, 1.8vw, 21px);
+  font-size: clamp(18px, 2vw, 24px);
   font-family: "Space Grotesk", "Manrope", sans-serif;
   font-weight: 700;
   letter-spacing: -0.03em;
+}
+
+.app-brand-description {
+  margin: 0;
+  max-width: 64ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(226, 236, 255, 0.82);
+}
+
+.app-header-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app-header-highlight {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .app-header-actions,
@@ -121,6 +218,11 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.app-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .header-menu-shell {
@@ -136,9 +238,14 @@ button {
   justify-content: center;
   min-height: 34px;
   padding: 0 13px;
-  border-radius: 0;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
+  transition:
+    transform 0.22s ease,
+    background 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
 }
 
 .app-header-badge {
@@ -161,6 +268,13 @@ button {
   cursor: pointer;
 }
 
+.header-utility-button:hover,
+.profile-button:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
 .header-dropdown-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -173,7 +287,7 @@ button {
   border: 1px solid rgba(42, 75, 140, 0.18);
   box-shadow: 0 18px 40px rgba(13, 36, 76, 0.18);
   z-index: 30;
-  border-radius: 0;
+  border-radius: 20px;
 }
 
 .header-dropdown-item {
@@ -187,7 +301,7 @@ button {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: 14px;
   display: grid;
   gap: 3px;
 }
@@ -216,10 +330,6 @@ button {
   color: #ffffff;
   cursor: pointer;
   padding: 0 12px 0 8px;
-}
-
-.profile-button:hover {
-  background: rgba(255, 255, 255, 0.14);
 }
 
 .profile-button-avatar,
@@ -252,7 +362,7 @@ button {
   border: 1px solid rgba(42, 75, 140, 0.18);
   box-shadow: 0 18px 40px rgba(13, 36, 76, 0.18);
   z-index: 30;
-  border-radius: 0;
+  border-radius: 20px;
 }
 
 .profile-dropdown-head {
@@ -1882,9 +1992,24 @@ button {
   }
 
   .app-header-inner,
-  .header-user-block {
+  .header-user-block,
+  .app-header-brand {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .app-brand-mark {
+    width: 48px;
+    height: 48px;
+  }
+
+  .app-brand-description {
+    font-size: 12px;
+  }
+
+  .app-header-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .landing-copy,
