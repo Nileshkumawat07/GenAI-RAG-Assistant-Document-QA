@@ -16,24 +16,13 @@ const auth = getAuth(app);
 
 let recaptchaVerifier = null;
 
-export function getPhoneAuth() {
-  return auth;
-}
-
-export function getOrCreateRecaptcha(containerId) {
-  if (recaptchaVerifier) {
-    return recaptchaVerifier;
-  }
-
-  recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+export async function sendFirebaseOtp(phoneNumber, containerId) {
+  await resetFirebaseRecaptcha(containerId);
+  const verifier = new RecaptchaVerifier(auth, containerId, {
     size: "invisible",
   });
-
-  return recaptchaVerifier;
-}
-
-export async function sendFirebaseOtp(phoneNumber, containerId) {
-  const verifier = getOrCreateRecaptcha(containerId);
+  recaptchaVerifier = verifier;
+  await verifier.render();
   return signInWithPhoneNumber(auth, phoneNumber, verifier);
 }
 
@@ -43,14 +32,19 @@ export async function verifyFirebaseOtp(confirmationResult, otpCode) {
   return result;
 }
 
-export async function resetFirebaseRecaptcha() {
-  if (!recaptchaVerifier) {
-    return;
+export async function resetFirebaseRecaptcha(containerId) {
+  if (recaptchaVerifier) {
+    try {
+      recaptchaVerifier.clear();
+    } finally {
+      recaptchaVerifier = null;
+    }
   }
 
-  try {
-    await recaptchaVerifier.clear();
-  } finally {
-    recaptchaVerifier = null;
+  if (containerId && typeof document !== "undefined") {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.innerHTML = "";
+    }
   }
 }

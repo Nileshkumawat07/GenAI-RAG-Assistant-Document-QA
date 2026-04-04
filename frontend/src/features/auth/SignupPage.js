@@ -64,7 +64,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
 
   useEffect(() => {
     return () => {
-      resetFirebaseRecaptcha().catch(() => {});
+      resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     };
   }, []);
 
@@ -76,6 +76,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
     if (field === "mobile") {
       setMobileOtpSent(false);
       setMobileConfirmation(null);
+      resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     }
 
     setFormData((current) => ({
@@ -131,6 +132,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       setOtpStatus(message);
       setMobileOtpSent(false);
       setMobileConfirmation(null);
+      resetFirebaseRecaptcha(recaptchaContainerId.current).catch(() => {});
     }
   };
 
