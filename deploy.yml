@@ -41,14 +41,7 @@
         fi
       changed_when: false
 
-    - name: Reset MySQL data volume
-      ansible.builtin.raw: >
-        if docker volume inspect mysql_data >/dev/null 2>&1; then
-          docker volume rm mysql_data;
-        fi
-      changed_when: false
-
-    - name: Ensure fresh MySQL data volume exists
+    - name: Ensure MySQL data volume exists
       ansible.builtin.raw: >
         if ! docker volume inspect mysql_data >/dev/null 2>&1; then
           docker volume create mysql_data;
