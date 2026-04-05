@@ -2544,3 +2544,12 @@ body.workspace-body-mode .sidebar-boost-card .primary-button {
   min-height: 40px;
   justify-self: start;
 }
+
+body.workspace-body-mode .contact-sidebar-submit {
+  min-width: 132px;
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 4px;
+}

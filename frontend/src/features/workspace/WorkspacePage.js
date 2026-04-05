@@ -361,6 +361,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       })
     : "Not available";
   const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
+  const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
 
   const hasQuestion = question.trim().length > 0;
 
@@ -744,6 +745,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     }
 
     if (selectedInfoPage === "contact") {
+      const groupedContactRequests = contactCategoryOrder
+        .map((categoryId) => ({
+          categoryId,
+          label: INFO_PAGE_CONFIG.contact.tabs.find((tab) => tab.id === categoryId)?.label || categoryId,
+          items: contactRequests.filter((requestItem) => requestItem.category === categoryId),
+        }))
+        .filter((group) => group.items.length > 0);
+
       return (
         <div className="content-grid single-column">
           <article className="tool-card workspace-copy-card">
@@ -822,40 +831,50 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
               {contactRequestsLoading ? (
                 <p className="tool-copy">Loading requests...</p>
-              ) : contactRequests.length > 0 ? (
-                <div className="workspace-info-grid">
-                  {contactRequests.map((requestItem) => (
-                    <div key={requestItem.id} className="workspace-mini-card">
-                      <h4>{requestItem.title}</h4>
-                      <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
-                      <p>Status: {requestItem.status}</p>
-                      <p>
-                        {new Date(requestItem.createdAt).toLocaleString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      <select
-                        className="auth-input workspace-static-input"
-                        value={requestItem.status}
-                        onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
-                      >
-                        <option>Submitted</option>
-                        <option>In Review</option>
-                        <option>In Process</option>
-                        <option>Closed</option>
-                      </select>
-                      {Object.entries(requestItem.values).map(([key, value]) => (
-                        <p key={key}>
-                          <strong>{key}:</strong> {value || "Not provided"}
-                        </p>
-                      ))}
-                      <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
-                        Delete Request
-                      </button>
+              ) : groupedContactRequests.length > 0 ? (
+                <div className="workspace-form-stack">
+                  {groupedContactRequests.map((group) => (
+                    <div key={group.categoryId} className="workspace-form-stack">
+                      <div className="workspace-mini-card">
+                        <h4>{group.label}</h4>
+                        <p>{group.items.length} request{group.items.length > 1 ? "s" : ""} stored in this section.</p>
+                      </div>
+                      <div className="workspace-info-grid">
+                        {group.items.map((requestItem) => (
+                          <div key={requestItem.id} className="workspace-mini-card">
+                            <h4>{requestItem.title}</h4>
+                            <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
+                            <p>Status: {requestItem.status}</p>
+                            <p>
+                              {new Date(requestItem.createdAt).toLocaleString("en-GB", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                            <select
+                              className="auth-input workspace-static-input"
+                              value={requestItem.status}
+                              onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
+                            >
+                              <option>Submitted</option>
+                              <option>In Review</option>
+                              <option>In Process</option>
+                              <option>Closed</option>
+                            </select>
+                            {Object.entries(requestItem.values).map(([key, value]) => (
+                              <p key={key}>
+                                <strong>{key}:</strong> {value || "Not provided"}
+                              </p>
+                            ))}
+                            <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
+                              Delete Request
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -980,7 +999,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                   value={getContactValue(activeInfoTab, activeInfoContent.textarea)}
                   onChange={(event) => setContactValue(activeInfoTab, activeInfoContent.textarea, event.target.value)}
                 />
-                {selectedInfoPage === "contact" && contactStatus[activeInfoTab]?.text ? (
+                {selectedInfoPage !== "contact" && contactStatus[activeInfoTab]?.text ? (
                   <p className={contactStatus[activeInfoTab].type === "success" ? "success-text" : "error-text"}>
                     {contactStatus[activeInfoTab].type === "success" ? `✓ ${contactStatus[activeInfoTab].text}` : contactStatus[activeInfoTab].text}
                   </p>
@@ -1066,7 +1085,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                       <p className="status-item status-info">Submit from here and track the request below.</p>
                     )}
                     <button
-                      className="primary-button"
+                      className="primary-button contact-sidebar-submit"
                       type="button"
                       onClick={() =>
                         handleContactSubmit(
