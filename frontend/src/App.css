@@ -2611,42 +2611,6 @@ body.workspace-body-mode .contact-request-panel {
   border-radius: 4px;
 }
 
-body.workspace-body-mode .contact-request-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-body.workspace-body-mode .contact-request-panel-kicker {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary-soft);
-}
-
-body.workspace-body-mode .contact-request-panel-head h4 {
-  margin: 0;
-  font-size: 20px;
-  color: var(--primary-deep);
-}
-
-body.workspace-body-mode .contact-request-count-badge {
-  min-height: 34px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(18, 61, 122, 0.08);
-  color: var(--primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
 body.workspace-body-mode .contact-request-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -2668,6 +2632,21 @@ body.workspace-body-mode .contact-request-card-head {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+body.workspace-body-mode .contact-request-id-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #111111, #2b2b2b);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 10px 22px rgba(17, 17, 17, 0.18);
 }
 
 body.workspace-body-mode .contact-request-type {

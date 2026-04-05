@@ -773,19 +773,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
                     {selectedSubmittedGroup ? (
                       <div className="contact-request-panel">
-                        <div className="contact-request-panel-head">
-                          <div className="contact-request-count-badge">
-                            {selectedSubmittedGroup.items.length} request{selectedSubmittedGroup.items.length !== 1 ? "s" : ""}
-                          </div>
-                        </div>
-
                         {selectedSubmittedGroup.items.length > 0 ? (
                           <div className="contact-request-card-grid">
                             {selectedSubmittedGroup.items.map((requestItem) => (
                               <div key={requestItem.id} className="contact-request-card">
                                 <div className="contact-request-card-head">
                                   <div>
-                                    <h5>{requestItem.requestCode || "Feedback Request"}</h5>
+                                    <div className="contact-request-id-badge">
+                                      {requestItem.requestCode || "Feedback Request"}
+                                    </div>
                                   </div>
                                   <span className="contact-request-status-chip">In Process</span>
                                 </div>
