@@ -775,7 +775,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                       <div className="contact-request-panel">
                         <div className="contact-request-panel-head">
                           <div>
-                            <p className="contact-request-panel-kicker">Request Category</p>
                             <h4>{selectedSubmittedGroup.label}</h4>
                           </div>
                           <div className="contact-request-count-badge">
@@ -789,7 +788,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                               <div key={requestItem.id} className="contact-request-card">
                                 <div className="contact-request-card-head">
                                   <div>
-                                    <p className="contact-request-type">{requestItem.title}</p>
                                     <h5>{requestItem.requestCode || "Feedback Request"}</h5>
                                   </div>
                                   <span className="contact-request-status-chip">In Process</span>
