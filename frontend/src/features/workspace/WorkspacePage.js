@@ -8,7 +8,6 @@ import {
   createContactRequest,
   deleteContactRequest,
   listContactRequests,
-  updateContactRequestStatus,
 } from "../info/contactApi";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
@@ -335,6 +334,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [contactSubmitting, setContactSubmitting] = useState(false);
   const [contactRequests, setContactRequests] = useState([]);
   const [contactRequestsLoading, setContactRequestsLoading] = useState(false);
+  const [activeSubmittedCategory, setActiveSubmittedCategory] = useState("general");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -532,23 +532,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       }));
     } finally {
       setContactSubmitting(false);
-    }
-  };
-
-  const handleContactStatusChange = async (requestId, status) => {
-    try {
-      const updatedRequest = await updateContactRequestStatus(requestId, {
-        userId: currentUser.id,
-        status,
-      });
-      setContactRequests((current) =>
-        current.map((item) => (item.id === requestId ? updatedRequest : item))
-      );
-    } catch (error) {
-      setContactStatus((current) => ({
-        ...current,
-        [activeInfoTab]: { type: "error", text: error.message },
-      }));
     }
   };
 
@@ -753,69 +736,107 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       }));
 
       if (activeInfoTab === "submittedRequests") {
+        const submittedCategoryTabs = groupedContactRequests.map((group) => ({
+          ...group,
+          heading: INFO_PAGE_CONFIG.contact.tabs.find((tab) => tab.id === group.categoryId)?.heading || group.label,
+        }));
+        const selectedSubmittedGroup =
+          submittedCategoryTabs.find((group) => group.categoryId === activeSubmittedCategory) ||
+          submittedCategoryTabs[0];
+
         return (
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
               <div className="workspace-form-stack">
-                <div className="workspace-mini-card">
+                <div className="workspace-mini-card contact-request-hero">
                   <h4>Submitted Requests</h4>
-                  <p>General Inquiry, Business, Feedback, Technical Support, Partnership, and Media & Press requests are grouped below with IDs and process status.</p>
+                  <p>Choose a request category to view its saved inquiries, ticket IDs, and request details in one place.</p>
                 </div>
 
                 {contactRequestsLoading ? (
                   <p className="tool-copy">Loading requests...</p>
                 ) : (
                   <div className="workspace-form-stack">
-                    {groupedContactRequests.map((group) => (
-                      <div key={group.categoryId} className="workspace-form-stack">
-                        <div className="workspace-mini-card">
-                          <h4>{group.label}</h4>
-                          <p>{group.items.length} request{group.items.length !== 1 ? "s" : ""} stored in this section.</p>
+                    <div className="contact-request-category-row">
+                      {submittedCategoryTabs.map((group) => (
+                        <button
+                          key={group.categoryId}
+                          type="button"
+                          className={`contact-request-category-button ${selectedSubmittedGroup?.categoryId === group.categoryId ? "active" : ""}`}
+                          onClick={() => setActiveSubmittedCategory(group.categoryId)}
+                        >
+                          <span>{group.label}</span>
+                          <strong>{group.items.length}</strong>
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedSubmittedGroup ? (
+                      <div className="contact-request-panel">
+                        <div className="contact-request-panel-head">
+                          <div>
+                            <p className="contact-request-panel-kicker">Request Category</p>
+                            <h4>{selectedSubmittedGroup.label}</h4>
+                          </div>
+                          <div className="contact-request-count-badge">
+                            {selectedSubmittedGroup.items.length} request{selectedSubmittedGroup.items.length !== 1 ? "s" : ""}
+                          </div>
                         </div>
-                        {group.items.length > 0 ? (
-                          <div className="workspace-info-grid">
-                            {group.items.map((requestItem) => (
-                              <div key={requestItem.id} className="workspace-mini-card">
-                                <h4>{requestItem.title}</h4>
-                                <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
-                                <p>Status: {requestItem.status}</p>
-                                <p>
-                                  {new Date(requestItem.createdAt).toLocaleString("en-GB", {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </p>
-                                <select
-                                  className="auth-input workspace-static-input"
-                                  value={requestItem.status}
-                                  onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
-                                >
-                                  <option>Submitted</option>
-                                  <option>In Review</option>
-                                  <option>In Process</option>
-                                  <option>Closed</option>
-                                </select>
-                                {Object.entries(requestItem.values).map(([key, value]) => (
-                                  <p key={key}>
-                                    <strong>{key}:</strong> {value || "Not provided"}
-                                  </p>
-                                ))}
-                                <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
+
+                        {selectedSubmittedGroup.items.length > 0 ? (
+                          <div className="contact-request-card-grid">
+                            {selectedSubmittedGroup.items.map((requestItem) => (
+                              <div key={requestItem.id} className="contact-request-card">
+                                <div className="contact-request-card-head">
+                                  <div>
+                                    <p className="contact-request-type">{requestItem.title}</p>
+                                    <h5>{requestItem.requestCode || "Feedback Request"}</h5>
+                                  </div>
+                                  <span className="contact-request-status-chip">In Process</span>
+                                </div>
+
+                                <div className="contact-request-meta">
+                                  <div className="contact-request-meta-item">
+                                    <span>Created</span>
+                                    <strong>
+                                      {new Date(requestItem.createdAt).toLocaleString("en-GB", {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </strong>
+                                  </div>
+                                  <div className="contact-request-meta-item">
+                                    <span>Process</span>
+                                    <strong>In Process</strong>
+                                  </div>
+                                </div>
+
+                                <div className="contact-request-details">
+                                  {Object.entries(requestItem.values).map(([key, value]) => (
+                                    <div key={key} className="contact-request-detail-item">
+                                      <span>{key}</span>
+                                      <strong>{value || "Not provided"}</strong>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <button className="contact-request-delete-button" type="button" onClick={() => handleContactDelete(requestItem.id)}>
                                   Delete Request
                                 </button>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="workspace-mini-card">
-                            <p>No requests submitted in this category yet.</p>
+                          <div className="contact-request-empty-card">
+                            <h5>No {selectedSubmittedGroup.label} requests yet</h5>
+                            <p>Your submitted {selectedSubmittedGroup.label.toLowerCase()} requests will appear here with their saved details.</p>
                           </div>
                         )}
                       </div>
-                    ))}
+                    ) : null}
                   </div>
                 )}
               </div>

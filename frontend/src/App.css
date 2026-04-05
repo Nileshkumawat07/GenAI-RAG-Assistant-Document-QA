@@ -2553,3 +2553,216 @@ body.workspace-body-mode .contact-sidebar-submit {
   font-weight: 700;
   margin-top: 4px;
 }
+
+body.workspace-body-mode .contact-request-hero {
+  background: linear-gradient(135deg, rgba(18, 61, 122, 0.08), rgba(46, 99, 174, 0.04));
+}
+
+body.workspace-body-mode .contact-request-category-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+body.workspace-body-mode .contact-request-category-button {
+  min-height: 62px;
+  padding: 12px 14px;
+  border: 1px solid rgba(42, 75, 140, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(242, 247, 255, 0.95));
+  color: var(--primary);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(13, 36, 76, 0.05);
+}
+
+body.workspace-body-mode .contact-request-category-button strong {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 61, 122, 0.08);
+  color: var(--primary);
+}
+
+body.workspace-body-mode .contact-request-category-button.active {
+  background: linear-gradient(135deg, #123d7a, #2d6bc0);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 12px 28px rgba(18, 61, 122, 0.22);
+}
+
+body.workspace-body-mode .contact-request-category-button.active strong {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+body.workspace-body-mode .contact-request-panel {
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(238, 245, 255, 0.9), rgba(248, 251, 255, 0.92));
+  border-radius: 4px;
+}
+
+body.workspace-body-mode .contact-request-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+body.workspace-body-mode .contact-request-panel-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-soft);
+}
+
+body.workspace-body-mode .contact-request-panel-head h4 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .contact-request-count-badge {
+  min-height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(18, 61, 122, 0.08);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+body.workspace-body-mode .contact-request-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+body.workspace-body-mode .contact-request-card,
+body.workspace-body-mode .contact-request-empty-card {
+  padding: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(42, 75, 140, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 255, 0.96));
+  box-shadow: 0 10px 26px rgba(13, 36, 76, 0.06);
+}
+
+body.workspace-body-mode .contact-request-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+body.workspace-body-mode .contact-request-type {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+body.workspace-body-mode .contact-request-card-head h5,
+body.workspace-body-mode .contact-request-empty-card h5 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .contact-request-status-chip {
+  min-height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(46, 99, 174, 0.1);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+body.workspace-body-mode .contact-request-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+body.workspace-body-mode .contact-request-meta-item {
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: rgba(237, 244, 255, 0.92);
+  border: 1px solid rgba(42, 75, 140, 0.12);
+}
+
+body.workspace-body-mode .contact-request-meta-item span,
+body.workspace-body-mode .contact-request-detail-item span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary-soft);
+}
+
+body.workspace-body-mode .contact-request-meta-item strong,
+body.workspace-body-mode .contact-request-detail-item strong {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  word-break: break-word;
+}
+
+body.workspace-body-mode .contact-request-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+body.workspace-body-mode .contact-request-detail-item {
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(42, 75, 140, 0.1);
+}
+
+body.workspace-body-mode .contact-request-delete-button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(180, 35, 24, 0.16);
+  background: linear-gradient(135deg, #c62828, #e53935);
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(198, 40, 40, 0.22);
+}
+
+body.workspace-body-mode .contact-request-delete-button:hover {
+  transform: translateY(-1px);
+}
+
+body.workspace-body-mode .contact-request-empty-card p {
+  margin-top: 8px;
+}
