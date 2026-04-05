@@ -160,7 +160,7 @@ const INFO_PAGE_CONFIG = {
       { id: "general", label: "General Inquiry", heading: "General", form: ["First Name", "Last Name", "Email", "Phone Number", "City", "Preferred Contact Time"], textarea: "Your Message", button: "Send Inquiry" },
       { id: "business", label: "Business", heading: "Business", form: ["Company Name", "Your Role", "Business Email", "Phone Number", "Website"], textarea: "Business Proposal", button: "Submit Request" },
       { id: "feedback", label: "Feedback", heading: "Feedback", form: ["Full Name", "Email", "Rate Our Service", "Service Used", "Date of Experience"], textarea: "Your Feedback", button: "Send Feedback" },
-      { id: "technical", label: "Technical Support", heading: "Technical", form: ["Full Name", "Email", "Ticket ID", "Platform (Web/App)", "Issue Type"], textarea: "Issue Description", button: "Submit Ticket" },
+      { id: "technical", label: "Technical Support", heading: "Technical", form: ["Full Name", "Email", "Platform (Web/App)", "Issue Type"], textarea: "Issue Description", button: "Submit Ticket" },
       { id: "partnership", label: "Partnership", heading: "Partnership", form: ["Full Name", "Organization", "Email", "Phone Number", "Website / Portfolio"], textarea: "Partnership Details", button: "Submit Proposal" },
       { id: "media", label: "Media & Press", heading: "Media", form: ["Full Name", "Media Company", "Official Email", "Phone Number", "Publication / Channel"], textarea: "Media Request Details", button: "Send Request" },
       { id: "submittedRequests", label: "Submitted Requests", heading: "Submitted Requests" },
@@ -774,51 +774,53 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     {selectedSubmittedGroup ? (
                       <div className="contact-request-panel">
                         {selectedSubmittedGroup.items.length > 0 ? (
-                          <div className="contact-request-card-grid">
-                            {selectedSubmittedGroup.items.map((requestItem) => (
-                              <div key={requestItem.id} className="contact-request-card">
-                                <div className="contact-request-card-head">
-                                  <div>
-                                    <div className="contact-request-id-badge">
-                                      {requestItem.requestCode || "Feedback Request"}
+                          <div className="contact-request-card-scroll">
+                            <div className="contact-request-card-grid">
+                              {selectedSubmittedGroup.items.map((requestItem) => (
+                                <div key={requestItem.id} className="contact-request-card">
+                                  <div className="contact-request-card-head">
+                                    <div>
+                                      <div className="contact-request-id-badge">
+                                        {requestItem.requestCode || "Feedback Request"}
+                                      </div>
+                                    </div>
+                                    <span className="contact-request-status-chip">In Process</span>
+                                  </div>
+
+                                  <div className="contact-request-meta">
+                                    <div className="contact-request-meta-item">
+                                      <span>Created</span>
+                                      <strong>
+                                        {new Date(requestItem.createdAt).toLocaleString("en-GB", {
+                                          day: "2-digit",
+                                          month: "short",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </strong>
+                                    </div>
+                                    <div className="contact-request-meta-item">
+                                      <span>Process</span>
+                                      <strong>In Process</strong>
                                     </div>
                                   </div>
-                                  <span className="contact-request-status-chip">In Process</span>
-                                </div>
 
-                                <div className="contact-request-meta">
-                                  <div className="contact-request-meta-item">
-                                    <span>Created</span>
-                                    <strong>
-                                      {new Date(requestItem.createdAt).toLocaleString("en-GB", {
-                                        day: "2-digit",
-                                        month: "short",
-                                        year: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </strong>
+                                  <div className="contact-request-details">
+                                    {Object.entries(requestItem.values).map(([key, value]) => (
+                                      <div key={key} className="contact-request-detail-item">
+                                        <span>{key}</span>
+                                        <strong>{value || "Not provided"}</strong>
+                                      </div>
+                                    ))}
                                   </div>
-                                  <div className="contact-request-meta-item">
-                                    <span>Process</span>
-                                    <strong>In Process</strong>
-                                  </div>
-                                </div>
 
-                                <div className="contact-request-details">
-                                  {Object.entries(requestItem.values).map(([key, value]) => (
-                                    <div key={key} className="contact-request-detail-item">
-                                      <span>{key}</span>
-                                      <strong>{value || "Not provided"}</strong>
-                                    </div>
-                                  ))}
+                                  <button className="contact-request-delete-button" type="button" onClick={() => handleContactDelete(requestItem.id)}>
+                                    Delete Request
+                                  </button>
                                 </div>
-
-                                <button className="contact-request-delete-button" type="button" onClick={() => handleContactDelete(requestItem.id)}>
-                                  Delete Request
-                                </button>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
                         ) : (
                           <div className="contact-request-empty-card">

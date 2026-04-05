@@ -2613,8 +2613,14 @@ body.workspace-body-mode .contact-request-panel {
 
 body.workspace-body-mode .contact-request-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+body.workspace-body-mode .contact-request-card-scroll {
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 body.workspace-body-mode .contact-request-card,
@@ -2746,4 +2752,10 @@ body.workspace-body-mode .contact-request-delete-button:hover {
 
 body.workspace-body-mode .contact-request-empty-card p {
   margin-top: 8px;
+}
+
+@media (max-width: 1180px) {
+  body.workspace-body-mode .contact-request-card-grid {
+    grid-template-columns: 1fr;
+  }
 }
