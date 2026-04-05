@@ -1,3 +1,4 @@
 email-validator
 SQLAlchemy
 pymysql
+cryptography
