@@ -3,11 +3,10 @@ import React, { useEffect, useState } from "react";
 import HomePage from "./features/auth/HomePage";
 import LoginPage from "./features/auth/LoginPage";
 import SignupPage from "./features/auth/SignupPage";
+import { loginUser, signupUser } from "./features/auth/authApi";
 import {
-  authenticateUser,
   clearCurrentUser,
   getCurrentUser,
-  registerUser,
   setCurrentUser,
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
@@ -74,22 +73,14 @@ function App() {
     navigateTo("workspace", null);
   };
 
-  const handleSignup = (formData) => {
-    const savedUser = registerUser(formData);
-    moveToWorkspace({
-      name: savedUser.fullName,
-      email: savedUser.email,
-      mode: "member",
-    });
+  const handleSignup = async (formData) => {
+    const user = await signupUser(formData);
+    moveToWorkspace(user);
   };
 
-  const handleLogin = ({ identifier, password }) => {
-    const user = authenticateUser(identifier, password);
-    moveToWorkspace({
-      name: user.fullName,
-      email: user.email,
-      mode: "member",
-    });
+  const handleLogin = async ({ identifier, password }) => {
+    const user = await loginUser({ identifier, password });
+    moveToWorkspace(user);
   };
 
   const handleGuestEntry = () => {

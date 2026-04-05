@@ -10,14 +10,19 @@ from app.api.routes.health import build_health_router
 from app.api.routes.image_generation import build_image_generation_router
 from app.api.routes.object_detection import build_object_detection_router
 from app.core.config import FRONTEND_ORIGIN
+from app.core.database import Base, engine
+import app.models  # Ensure ORM models are registered before create_all().
+from app.services.auth_service import AuthService
 from app.services.otp_service import OTPService
 from app.services.rag_service import RAGService
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
+    Base.metadata.create_all(bind=engine)
     rag_service = RAGService()
     otp_service = OTPService()
+    auth_service = AuthService()
     base_dir = Path(__file__).resolve().parent
     frontend_build_dir = base_dir.parent / "frontend" / "build"
 
@@ -31,7 +36,7 @@ def create_app() -> FastAPI:
 
     mount_frontend(app, frontend_build_dir)
     app.include_router(build_health_router(rag_service))
-    app.include_router(build_auth_router(otp_service))
+    app.include_router(build_auth_router(otp_service, auth_service))
     app.include_router(build_document_router(rag_service))
     app.include_router(build_object_detection_router())
     app.include_router(build_image_generation_router())

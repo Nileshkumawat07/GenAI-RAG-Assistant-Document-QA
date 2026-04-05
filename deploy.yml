@@ -105,6 +105,11 @@
         -v genai-hf-cache:/app/.cache/huggingface
         -e GROQ_API_KEY={{ groq_api_key_value | quote }}
         -e FRONTEND_ORIGIN={{ frontend_origin_value | default('http://localhost:3000', true) | quote }}
+        -e MYSQL_HOST=mysql
+        -e MYSQL_PORT=3306
+        -e MYSQL_DATABASE={{ mysql_database_value | quote }}
+        -e MYSQL_USER={{ mysql_user_value | quote }}
+        -e MYSQL_PASSWORD={{ mysql_password_value | quote }}
         --restart unless-stopped
         nilesh9890/genai-rag:latest
       no_log: true

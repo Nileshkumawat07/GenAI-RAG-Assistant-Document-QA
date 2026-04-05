@@ -54,3 +54,13 @@ SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "").strip()
 OTP_LENGTH = int(os.getenv("OTP_LENGTH", "6"))
 OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "600"))
 OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "30"))
+
+MYSQL_HOST = os.getenv("MYSQL_HOST", "mysql").strip()
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "genai_app").strip()
+MYSQL_USER = os.getenv("MYSQL_USER", "genai_user").strip()
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "genai_user_123").strip()
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}",
+).strip()

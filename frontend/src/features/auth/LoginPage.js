@@ -6,6 +6,7 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(initialError);
+  const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
     const nextErrors = {};
@@ -21,7 +22,7 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
     return nextErrors;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     const nextErrors = validate();
@@ -33,10 +34,13 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
     }
 
     try {
+      setSubmitting(true);
       setFormError("");
-      onSubmit({ identifier, password });
+      await onSubmit({ identifier, password });
     } catch (error) {
       setFormError(error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -46,13 +50,13 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
         <p className="hero-kicker">Welcome Back</p>
         <h1>Return to your AI command center.</h1>
         <p>
-          Log in with the account you created on this device, or use the temporary access button to
-          jump straight into the main workspace while auth is only local.
+          Log in with the account you created from the shared backend, or use the temporary access
+          button to jump straight into the workspace.
         </p>
         <div className="auth-showcase-points">
           <span>Fast access</span>
           <span>Clean validation</span>
-          <span>Local demo auth</span>
+          <span>MySQL-backed auth</span>
         </div>
       </div>
 
@@ -96,8 +100,8 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
 
         {formError ? <p className="form-error-banner">{formError}</p> : null}
 
-        <button className="auth-primary-button" type="submit">
-          Login
+        <button className="auth-primary-button" type="submit" disabled={submitting}>
+          {submitting ? "Logging in..." : "Login"}
         </button>
         <button className="auth-secondary-button" type="button" onClick={onBypass}>
           Continue without login

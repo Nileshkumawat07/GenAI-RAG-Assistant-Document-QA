@@ -76,6 +76,7 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
   const [emailStatus, setEmailStatus] = useState("Waiting for email action.");
   const [mobileStatus, setMobileStatus] = useState("Waiting for mobile action.");
   const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
   const recaptchaContainerId = useRef(`firebase-phone-recaptcha-${Math.random().toString(36).slice(2, 10)}`);
   const [formData, setFormData] = useState({
     fullName: "",
@@ -349,12 +350,29 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
       setEmailVerified(true);
       setEmailStatus("Verified successfully.");
       setMobileStatus("Verified successfully.");
-      onSubmit(formData);
+      setSubmitting(true);
+      await onSubmit({
+        fullName: formData.fullName.trim(),
+        username: formData.username.trim(),
+        dateOfBirth: formData.dateOfBirth,
+        gender: formData.gender,
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        alternateEmail: formData.alternateEmail.trim() || null,
+        mobile: formData.mobile.trim(),
+        securityQuestion: formData.securityQuestion,
+        securityAnswer: formData.securityAnswer.trim(),
+        referralCode: formData.referralCode.trim() || null,
+        emailVerified: true,
+        mobileVerified: true,
+      });
     } catch (error) {
       const message = formatFirebaseMessage(error.message, "email");
       setFormError(message);
       setErrors((current) => ({ ...current, emailVerification: message }));
       setEmailStatus(message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -625,14 +643,14 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
           <div className="terms-panel">
             <h3>Privacy Terms & Agreement Instructions</h3>
             <p>
-              This front-end flow stores users locally in your browser after successful verification
-              so you can continue using the existing onboarding journey.
+              This flow verifies contact details in the UI and then stores the real account in the
+              backend MySQL database.
             </p>
           </div>
 
           <div className="signup-actions">
-            <button className="auth-primary-button" type="submit">
-              Create Account
+            <button className="auth-primary-button" type="submit" disabled={submitting}>
+              {submitting ? "Creating Account..." : "Create Account"}
             </button>
             <button className="auth-secondary-button" type="button" onClick={onBypass}>
               Continue without signup
