@@ -2693,10 +2693,12 @@ body.workspace-body-mode .contact-request-status-chip {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: rgba(46, 99, 174, 0.1);
-  color: var(--primary);
+  background: linear-gradient(135deg, #1f9d55, #157347);
+  color: #ffffff;
   font-size: 12px;
   font-weight: 800;
+  border: 1px solid rgba(21, 115, 71, 0.18);
+  box-shadow: 0 8px 18px rgba(21, 115, 71, 0.18);
 }
 
 body.workspace-body-mode .contact-request-meta {

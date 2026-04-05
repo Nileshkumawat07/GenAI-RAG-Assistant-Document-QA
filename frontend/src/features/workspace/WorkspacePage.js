@@ -774,9 +774,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     {selectedSubmittedGroup ? (
                       <div className="contact-request-panel">
                         <div className="contact-request-panel-head">
-                          <div>
-                            <h4>{selectedSubmittedGroup.label}</h4>
-                          </div>
                           <div className="contact-request-count-badge">
                             {selectedSubmittedGroup.items.length} request{selectedSubmittedGroup.items.length !== 1 ? "s" : ""}
                           </div>
