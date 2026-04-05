@@ -1,6 +1,6 @@
 import { requestJson } from "../../shared/api/http";
 
-function normalizeAuthUser(user) {
+export function normalizeAuthUser(user) {
   return {
     id: user.id,
     name: user.fullName,
@@ -51,4 +51,66 @@ export async function loginUser(payload) {
   );
 
   return normalizeAuthUser(data);
+}
+
+export async function updateUsername(payload) {
+  const data = await requestJson(
+    "/auth/settings/username",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update username."
+  );
+
+  return normalizeAuthUser(data);
+}
+
+export async function updateEmail(payload) {
+  const data = await requestJson(
+    "/auth/settings/email",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update email."
+  );
+
+  return normalizeAuthUser(data);
+}
+
+export async function updateMobile(payload) {
+  const data = await requestJson(
+    "/auth/settings/mobile",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update mobile number."
+  );
+
+  return normalizeAuthUser(data);
+}
+
+export async function changePassword(payload) {
+  return requestJson(
+    "/auth/settings/password",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update password."
+  );
 }

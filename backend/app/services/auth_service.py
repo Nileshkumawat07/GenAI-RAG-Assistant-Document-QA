@@ -37,6 +37,13 @@ class UserPayload:
 
 
 class AuthService:
+    def get_user_by_id(self, db: Session, *, user_id: str) -> UserPayload:
+        user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+        if not user:
+            raise AuthServiceError("User account was not found.")
+
+        return self._serialize_user(user)
+
     def register_user(
         self,
         db: Session,
@@ -108,6 +115,91 @@ class AuthService:
             raise AuthServiceError("Invalid email/username or password.")
 
         return self._serialize_user(user)
+
+    def update_username(self, db: Session, *, user_id: str, new_username: str) -> UserPayload:
+        user = self._get_user_model_by_id(db, user_id)
+        normalized_username = new_username.strip().lower()
+
+        if len(normalized_username) < 4:
+            raise AuthServiceError("Username must be at least 4 characters.")
+
+        if normalized_username == user.username:
+            raise AuthServiceError("Enter a different username.")
+
+        existing = db.execute(
+            select(User).where(User.username == normalized_username, User.id != user_id)
+        ).scalar_one_or_none()
+        if existing:
+            raise AuthServiceError("That username is already in use.")
+
+        user.username = normalized_username
+        db.commit()
+        db.refresh(user)
+        return self._serialize_user(user)
+
+    def update_email(self, db: Session, *, user_id: str, new_email: str) -> UserPayload:
+        user = self._get_user_model_by_id(db, user_id)
+        normalized_email = new_email.strip().lower()
+
+        if normalized_email == user.email:
+            raise AuthServiceError("Enter a different email address.")
+
+        existing = db.execute(
+            select(User).where(User.email == normalized_email, User.id != user_id)
+        ).scalar_one_or_none()
+        if existing:
+            raise AuthServiceError("That email address is already in use.")
+
+        user.email = normalized_email
+        user.email_verified = True
+        db.commit()
+        db.refresh(user)
+        return self._serialize_user(user)
+
+    def update_mobile(self, db: Session, *, user_id: str, new_mobile: str) -> UserPayload:
+        user = self._get_user_model_by_id(db, user_id)
+        normalized_mobile = new_mobile.strip()
+
+        if normalized_mobile == user.mobile:
+            raise AuthServiceError("Enter a different mobile number.")
+
+        existing = db.execute(
+            select(User).where(User.mobile == normalized_mobile, User.id != user_id)
+        ).scalar_one_or_none()
+        if existing:
+            raise AuthServiceError("That mobile number is already in use.")
+
+        user.mobile = normalized_mobile
+        user.mobile_verified = True
+        db.commit()
+        db.refresh(user)
+        return self._serialize_user(user)
+
+    def change_password(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        current_password: str,
+        new_password: str,
+    ) -> None:
+        user = self._get_user_model_by_id(db, user_id)
+
+        if not self._verify_password(current_password, user.password_hash):
+            raise AuthServiceError("Current password is incorrect.")
+
+        if current_password == new_password:
+            raise AuthServiceError("Choose a new password that is different from the current one.")
+
+        user.password_hash = self._hash_password(new_password)
+        db.commit()
+
+    def _get_user_model_by_id(self, db: Session, user_id: str) -> User:
+        user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+        if not user:
+            raise AuthServiceError("User account was not found.")
+
+        return user
 
     def _serialize_user(self, user: User) -> UserPayload:
         return UserPayload(

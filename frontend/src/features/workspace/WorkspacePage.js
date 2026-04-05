@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel";
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
+import SettingsPanel from "./SettingsPanel";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 
@@ -306,7 +307,7 @@ const INFO_PAGE_CONFIG = {
   },
 };
 
-function WorkspacePage({ currentUser, selectedInfoPage = null }) {
+function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [activeSection, setActiveSection] = useState("document-retrieval");
   const [sessionId] = useState(() => getSessionId());
   const [selectedFile, setSelectedFile] = useState(null);
@@ -321,13 +322,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
     { text: "Upload a document to begin.", type: "info" },
   ]);
   const [infoTabs, setInfoTabs] = useState({});
-  const [accountTab, setAccountTab] = useState("personalInfo");
-  const [securityTab, setSecurityTab] = useState("password");
-  const [preferencesTab, setPreferencesTab] = useState("theme");
-  const [captchaCode, setCaptchaCode] = useState("A7B9KD");
-  const [regionTimezone, setRegionTimezone] = useState("Asia/Kolkata");
-  const [dateFormat, setDateFormat] = useState("DD/MM/YYYY");
-  const [country, setCountry] = useState("India");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -354,15 +348,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
         year: "numeric",
       })
     : "Not available";
-
-  const refreshCaptcha = () => {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let result = "";
-    for (let index = 0; index < 6; index += 1) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setCaptchaCode(result);
-  };
 
   const hasQuestion = question.trim().length > 0;
 
@@ -536,266 +521,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
     }
 
     if (selectedInfoPage === "settings") {
-      const accountSubTabs = ["personalInfo", "username", "email", "mobile"];
-      const securitySubTabs = ["password", "twoStep"];
-      const preferencesSubTabs = ["theme", "language", "font"];
-
-      const renderSettingsBody = () => {
-        if (activeInfoTab === "account") {
-          return (
-            <>
-              <div className="workspace-subtabs">
-                {accountSubTabs.map((sub) => (
-                  <button
-                    key={sub}
-                    className={`workspace-subtab ${accountTab === sub ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setAccountTab(sub)}
-                  >
-                    {sub === "personalInfo" ? "Personal Info" : `Change ${sub.charAt(0).toUpperCase() + sub.slice(1)}`}
-                  </button>
-                ))}
-              </div>
-              {accountTab === "personalInfo" ? (
-                <div className="workspace-info-grid">
-                  {[
-                    ["Full Name", profileName],
-                    ["Username", profileUsername],
-                    ["Email", profileEmail],
-                    ["Alternate Email", profileAlternateEmail],
-                    ["Mobile", profileMobile],
-                    ["Date of Birth", profileDateOfBirth],
-                    ["Gender", profileGender],
-                    ["Security Question", profileSecurityQuestion],
-                    ["Security Answer", profileSecurityAnswer],
-                    ["Referral Code", profileReferralCode],
-                  ].map(([title, text]) => (
-                    <div key={title} className="workspace-mini-card">
-                      <h4>{title}</h4>
-                      <p>{text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="workspace-form-stack">
-                  <input className="auth-input workspace-static-input" placeholder={`Current ${accountTab}`} />
-                  <input className="auth-input workspace-static-input" placeholder={`New ${accountTab}`} />
-                  <input className="auth-input workspace-static-input" placeholder="Enter OTP sent to Previous" />
-                  <input className="auth-input workspace-static-input" placeholder="Enter OTP sent to New" />
-                  <input className="auth-input workspace-static-input" placeholder="Enter CAPTCHA" />
-                  <div className="workspace-captcha-row">
-                    <div className="captcha-box">{captchaCode}</div>
-                    <button className="header-dropdown-item" type="button" onClick={refreshCaptcha}>Refresh</button>
-                  </div>
-                  <button className="primary-button" type="button">Verify & Update</button>
-                </div>
-              )}
-            </>
-          );
-        }
-
-        if (activeInfoTab === "security") {
-          return (
-            <>
-              <div className="workspace-subtabs">
-                {securitySubTabs.map((sub) => (
-                  <button
-                    key={sub}
-                    className={`workspace-subtab ${securityTab === sub ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setSecurityTab(sub)}
-                  >
-                    {sub === "password" ? "Change Password" : "Two-Step Verification"}
-                  </button>
-                ))}
-              </div>
-              <div className="workspace-form-stack">
-                {securityTab === "password" ? (
-                  <>
-                    <input className="auth-input workspace-static-input" placeholder="Current Password" />
-                    <input className="auth-input workspace-static-input" placeholder="New Password" />
-                    <input className="auth-input workspace-static-input" placeholder="Confirm New Password" />
-                    <input className="auth-input workspace-static-input" placeholder="Enter OTP" />
-                  </>
-                ) : (
-                  <>
-                    <select className="auth-input workspace-static-input" defaultValue="Enable Two-Step Verification">
-                      <option>Enable Two-Step Verification</option>
-                      <option>Yes</option>
-                      <option>No</option>
-                    </select>
-                    <input className="auth-input workspace-static-input" placeholder="Enter OTP" />
-                  </>
-                )}
-                <input className="auth-input workspace-static-input" placeholder="Enter CAPTCHA" />
-                <div className="workspace-captcha-row">
-                  <div className="captcha-box">{captchaCode}</div>
-                  <button className="header-dropdown-item" type="button" onClick={refreshCaptcha}>Refresh</button>
-                </div>
-                <button className="primary-button" type="button">Confirm</button>
-              </div>
-            </>
-          );
-        }
-
-        if (activeInfoTab === "preferences") {
-          return (
-            <>
-              <div className="workspace-subtabs">
-                {preferencesSubTabs.map((sub) => (
-                  <button
-                    key={sub}
-                    className={`workspace-subtab ${preferencesTab === sub ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setPreferencesTab(sub)}
-                  >
-                    Change {sub.charAt(0).toUpperCase() + sub.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div className="workspace-form-stack">
-                {preferencesTab === "theme" ? (
-                  <select className="auth-input workspace-static-input"><option>Theme</option><option>Light</option><option>Dark</option></select>
-                ) : preferencesTab === "language" ? (
-                  <select className="auth-input workspace-static-input"><option>Language</option><option>English</option><option>Hindi</option></select>
-                ) : (
-                  <select className="auth-input workspace-static-input"><option>Font</option><option>Arial</option><option>Roboto</option><option>Segoe UI</option></select>
-                )}
-                <button className="primary-button" type="button">Save Preference</button>
-              </div>
-            </>
-          );
-        }
-
-        if (activeInfoTab === "privacy") {
-          return (
-            <div className="workspace-form-stack">
-              <p className="tool-copy workspace-copy-paragraph">Manage your data preferences below:</p>
-              <button className="primary-button" type="button">Download My Data</button>
-              <button className="primary-button secondary-tone" type="button">Delete My Account</button>
-              <label className="terms-check"><input type="checkbox" /> <span>Allow Ad Personalization</span></label>
-              <label className="terms-check"><input type="checkbox" /> <span>Enable Cookie Tracking</span></label>
-            </div>
-          );
-        }
-
-        if (activeInfoTab === "activity") {
-          return (
-            <div className="workspace-form-stack">
-              <p className="tool-copy workspace-copy-paragraph">Recent login activities:</p>
-              <div className="workspace-mini-card"><p>Jaipur, India - 2025-07-07 22:15</p></div>
-              <div className="workspace-mini-card"><p>Mumbai, India - 2025-07-06 19:48</p></div>
-              <button className="primary-button" type="button">Clear Activity Log</button>
-            </div>
-          );
-        }
-
-        if (activeInfoTab === "linked") {
-          return (
-            <div className="workspace-form-stack">
-              <div className="workspace-inline-action"><span>Google</span><button className="header-dropdown-item" type="button">Unlink Google</button></div>
-              <div className="workspace-inline-action"><span>Facebook</span><button className="header-dropdown-item" type="button">Unlink Facebook</button></div>
-              <div className="workspace-inline-action"><span>Apple</span><button className="header-dropdown-item" type="button">Unlink Apple</button></div>
-            </div>
-          );
-        }
-
-        if (activeInfoTab === "notifications") {
-          return (
-            <div className="workspace-form-stack">
-              <label className="terms-check"><input type="checkbox" /> <span>Email Alerts</span></label>
-              <label className="terms-check"><input type="checkbox" /> <span>SMS Notifications</span></label>
-              <label className="terms-check"><input type="checkbox" /> <span>In-App Alerts</span></label>
-              <button className="primary-button" type="button">Save Preferences</button>
-            </div>
-          );
-        }
-
-        if (activeInfoTab === "billing") {
-          return (
-            <div className="workspace-form-stack">
-              <div className="workspace-mini-card"><h4>Subscription & Billing</h4><p>Plan: Pro - Rs999/month</p></div>
-              <button className="primary-button" type="button">Manage Payment Method</button>
-              <button className="primary-button" type="button">View Invoices</button>
-              <button className="primary-button secondary-tone" type="button">Cancel Subscription</button>
-            </div>
-          );
-        }
-
-        if (activeInfoTab === "region") {
-          return (
-            <div className="workspace-form-stack">
-              <label className="auth-label">Select Timezone</label>
-              <select className="auth-input workspace-static-input" value={regionTimezone} onChange={(event) => setRegionTimezone(event.target.value)}>
-                <option value="Asia/Kolkata">Asia/Kolkata (India)</option>
-                <option value="America/New_York">America/New_York (USA)</option>
-                <option value="Europe/London">Europe/London (UK)</option>
-                <option value="Asia/Tokyo">Asia/Tokyo (Japan)</option>
-              </select>
-              <label className="auth-label">Date/Time Format</label>
-              <select className="auth-input workspace-static-input" value={dateFormat} onChange={(event) => setDateFormat(event.target.value)}>
-                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-              </select>
-              <label className="auth-label">Override Country/Region</label>
-              <select className="auth-input workspace-static-input" value={country} onChange={(event) => setCountry(event.target.value)}>
-                <option>India</option>
-                <option>United States</option>
-                <option>Germany</option>
-                <option>Japan</option>
-              </select>
-              <button className="primary-button" type="button">Save Region & Language</button>
-            </div>
-          );
-        }
-
-        if (activeInfoTab === "support") {
-          return (
-            <div className="workspace-form-stack">
-              <div className="workspace-info-grid">
-                <div className="workspace-mini-card">
-                  <h4>Help Center</h4>
-                  <p>Browse guides, onboarding help, and workspace how-to articles.</p>
-                </div>
-                <div className="workspace-mini-card">
-                  <h4>Priority Support</h4>
-                  <p>Reach the support team for billing, technical, and account assistance.</p>
-                </div>
-                <div className="workspace-mini-card">
-                  <h4>Feature Requests</h4>
-                  <p>Submit product ideas and improvement requests for future releases.</p>
-                </div>
-                <div className="workspace-mini-card">
-                  <h4>Release Updates</h4>
-                  <p>See recent improvements, fixes, and updates across the assistant.</p>
-                </div>
-              </div>
-              <button className="primary-button" type="button">Open Support Center</button>
-            </div>
-          );
-        }
-
-        if (activeInfoTab === "terms") {
-          return (
-            <div className="workspace-form-stack">
-              <p className="tool-copy workspace-copy-paragraph">Please review the Terms and Conditions and Privacy Policy. Continuing usage means acceptance of all conditions.</p>
-              <button className="primary-button" type="button">Read Full Terms</button>
-            </div>
-          );
-        }
-
-        return (
-          <div className="workspace-form-stack">
-            <div className="workspace-mini-card">
-              <p>Resetting will revert all settings to their default values. This action cannot be undone.</p>
-            </div>
-            <input className="auth-input workspace-static-input" placeholder="Enter your password" type="password" />
-            <button className="primary-button secondary-tone" type="button">Confirm Reset</button>
-          </div>
-        );
-      };
-
       return (
         <>
           <div className="insight-section">
@@ -806,7 +531,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
           </div>
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
-              {renderSettingsBody()}
+              <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} />
             </article>
           </div>
         </>

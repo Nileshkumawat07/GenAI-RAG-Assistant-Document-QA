@@ -6,10 +6,14 @@ from fastapi.responses import HTMLResponse
 from app.core.database import get_db
 from app.schemas.auth import (
     AuthUserResponse,
+    ChangePasswordRequest,
     CheckEmailVerificationRequest,
     LoginRequest,
     SendEmailVerificationRequest,
     SignupRequest,
+    UpdateEmailRequest,
+    UpdateMobileRequest,
+    UpdateUsernameRequest,
 )
 from app.services.auth_service import AuthService, AuthServiceError
 from app.services.otp_service import OTPService, OTPServiceError
@@ -17,6 +21,24 @@ from app.services.otp_service import OTPService, OTPServiceError
 
 def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["auth"])
+
+    def serialize_user(user):
+        return AuthUserResponse(
+            id=user.id,
+            fullName=user.full_name,
+            username=user.username,
+            dateOfBirth=user.date_of_birth,
+            gender=user.gender,
+            email=user.email,
+            alternateEmail=user.alternate_email,
+            mobile=user.mobile,
+            securityQuestion=user.security_question,
+            securityAnswer=user.security_answer,
+            referralCode=user.referral_code,
+            emailVerified=user.email_verified,
+            mobileVerified=user.mobile_verified,
+            createdAt=user.created_at,
+        )
 
     @router.post("/signup", response_model=AuthUserResponse)
     def signup(payload: SignupRequest, db: Session = Depends(get_db)):
@@ -37,22 +59,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 email_verified=payload.emailVerified,
                 mobile_verified=payload.mobileVerified,
             )
-            return AuthUserResponse(
-                id=user.id,
-                fullName=user.full_name,
-                username=user.username,
-                dateOfBirth=user.date_of_birth,
-                gender=user.gender,
-                email=user.email,
-                alternateEmail=user.alternate_email,
-                mobile=user.mobile,
-                securityQuestion=user.security_question,
-                securityAnswer=user.security_answer,
-                referralCode=user.referral_code,
-                emailVerified=user.email_verified,
-                mobileVerified=user.mobile_verified,
-                createdAt=user.created_at,
-            )
+            return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -64,24 +71,46 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 identifier=payload.identifier,
                 password=payload.password,
             )
-            return AuthUserResponse(
-                id=user.id,
-                fullName=user.full_name,
-                username=user.username,
-                dateOfBirth=user.date_of_birth,
-                gender=user.gender,
-                email=user.email,
-                alternateEmail=user.alternate_email,
-                mobile=user.mobile,
-                securityQuestion=user.security_question,
-                securityAnswer=user.security_answer,
-                referralCode=user.referral_code,
-                emailVerified=user.email_verified,
-                mobileVerified=user.mobile_verified,
-                createdAt=user.created_at,
-            )
+            return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    @router.post("/settings/username", response_model=AuthUserResponse)
+    def update_username(payload: UpdateUsernameRequest, db: Session = Depends(get_db)):
+        try:
+            user = auth_service.update_username(db, user_id=payload.userId, new_username=payload.newUsername)
+            return serialize_user(user)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/settings/email", response_model=AuthUserResponse)
+    def update_email(payload: UpdateEmailRequest, db: Session = Depends(get_db)):
+        try:
+            user = auth_service.update_email(db, user_id=payload.userId, new_email=payload.newEmail)
+            return serialize_user(user)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/settings/mobile", response_model=AuthUserResponse)
+    def update_mobile(payload: UpdateMobileRequest, db: Session = Depends(get_db)):
+        try:
+            user = auth_service.update_mobile(db, user_id=payload.userId, new_mobile=payload.newMobile)
+            return serialize_user(user)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/settings/password")
+    def change_password(payload: ChangePasswordRequest, db: Session = Depends(get_db)):
+        try:
+            auth_service.change_password(
+                db,
+                user_id=payload.userId,
+                current_password=payload.currentPassword,
+                new_password=payload.newPassword,
+            )
+            return {"message": "Password updated successfully."}
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/email/send-verification")
     def send_email_verification(payload: SendEmailVerificationRequest):

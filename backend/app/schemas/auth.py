@@ -32,6 +32,27 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UpdateUsernameRequest(BaseModel):
+    userId: str
+    newUsername: str
+
+
+class UpdateEmailRequest(BaseModel):
+    userId: str
+    newEmail: EmailStr
+
+
+class UpdateMobileRequest(BaseModel):
+    userId: str
+    newMobile: str
+
+
+class ChangePasswordRequest(BaseModel):
+    userId: str
+    currentPassword: str
+    newPassword: str
+
+
 class AuthUserResponse(BaseModel):
     id: str
     fullName: str

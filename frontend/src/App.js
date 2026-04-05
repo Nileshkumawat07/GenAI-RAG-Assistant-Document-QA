@@ -73,6 +73,11 @@ function App() {
     navigateTo("workspace", null);
   };
 
+  const handleUserUpdate = (user) => {
+    setCurrentUser(user);
+    setCurrentUserState(user);
+  };
+
   const handleSignup = async (formData) => {
     const user = await signupUser(formData);
     moveToWorkspace(user);
@@ -111,7 +116,22 @@ function App() {
     }
 
     if (screen === "workspace") {
-      return <WorkspacePage currentUser={currentUser} selectedInfoPage={selectedInfoPage} />;
+      if (!currentUser) {
+        return (
+          <HomePage
+            onLogin={() => navigateTo("login")}
+            onSignup={() => navigateTo("signup")}
+          />
+        );
+      }
+
+      return (
+        <WorkspacePage
+          currentUser={currentUser}
+          selectedInfoPage={selectedInfoPage}
+          onUserUpdate={handleUserUpdate}
+        />
+      );
     }
 
     return (
@@ -144,6 +164,19 @@ function App() {
     const initialRoute = getRouteFromHash();
     navigateTo(initialRoute.screen, initialRoute.infoPage, "replace");
   }, []);
+
+  useEffect(() => {
+    if (screen === "home" && currentUser) {
+      clearCurrentUser();
+      setCurrentUserState(null);
+    }
+  }, [screen, currentUser]);
+
+  useEffect(() => {
+    if (screen === "workspace" && !currentUser) {
+      navigateTo("home", null, "replace");
+    }
+  }, [screen, currentUser]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {
