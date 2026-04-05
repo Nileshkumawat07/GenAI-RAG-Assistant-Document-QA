@@ -85,7 +85,7 @@ function createFormState(formKey) {
   }, {});
 }
 
-function Contactus() {
+function Contactus({ embedded = false }) {
   const [selectedForm, setSelectedForm] = useState("general");
   const [formValues, setFormValues] = useState(() => createFormState("general"));
   const [status, setStatus] = useState({ type: "", text: "" });
@@ -183,11 +183,9 @@ function Contactus() {
   const rowFields = activeForm.fields.filter((field) => field.half);
   const blockFields = activeForm.fields.filter((field) => !field.half);
 
-  return (
-    <div style={styles.page}>
-      <style>{`@keyframes fadeIn {from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }} .fade-in {animation: fadeIn 0.5s ease-out forwards; opacity: 0;}`}</style>
-      <div style={styles.container} className="fade-in">
-        <div style={styles.sidebar}>
+  const content = (
+    <>
+      <div style={embedded ? styles.embeddedSidebar : styles.sidebar}>
           <h1 style={styles.title}>Contact Us</h1>
           <p style={styles.description}>Select a category to get started</p>
           <div style={styles.tabs}>
@@ -213,34 +211,46 @@ function Contactus() {
             <p>hello@yourcompany.com</p>
             <p>+91 98765 43210</p>
           </div>
+      </div>
+      <div style={embedded ? styles.embeddedFormSection : styles.formSection}>
+        <div style={embedded ? styles.embeddedFormCard : styles.formCard}>
+          <h2 style={styles.cardTitle}>{activeForm.title}</h2>
+          <form style={styles.form} onSubmit={handleSubmit}>
+            {rowFields.length > 0 ? <div style={styles.row}>{rowFields.map((field) => renderField(field))}</div> : null}
+            {blockFields.map((field) => renderField(field))}
+            {status.text ? (
+              <div
+                style={{
+                  ...styles.status,
+                  ...(status.type === "success" ? styles.successStatus : styles.errorStatus),
+                }}
+              >
+                {status.text}
+              </div>
+            ) : null}
+            <button type="submit" style={styles.button} disabled={submitting}>
+              {submitting ? "Submitting..." : activeForm.button}
+            </button>
+          </form>
         </div>
-        <div style={styles.formSection}>
-          <div style={styles.formCard}>
-            <h2 style={styles.cardTitle}>{activeForm.title}</h2>
-            <form style={styles.form} onSubmit={handleSubmit}>
-              {rowFields.length > 0 ? <div style={styles.row}>{rowFields.map((field) => renderField(field))}</div> : null}
-              {blockFields.map((field) => renderField(field))}
-              {status.text ? (
-                <div
-                  style={{
-                    ...styles.status,
-                    ...(status.type === "success" ? styles.successStatus : styles.errorStatus),
-                  }}
-                >
-                  {status.text}
-                </div>
-              ) : null}
-              <button type="submit" style={styles.button} disabled={submitting}>
-                {submitting ? "Submitting..." : activeForm.button}
-              </button>
-            </form>
-          </div>
-          <div style={styles.infoBanner}>
-            <p style={styles.infoText}>
-              Contact requests are now stored in Firebase so your team can review them later. You can expect a response from us within three business days.
-            </p>
-          </div>
+        <div style={styles.infoBanner}>
+          <p style={styles.infoText}>
+            Contact requests are now stored in Firebase so your team can review them later. You can expect a response from us within three business days.
+          </p>
         </div>
+      </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div style={styles.embeddedContainer}>{content}</div>;
+  }
+
+  return (
+    <div style={styles.page}>
+      <style>{`@keyframes fadeIn {from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }} .fade-in {animation: fadeIn 0.5s ease-out forwards; opacity: 0;}`}</style>
+      <div style={styles.container} className="fade-in">
+        {content}
       </div>
     </div>
   );
@@ -249,7 +259,9 @@ function Contactus() {
 const styles = {
   page: { fontFamily: "Segoe UI, sans-serif", backgroundColor: "#F5F5F5", minHeight: "100%", padding: "24px 20px", boxSizing: "border-box" },
   container: { maxWidth: "1400px", margin: "0 auto", backgroundColor: "#FFFFFF", display: "flex", flexWrap: "wrap", borderRadius: "12px", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" },
+  embeddedContainer: { display: "flex", flexWrap: "wrap", gap: "18px", alignItems: "flex-start" },
   sidebar: { flex: "1 1 280px", backgroundColor: "#ECEFF1", padding: "30px", borderRight: "1px solid #CFD8DC" },
+  embeddedSidebar: { flex: "0 0 280px", backgroundColor: "#ECEFF1", padding: "30px", borderRadius: "12px", border: "1px solid #CFD8DC" },
   title: { fontSize: "24px", color: "#1A237E", marginBottom: "12px" },
   description: { fontSize: "14px", color: "#546E7A", marginBottom: "20px" },
   tabs: { display: "flex", flexDirection: "column", gap: "10px" },
@@ -257,7 +269,9 @@ const styles = {
   contactInfo: { marginTop: "30px", fontSize: "13px", color: "#546E7A" },
   contactTitle: { fontWeight: "bold", color: "#1A237E", marginBottom: "8px" },
   formSection: { flex: "2 1 1000px", padding: "40px", backgroundColor: "#FAFAFA" },
+  embeddedFormSection: { flex: "1 1 640px", minWidth: 0 },
   formCard: { backgroundColor: "#FFFFFF", padding: "30px", borderRadius: "10px", boxShadow: "0 4px 16px rgba(0,0,0,0.05)", marginBottom: "20px" },
+  embeddedFormCard: { backgroundColor: "#FFFFFF", padding: "30px", borderRadius: "12px", boxShadow: "0 4px 16px rgba(0,0,0,0.05)", marginBottom: "20px", border: "1px solid #E2E8F0" },
   cardTitle: { fontSize: "20px", marginBottom: "20px", color: "#212121" },
   form: { display: "flex", flexDirection: "column", gap: "10px" },
   row: { display: "flex", gap: "10px", flexWrap: "wrap" },

@@ -551,7 +551,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
-              <Contactus />
+              <Contactus embedded />
             </article>
           </div>
         </>
