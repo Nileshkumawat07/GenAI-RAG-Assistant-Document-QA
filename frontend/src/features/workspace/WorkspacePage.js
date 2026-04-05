@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel";
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
+import Contactus from "../info/Contactus";
 import SettingsPanel from "./SettingsPanel";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
@@ -532,6 +533,25 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
               <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} />
+            </article>
+          </div>
+        </>
+      );
+    }
+
+    if (selectedInfoPage === "contact") {
+      return (
+        <>
+          <div className="insight-section">
+            <div className="insight-card">
+              <h3 className="tool-title">{activeInfoContent.heading}</h3>
+              <p className="tool-copy">{infoConfig.message}</p>
+            </div>
+          </div>
+
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <Contactus />
             </article>
           </div>
         </>
