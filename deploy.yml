@@ -2,17 +2,12 @@
 - hosts: all
   gather_facts: false
   vars:
-    mysql_env_file_content: "{{ lookup('file', 'mysql/mysql.env', errors='ignore') | default('', true) }}"
     groq_api_key_value: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
     frontend_origin_value: "{{ frontend_origin | default(lookup('env', 'FRONTEND_ORIGIN'), true) }}"
-    mysql_root_password_value: >-
-      {{ mysql_root_password | default((mysql_env_file_content | regex_search('(?m)^MYSQL_ROOT_PASSWORD=(.*)$', '\\1') | first | default('')) or lookup('env', 'MYSQL_ROOT_PASSWORD'), true) }}
-    mysql_database_value: >-
-      {{ mysql_database | default((mysql_env_file_content | regex_search('(?m)^MYSQL_DATABASE=(.*)$', '\\1') | first | default('')) or lookup('env', 'MYSQL_DATABASE'), true) }}
-    mysql_user_value: >-
-      {{ mysql_user | default((mysql_env_file_content | regex_search('(?m)^MYSQL_USER=(.*)$', '\\1') | first | default('')) or lookup('env', 'MYSQL_USER'), true) }}
-    mysql_password_value: >-
-      {{ mysql_password | default((mysql_env_file_content | regex_search('(?m)^MYSQL_PASSWORD=(.*)$', '\\1') | first | default('')) or lookup('env', 'MYSQL_PASSWORD'), true) }}
+    mysql_root_password_value: "{{ mysql_root_password | default('genai_root_123', true) }}"
+    mysql_database_value: "{{ mysql_database | default('genai_app', true) }}"
+    mysql_user_value: "{{ mysql_user | default('genai_user', true) }}"
+    mysql_password_value: "{{ mysql_password | default('genai_user_123', true) }}"
 
   pre_tasks:
     - name: Ensure required runtime secrets are provided
