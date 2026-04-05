@@ -743,6 +743,133 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       );
     }
 
+    if (selectedInfoPage === "contact") {
+      return (
+        <div className="content-grid single-column">
+          <article className="tool-card workspace-copy-card">
+            <div className="workspace-form-stack">
+              <div className="workspace-mini-card">
+                <h4>{activeInfoContent.label}</h4>
+                <p>Fill the form, submit from the contact details area, and track request IDs below.</p>
+              </div>
+
+              <div className="workspace-form-stack">
+                {activeInfoContent.form.map((field) => (
+                  field === "Rate Our Service" ? (
+                    <select
+                      key={field}
+                      className="auth-input workspace-static-input"
+                      value={getContactValue(activeInfoTab, field)}
+                      onChange={(event) => setContactValue(activeInfoTab, field, event.target.value)}
+                    >
+                      <option value="">{field}</option>
+                      <option>Excellent</option>
+                      <option>Good</option>
+                      <option>Fair</option>
+                      <option>Poor</option>
+                    </select>
+                  ) : field === "Issue Type" ? (
+                    <select
+                      key={field}
+                      className="auth-input workspace-static-input"
+                      value={getContactValue(activeInfoTab, field)}
+                      onChange={(event) => setContactValue(activeInfoTab, field, event.target.value)}
+                    >
+                      <option value="">{field}</option>
+                      <option>Login Problem</option>
+                      <option>Payment Issue</option>
+                      <option>Bug Report</option>
+                      <option>Other</option>
+                    </select>
+                  ) : field === "Date of Experience" ? (
+                    <input
+                      key={field}
+                      className="auth-input workspace-static-input"
+                      type="date"
+                      value={getContactValue(activeInfoTab, field)}
+                      onChange={(event) => setContactValue(activeInfoTab, field, event.target.value)}
+                    />
+                  ) : (
+                    <input
+                      key={field}
+                      className="auth-input workspace-static-input"
+                      type={
+                        field.toLowerCase().includes("email")
+                          ? "email"
+                          : field.toLowerCase().includes("phone")
+                            ? "tel"
+                            : "text"
+                      }
+                      placeholder={field}
+                      value={getContactValue(activeInfoTab, field)}
+                      onChange={(event) => setContactValue(activeInfoTab, field, event.target.value)}
+                    />
+                  )
+                ))}
+                <textarea
+                  className="question-input workspace-static-textarea"
+                  rows={4}
+                  placeholder={activeInfoContent.textarea}
+                  value={getContactValue(activeInfoTab, activeInfoContent.textarea)}
+                  onChange={(event) => setContactValue(activeInfoTab, activeInfoContent.textarea, event.target.value)}
+                />
+              </div>
+
+              <div className="workspace-mini-card">
+                <h4>Submitted Requests</h4>
+                <p>General Inquiry, Business, Feedback, Technical Support, Partnership, and Media & Press are shown here with IDs and process status.</p>
+              </div>
+
+              {contactRequestsLoading ? (
+                <p className="tool-copy">Loading requests...</p>
+              ) : contactRequests.length > 0 ? (
+                <div className="workspace-info-grid">
+                  {contactRequests.map((requestItem) => (
+                    <div key={requestItem.id} className="workspace-mini-card">
+                      <h4>{requestItem.title}</h4>
+                      <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
+                      <p>Status: {requestItem.status}</p>
+                      <p>
+                        {new Date(requestItem.createdAt).toLocaleString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      <select
+                        className="auth-input workspace-static-input"
+                        value={requestItem.status}
+                        onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
+                      >
+                        <option>Submitted</option>
+                        <option>In Review</option>
+                        <option>In Process</option>
+                        <option>Closed</option>
+                      </select>
+                      {Object.entries(requestItem.values).map(([key, value]) => (
+                        <p key={key}>
+                          <strong>{key}:</strong> {value || "Not provided"}
+                        </p>
+                      ))}
+                      <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
+                        Delete Request
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="workspace-mini-card">
+                  <p>No requests submitted yet.</p>
+                </div>
+              )}
+            </div>
+          </article>
+        </div>
+      );
+    }
+
     return (
       <>
         <div className="insight-section">
@@ -863,60 +990,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     {activeInfoContent.button}
                   </button>
                 ) : null}
-              </div>
-            ) : null}
-
-            {selectedInfoPage === "contact" ? (
-              <div className="workspace-form-stack">
-                <div className="workspace-mini-card">
-                  <p>You can expect a response from us within three business days.</p>
-                </div>
-                <div className="workspace-mini-card">
-                  <h4>Submitted Requests</h4>
-                  <p>General Inquiry, Business, Feedback, Technical Support, Partnership, and Media & Press requests are listed here with their IDs and process status.</p>
-                </div>
-                {contactRequestsLoading ? (
-                  <p className="tool-copy">Loading requests...</p>
-                ) : contactRequests.length > 0 ? (
-                  <div className="workspace-info-grid">
-                    {contactRequests.map((requestItem) => (
-                      <div key={requestItem.id} className="workspace-mini-card">
-                        <h4>{requestItem.title}</h4>
-                        <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
-                        <p>Status: {requestItem.status}</p>
-                        <p>
-                          {new Date(requestItem.createdAt).toLocaleString("en-GB", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                        <select
-                          className="auth-input workspace-static-input"
-                          value={requestItem.status}
-                          onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
-                        >
-                          <option>Submitted</option>
-                          <option>In Review</option>
-                          <option>In Process</option>
-                          <option>Closed</option>
-                        </select>
-                        {Object.entries(requestItem.values).map(([key, value]) => (
-                          <p key={key}>
-                            <strong>{key}:</strong> {value || "Not provided"}
-                          </p>
-                        ))}
-                        <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
-                          Delete Request
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="tool-copy">No requests submitted yet.</p>
-                )}
               </div>
             ) : null}
 
