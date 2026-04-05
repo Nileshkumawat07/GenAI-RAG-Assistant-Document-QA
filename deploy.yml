@@ -4,12 +4,21 @@
   vars:
     groq_api_key_value: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
     frontend_origin_value: "{{ frontend_origin | default(lookup('env', 'FRONTEND_ORIGIN'), true) }}"
-    mysql_root_password_value: "{{ mysql_root_password | default(lookup('env', 'MYSQL_ROOT_PASSWORD'), true) }}"
-    mysql_database_value: "{{ mysql_database | default(lookup('env', 'MYSQL_DATABASE'), true) }}"
-    mysql_user_value: "{{ mysql_user | default(lookup('env', 'MYSQL_USER'), true) }}"
-    mysql_password_value: "{{ mysql_password | default(lookup('env', 'MYSQL_PASSWORD'), true) }}"
+    mysql_root_password_value: >-
+      {{ mysql_root_password | default(mysql_env_file_vars.MYSQL_ROOT_PASSWORD | default(lookup('env', 'MYSQL_ROOT_PASSWORD'), true), true) }}
+    mysql_database_value: >-
+      {{ mysql_database | default(mysql_env_file_vars.MYSQL_DATABASE | default(lookup('env', 'MYSQL_DATABASE'), true), true) }}
+    mysql_user_value: >-
+      {{ mysql_user | default(mysql_env_file_vars.MYSQL_USER | default(lookup('env', 'MYSQL_USER'), true), true) }}
+    mysql_password_value: >-
+      {{ mysql_password | default(mysql_env_file_vars.MYSQL_PASSWORD | default(lookup('env', 'MYSQL_PASSWORD'), true), true) }}
 
   pre_tasks:
+    - name: Load MySQL env file from repo
+      ansible.builtin.include_vars:
+        file: mysql/mysql.env
+        name: mysql_env_file_vars
+
     - name: Ensure required runtime secrets are provided
       ansible.builtin.assert:
         that:
