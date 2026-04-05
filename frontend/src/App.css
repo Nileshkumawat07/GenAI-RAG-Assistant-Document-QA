@@ -2537,3 +2537,10 @@ body.workspace-body-mode .workspace-form-stack .primary-button {
   min-width: 180px;
   justify-self: start;
 }
+
+body.workspace-body-mode .sidebar-boost-card .primary-button {
+  width: auto;
+  min-width: 150px;
+  min-height: 40px;
+  justify-self: start;
+}

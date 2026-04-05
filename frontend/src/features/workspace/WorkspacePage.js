@@ -1,10 +1,15 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel";
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import SettingsPanel from "./SettingsPanel";
-import { saveContactSubmission } from "../../shared/firebase/firestore";
+import {
+  createContactRequest,
+  deleteContactRequest,
+  listContactRequests,
+  updateContactRequestStatus,
+} from "../info/contactApi";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 
@@ -158,6 +163,7 @@ const INFO_PAGE_CONFIG = {
       { id: "feedback", label: "Feedback", heading: "Feedback", form: ["Full Name", "Email", "Rate Our Service", "Service Used", "Date of Experience"], textarea: "Your Feedback", button: "Send Feedback" },
       { id: "technical", label: "Technical Support", heading: "Technical", form: ["Full Name", "Email", "Ticket ID", "Platform (Web/App)", "Issue Type"], textarea: "Issue Description", button: "Submit Ticket" },
       { id: "partnership", label: "Partnership", heading: "Partnership", form: ["Full Name", "Organization", "Email", "Phone Number", "Website / Portfolio"], textarea: "Partnership Details", button: "Submit Proposal" },
+      { id: "media", label: "Media & Press", heading: "Media", form: ["Full Name", "Media Company", "Official Email", "Phone Number", "Publication / Channel"], textarea: "Media Request Details", button: "Send Request" },
     ],
   },
   faqs: {
@@ -326,6 +332,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [contactForms, setContactForms] = useState({});
   const [contactStatus, setContactStatus] = useState({});
   const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactRequests, setContactRequests] = useState([]);
+  const [contactRequestsLoading, setContactRequestsLoading] = useState(false);
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -352,6 +360,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         year: "numeric",
       })
     : "Not available";
+  const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
 
   const hasQuestion = question.trim().length > 0;
 
@@ -360,6 +369,31 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       [{ text, type }, ...current.filter((item) => item.text !== text)].slice(0, 6)
     );
   };
+
+  const loadContactRequests = async () => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    try {
+      setContactRequestsLoading(true);
+      const requests = await listContactRequests(currentUser.id);
+      setContactRequests(requests);
+    } catch (error) {
+      setContactStatus((current) => ({
+        ...current,
+        [activeInfoTab || "general"]: { type: "error", text: error.message },
+      }));
+    } finally {
+      setContactRequestsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedInfoPage === "contact" && currentUser?.id) {
+      loadContactRequests();
+    }
+  }, [selectedInfoPage, currentUser?.id]);
 
   const getContactFieldKey = (tabId, field) => {
     const keyMap = {
@@ -404,6 +438,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         "Website / Portfolio": "website",
         "Partnership Details": "message",
       },
+      media: {
+        "Full Name": "fullName",
+        "Media Company": "mediaCompany",
+        "Official Email": "email",
+        "Phone Number": "phoneNumber",
+        "Publication / Channel": "publication",
+        "Media Request Details": "message",
+      },
     };
 
     return keyMap[tabId]?.[field] || field.toLowerCase().replace(/[^a-z0-9]+(.)/g, (_, char) => char.toUpperCase());
@@ -427,13 +469,21 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
   const handleContactSubmit = async (tabId, title, fields, textarea) => {
     const payload = {};
+    const requiredFieldsByTab = {
+      general: ["First Name", "Last Name", "Email"],
+      business: ["Company Name", "Your Role", "Business Email"],
+      feedback: ["Full Name", "Email", "Rate Our Service"],
+      technical: ["Full Name", "Email", "Issue Type"],
+      partnership: ["Full Name", "Email"],
+      media: ["Full Name", "Official Email"],
+    };
 
     for (const field of fields) {
       const key = getContactFieldKey(tabId, field);
       const value = (contactForms[tabId]?.[key] || "").trim();
       payload[key] = value;
 
-      if (!value && (field === "First Name" || field === "Last Name" || field === "Email" || field === "Company Name" || field === "Your Role" || field === "Business Email" || field === "Full Name" || field === "Rate Our Service" || field === "Issue Type")) {
+      if (!value && requiredFieldsByTab[tabId]?.includes(field)) {
         setContactStatus((current) => ({
           ...current,
           [tabId]: { type: "error", text: `Please fill ${field}.` },
@@ -456,15 +506,22 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
     try {
       setContactSubmitting(true);
-      const requestToken = await saveContactSubmission({
+      const createdRequest = await createContactRequest({
+        userId: currentUser.id,
         category: tabId,
         title,
         values: payload,
       });
       setContactForms((current) => ({ ...current, [tabId]: {} }));
+      setContactRequests((current) => [createdRequest, ...current]);
       setContactStatus((current) => ({
         ...current,
-        [tabId]: { type: "success", text: `Tick confirmed. Request token: ${requestToken}` },
+        [tabId]: {
+          type: "success",
+          text: createdRequest.requestCode
+            ? `Saved successfully. Tracking ID: ${createdRequest.requestCode}`
+            : "Feedback saved successfully.",
+        },
       }));
     } catch (error) {
       setContactStatus((current) => ({
@@ -473,6 +530,35 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       }));
     } finally {
       setContactSubmitting(false);
+    }
+  };
+
+  const handleContactStatusChange = async (requestId, status) => {
+    try {
+      const updatedRequest = await updateContactRequestStatus(requestId, {
+        userId: currentUser.id,
+        status,
+      });
+      setContactRequests((current) =>
+        current.map((item) => (item.id === requestId ? updatedRequest : item))
+      );
+    } catch (error) {
+      setContactStatus((current) => ({
+        ...current,
+        [activeInfoTab]: { type: "error", text: error.message },
+      }));
+    }
+  };
+
+  const handleContactDelete = async (requestId) => {
+    try {
+      await deleteContactRequest(requestId, currentUser.id);
+      setContactRequests((current) => current.filter((item) => item.id !== requestId));
+    } catch (error) {
+      setContactStatus((current) => ({
+        ...current,
+        [activeInfoTab]: { type: "error", text: error.message },
+      }));
     }
   };
 
@@ -735,10 +821,25 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                       <option>Bug Report</option>
                       <option>Other</option>
                     </select>
+                  ) : field === "Date of Experience" ? (
+                    <input
+                      key={field}
+                      className="auth-input workspace-static-input"
+                      type="date"
+                      value={getContactValue(activeInfoTab, field)}
+                      onChange={(event) => setContactValue(activeInfoTab, field, event.target.value)}
+                    />
                   ) : (
                     <input
                       key={field}
                       className="auth-input workspace-static-input"
+                      type={
+                        field.toLowerCase().includes("email")
+                          ? "email"
+                          : field.toLowerCase().includes("phone")
+                            ? "tel"
+                            : "text"
+                      }
                       placeholder={field}
                       value={getContactValue(activeInfoTab, field)}
                       onChange={(event) => setContactValue(activeInfoTab, field, event.target.value)}
@@ -757,24 +858,65 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     {contactStatus[activeInfoTab].type === "success" ? `✓ ${contactStatus[activeInfoTab].text}` : contactStatus[activeInfoTab].text}
                   </p>
                 ) : null}
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() =>
-                    selectedInfoPage === "contact"
-                      ? handleContactSubmit(activeInfoTab, activeInfoContent.label || activeInfoContent.heading, activeInfoContent.form, activeInfoContent.textarea)
-                      : undefined
-                  }
-                  disabled={selectedInfoPage === "contact" ? contactSubmitting : false}
-                >
-                  {selectedInfoPage === "contact" && contactSubmitting ? "Submitting..." : activeInfoContent.button}
-                </button>
+                {selectedInfoPage !== "contact" ? (
+                  <button className="primary-button" type="button">
+                    {activeInfoContent.button}
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
             {selectedInfoPage === "contact" ? (
-              <div className="workspace-mini-card">
-                <p>You can expect a response from us within three business days.</p>
+              <div className="workspace-form-stack">
+                <div className="workspace-mini-card">
+                  <p>You can expect a response from us within three business days.</p>
+                </div>
+                <div className="workspace-mini-card">
+                  <h4>Submitted Requests</h4>
+                  <p>General Inquiry, Business, Feedback, Technical Support, Partnership, and Media & Press requests are listed here with their IDs and process status.</p>
+                </div>
+                {contactRequestsLoading ? (
+                  <p className="tool-copy">Loading requests...</p>
+                ) : contactRequests.length > 0 ? (
+                  <div className="workspace-info-grid">
+                    {contactRequests.map((requestItem) => (
+                      <div key={requestItem.id} className="workspace-mini-card">
+                        <h4>{requestItem.title}</h4>
+                        <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
+                        <p>Status: {requestItem.status}</p>
+                        <p>
+                          {new Date(requestItem.createdAt).toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        <select
+                          className="auth-input workspace-static-input"
+                          value={requestItem.status}
+                          onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
+                        >
+                          <option>Submitted</option>
+                          <option>In Review</option>
+                          <option>In Process</option>
+                          <option>Closed</option>
+                        </select>
+                        {Object.entries(requestItem.values).map(([key, value]) => (
+                          <p key={key}>
+                            <strong>{key}:</strong> {value || "Not provided"}
+                          </p>
+                        ))}
+                        <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
+                          Delete Request
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="tool-copy">No requests submitted yet.</p>
+                )}
               </div>
             ) : null}
 
@@ -834,15 +976,49 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
             <div className="sidebar-boost-card">
               <div className="sidebar-status">
                 <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : "Image Generation Status"}</h4>
-                <div className="status-feed">
-                  {infoConfig
-                    ? infoConfig.statusItems.map((item) => (
+                {selectedInfoPage === "contact" ? (
+                  <div className="workspace-form-stack">
+                    <div className="status-feed">
+                      {infoConfig.statusItems.map((item) => (
                         <p key={item} className="status-item status-info">
                           {item}
                         </p>
-                      ))
-                    : statusContent}
-                </div>
+                      ))}
+                    </div>
+                    {activeContactStatus.text ? (
+                      <p className={activeContactStatus.type === "success" ? "success-text" : "error-text"}>
+                        {activeContactStatus.type === "success" ? `✓ ${activeContactStatus.text}` : activeContactStatus.text}
+                      </p>
+                    ) : (
+                      <p className="status-item status-info">Submit from here and track the request below.</p>
+                    )}
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() =>
+                        handleContactSubmit(
+                          activeInfoTab,
+                          activeInfoContent.label || activeInfoContent.heading,
+                          activeInfoContent.form,
+                          activeInfoContent.textarea
+                        )
+                      }
+                      disabled={contactSubmitting}
+                    >
+                      {contactSubmitting ? "Submitting..." : activeInfoContent.button}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="status-feed">
+                    {infoConfig
+                      ? infoConfig.statusItems.map((item) => (
+                          <p key={item} className="status-item status-info">
+                            {item}
+                          </p>
+                        ))
+                      : statusContent}
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
