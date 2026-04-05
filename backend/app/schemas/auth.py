@@ -68,3 +68,4 @@ class AuthUserResponse(BaseModel):
     emailVerified: bool
     mobileVerified: bool
     createdAt: str
+    authToken: str

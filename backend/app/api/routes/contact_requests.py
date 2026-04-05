@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.core.database import get_db
 from app.schemas.contact import (
@@ -8,11 +8,25 @@ from app.schemas.contact import (
     ContactRequestResponse,
     ContactRequestUpdateStatus,
 )
+from app.services.auth_service import AuthService, AuthServiceError
 from app.services.contact_request_service import ContactRequestService, ContactRequestServiceError
 
 
-def build_contact_request_router(contact_request_service: ContactRequestService) -> APIRouter:
+def build_contact_request_router(contact_request_service: ContactRequestService, auth_service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/contact-requests", tags=["contact-requests"])
+
+    def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing authorization token.")
+
+        token = authorization.split(" ", 1)[1].strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing authorization token.")
+
+        try:
+            return auth_service.verify_access_token(token)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     def serialize_contact_request(item):
         return ContactRequestResponse(
@@ -27,11 +41,17 @@ def build_contact_request_router(contact_request_service: ContactRequestService)
         )
 
     @router.post("", response_model=ContactRequestResponse)
-    def create_contact_request(payload: ContactRequestCreate, db: Session = Depends(get_db)):
+    def create_contact_request(
+        payload: ContactRequestCreate,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
         try:
+            if payload.userId != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only create your own contact requests.")
             item = contact_request_service.create_request(
                 db,
-                user_id=payload.userId,
+                user_id=authenticated_user_id,
                 category=payload.category,
                 title=payload.title,
                 values=payload.values,
@@ -41,9 +61,15 @@ def build_contact_request_router(contact_request_service: ContactRequestService)
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.get("", response_model=list[ContactRequestResponse])
-    def list_contact_requests(user_id: str = Query(..., alias="userId"), db: Session = Depends(get_db)):
+    def list_contact_requests(
+        user_id: str = Query(..., alias="userId"),
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
         try:
-            items = contact_request_service.list_requests(db, user_id=user_id)
+            if user_id != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only access your own contact requests.")
+            items = contact_request_service.list_requests(db, user_id=authenticated_user_id)
             return [serialize_contact_request(item) for item in items]
         except ContactRequestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -53,11 +79,14 @@ def build_contact_request_router(contact_request_service: ContactRequestService)
         request_id: str,
         payload: ContactRequestUpdateStatus,
         db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            if payload.userId != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only update your own contact requests.")
             item = contact_request_service.update_status(
                 db,
-                user_id=payload.userId,
+                user_id=authenticated_user_id,
                 request_id=request_id,
                 status=payload.status,
             )
@@ -66,9 +95,16 @@ def build_contact_request_router(contact_request_service: ContactRequestService)
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.delete("/{request_id}")
-    def delete_contact_request(request_id: str, user_id: str = Query(..., alias="userId"), db: Session = Depends(get_db)):
+    def delete_contact_request(
+        request_id: str,
+        user_id: str = Query(..., alias="userId"),
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
         try:
-            contact_request_service.delete_request(db, user_id=user_id, request_id=request_id)
+            if user_id != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only delete your own contact requests.")
+            contact_request_service.delete_request(db, user_id=authenticated_user_id, request_id=request_id)
             return {"message": "Contact request deleted successfully."}
         except ContactRequestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

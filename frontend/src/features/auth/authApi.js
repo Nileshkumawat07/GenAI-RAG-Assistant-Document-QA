@@ -17,6 +17,7 @@ export function normalizeAuthUser(user) {
     emailVerified: user.emailVerified,
     mobileVerified: user.mobileVerified,
     createdAt: user.createdAt,
+    authToken: user.authToken,
     mode: "member",
   };
 }

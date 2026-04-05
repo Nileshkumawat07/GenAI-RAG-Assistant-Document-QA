@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import HTMLResponse
 
 from app.core.database import get_db
@@ -22,6 +22,19 @@ from app.services.otp_service import OTPService, OTPServiceError
 def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["auth"])
 
+    def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing authorization token.")
+
+        token = authorization.split(" ", 1)[1].strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing authorization token.")
+
+        try:
+            return auth_service.verify_access_token(token)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+
     def serialize_user(user):
         return AuthUserResponse(
             id=user.id,
@@ -38,6 +51,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             emailVerified=user.email_verified,
             mobileVerified=user.mobile_verified,
             createdAt=user.created_at,
+            authToken=auth_service.create_access_token(user_id=user.id),
         )
 
     @router.post("/signup", response_model=AuthUserResponse)
@@ -76,35 +90,59 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     @router.post("/settings/username", response_model=AuthUserResponse)
-    def update_username(payload: UpdateUsernameRequest, db: Session = Depends(get_db)):
+    def update_username(
+        payload: UpdateUsernameRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
         try:
-            user = auth_service.update_username(db, user_id=payload.userId, new_username=payload.newUsername)
+            if payload.userId != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only update your own account.")
+            user = auth_service.update_username(db, user_id=authenticated_user_id, new_username=payload.newUsername)
             return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/settings/email", response_model=AuthUserResponse)
-    def update_email(payload: UpdateEmailRequest, db: Session = Depends(get_db)):
+    def update_email(
+        payload: UpdateEmailRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
         try:
-            user = auth_service.update_email(db, user_id=payload.userId, new_email=payload.newEmail)
+            if payload.userId != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only update your own account.")
+            user = auth_service.update_email(db, user_id=authenticated_user_id, new_email=payload.newEmail)
             return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/settings/mobile", response_model=AuthUserResponse)
-    def update_mobile(payload: UpdateMobileRequest, db: Session = Depends(get_db)):
+    def update_mobile(
+        payload: UpdateMobileRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
         try:
-            user = auth_service.update_mobile(db, user_id=payload.userId, new_mobile=payload.newMobile)
+            if payload.userId != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only update your own account.")
+            user = auth_service.update_mobile(db, user_id=authenticated_user_id, new_mobile=payload.newMobile)
             return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/settings/password")
-    def change_password(payload: ChangePasswordRequest, db: Session = Depends(get_db)):
+    def change_password(
+        payload: ChangePasswordRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
         try:
+            if payload.userId != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only update your own account.")
             auth_service.change_password(
                 db,
-                user_id=payload.userId,
+                user_id=authenticated_user_id,
                 current_password=payload.currentPassword,
                 new_password=payload.newPassword,
             )

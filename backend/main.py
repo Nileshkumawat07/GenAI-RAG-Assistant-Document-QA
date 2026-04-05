@@ -40,7 +40,7 @@ def create_app() -> FastAPI:
     mount_frontend(app, frontend_build_dir)
     app.include_router(build_health_router(rag_service))
     app.include_router(build_auth_router(otp_service, auth_service))
-    app.include_router(build_contact_request_router(contact_request_service))
+    app.include_router(build_contact_request_router(contact_request_service, auth_service))
     app.include_router(build_document_router(rag_service))
     app.include_router(build_object_detection_router())
     app.include_router(build_image_generation_router())

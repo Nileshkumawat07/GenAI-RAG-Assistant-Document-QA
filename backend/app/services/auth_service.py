@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -37,12 +38,37 @@ class UserPayload:
 
 
 class AuthService:
+    def __init__(self) -> None:
+        self._token_secret = (os.getenv("AUTH_TOKEN_SECRET") or os.getenv("SECRET_KEY") or "genai-workspace-auth-secret").encode("utf-8")
+
     def get_user_by_id(self, db: Session, *, user_id: str) -> UserPayload:
         user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
         if not user:
             raise AuthServiceError("User account was not found.")
 
         return self._serialize_user(user)
+
+    def create_access_token(self, *, user_id: str) -> str:
+        payload = user_id.encode("utf-8")
+        signature = hmac.new(self._token_secret, payload, hashlib.sha256).digest()
+        return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+    def verify_access_token(self, token: str) -> str:
+        try:
+            payload_b64, signature_b64 = token.split(".", 1)
+            payload = base64.urlsafe_b64decode(self._restore_padding(payload_b64))
+            signature = base64.urlsafe_b64decode(self._restore_padding(signature_b64))
+        except Exception as exc:
+            raise AuthServiceError("Invalid session token.") from exc
+
+        expected_signature = hmac.new(self._token_secret, payload, hashlib.sha256).digest()
+        if not hmac.compare_digest(signature, expected_signature):
+            raise AuthServiceError("Invalid session token.")
+
+        user_id = payload.decode("utf-8").strip()
+        if not user_id:
+            raise AuthServiceError("Invalid session token.")
+        return user_id
 
     def register_user(
         self,
@@ -236,3 +262,7 @@ class AuthService:
 
         actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
         return hmac.compare_digest(actual, expected)
+
+    @staticmethod
+    def _restore_padding(value: str) -> bytes:
+        return (value + "=" * (-len(value) % 4)).encode("utf-8")
