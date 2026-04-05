@@ -1,92 +1,187 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+
+import { saveContactSubmission } from "../../shared/firebase/firestore";
+
+const FORM_CONFIG = {
+  general: {
+    title: "General Inquiry",
+    button: "Send Inquiry",
+    fields: [
+      { name: "firstName", label: "First Name", type: "text", required: true, half: true },
+      { name: "lastName", label: "Last Name", type: "text", required: true, half: true },
+      { name: "email", label: "Email", type: "email", required: true },
+      { name: "phoneNumber", label: "Phone Number", type: "tel" },
+      { name: "city", label: "City", type: "text" },
+      { name: "preferredContactTime", label: "Preferred Contact Time", type: "text" },
+      { name: "message", label: "Your Message", type: "textarea", required: true },
+    ],
+  },
+  business: {
+    title: "Business",
+    button: "Submit Request",
+    fields: [
+      { name: "companyName", label: "Company Name", type: "text", required: true },
+      { name: "role", label: "Your Role", type: "text", required: true },
+      { name: "email", label: "Business Email", type: "email", required: true },
+      { name: "phoneNumber", label: "Phone Number", type: "tel" },
+      { name: "website", label: "Website", type: "text" },
+      { name: "message", label: "Business Proposal", type: "textarea", required: true },
+    ],
+  },
+  feedback: {
+    title: "Feedback",
+    button: "Send Feedback",
+    fields: [
+      { name: "fullName", label: "Full Name", type: "text", required: true },
+      { name: "email", label: "Email", type: "email", required: true },
+      { name: "rating", label: "Rate Our Service", type: "select", required: true, options: ["Excellent", "Good", "Fair", "Poor"] },
+      { name: "serviceUsed", label: "Service Used", type: "text" },
+      { name: "experienceDate", label: "Date of Experience", type: "date" },
+      { name: "message", label: "Your Feedback", type: "textarea", required: true },
+    ],
+  },
+  technical: {
+    title: "Technical Support",
+    button: "Submit Ticket",
+    fields: [
+      { name: "fullName", label: "Full Name", type: "text", required: true },
+      { name: "email", label: "Email", type: "email", required: true },
+      { name: "ticketId", label: "Ticket ID", type: "text" },
+      { name: "platform", label: "Platform (Web/App)", type: "text" },
+      { name: "issueType", label: "Issue Type", type: "select", required: true, options: ["Login Problem", "Payment Issue", "Bug Report", "Other"] },
+      { name: "message", label: "Issue Description", type: "textarea", required: true },
+    ],
+  },
+  partnership: {
+    title: "Partnership",
+    button: "Submit Proposal",
+    fields: [
+      { name: "fullName", label: "Full Name", type: "text", required: true },
+      { name: "organization", label: "Organization", type: "text" },
+      { name: "email", label: "Email", type: "email", required: true },
+      { name: "phoneNumber", label: "Phone Number", type: "tel" },
+      { name: "website", label: "Website / Portfolio", type: "text" },
+      { name: "message", label: "Partnership Details", type: "textarea", required: true },
+    ],
+  },
+  media: {
+    title: "Media & Press",
+    button: "Send Request",
+    fields: [
+      { name: "fullName", label: "Full Name", type: "text", required: true },
+      { name: "mediaCompany", label: "Media Company", type: "text" },
+      { name: "email", label: "Official Email", type: "email", required: true },
+      { name: "phoneNumber", label: "Phone Number", type: "tel" },
+      { name: "publication", label: "Publication / Channel", type: "text" },
+      { name: "message", label: "Media Request Details", type: "textarea", required: true },
+    ],
+  },
+};
+
+function createFormState(formKey) {
+  return FORM_CONFIG[formKey].fields.reduce((accumulator, field) => {
+    accumulator[field.name] = "";
+    return accumulator;
+  }, {});
+}
 
 function Contactus() {
   const [selectedForm, setSelectedForm] = useState("general");
-  const smallInput = { ...styles.input, minHeight: "30px", fontSize: "13px", padding: "6px 10px" };
+  const [formValues, setFormValues] = useState(() => createFormState("general"));
+  const [status, setStatus] = useState({ type: "", text: "" });
+  const [submitting, setSubmitting] = useState(false);
 
-  const forms = {
-    general: (
-      <form style={styles.form}>
-        <div style={styles.row}>
-          <input placeholder="First Name" style={smallInput} required />
-          <input placeholder="Last Name" style={smallInput} required />
-        </div>
-        <input placeholder="Email" type="email" style={smallInput} required />
-        <input placeholder="Phone Number" style={smallInput} />
-        <input placeholder="City" style={smallInput} />
-        <input placeholder="Preferred Contact Time" style={smallInput} />
-        <textarea placeholder="Your Message" rows="3" style={styles.textarea} required />
-        <button type="submit" style={styles.button}>Send Inquiry</button>
-      </form>
-    ),
-    business: (
-      <form style={styles.form}>
-        <input placeholder="Company Name" style={smallInput} required />
-        <input placeholder="Your Role" style={smallInput} required />
-        <input type="email" placeholder="Business Email" style={smallInput} required />
-        <input placeholder="Phone Number" style={smallInput} />
-        <input placeholder="Website" style={smallInput} />
-        <textarea placeholder="Business Proposal" rows="3" style={styles.textarea} required />
-        <button type="submit" style={styles.button}>Submit Request</button>
-      </form>
-    ),
-    feedback: (
-      <form style={styles.form}>
-        <input placeholder="Full Name" style={smallInput} required />
-        <input type="email" placeholder="Email" style={smallInput} required />
-        <select style={smallInput} required>
-          <option value="">Rate Our Service</option>
-          <option>Excellent</option>
-          <option>Good</option>
-          <option>Fair</option>
-          <option>Poor</option>
-        </select>
-        <input placeholder="Service Used" style={smallInput} />
-        <input placeholder="Date of Experience" style={smallInput} />
-        <textarea placeholder="Your Feedback" rows="3" style={styles.textarea} required />
-        <button type="submit" style={styles.button}>Send Feedback</button>
-      </form>
-    ),
-    technical: (
-      <form style={styles.form}>
-        <input placeholder="Full Name" style={smallInput} required />
-        <input type="email" placeholder="Email" style={smallInput} required />
-        <input placeholder="Ticket ID" style={smallInput} />
-        <input placeholder="Platform (Web/App)" style={smallInput} />
-        <select style={smallInput} required>
-          <option value="">Issue Type</option>
-          <option>Login Problem</option>
-          <option>Payment Issue</option>
-          <option>Bug Report</option>
-          <option>Other</option>
-        </select>
-        <textarea placeholder="Issue Description" rows="3" style={styles.textarea} required />
-        <button type="submit" style={styles.button}>Submit Ticket</button>
-      </form>
-    ),
-    partnership: (
-      <form style={styles.form}>
-        <input placeholder="Full Name" style={smallInput} required />
-        <input placeholder="Organization" style={smallInput} />
-        <input placeholder="Email" type="email" style={smallInput} required />
-        <input placeholder="Phone Number" style={smallInput} />
-        <input placeholder="Website / Portfolio" style={smallInput} />
-        <textarea placeholder="Partnership Details" rows="3" style={styles.textarea} required />
-        <button type="submit" style={styles.button}>Submit Proposal</button>
-      </form>
-    ),
-    media: (
-      <form style={styles.form}>
-        <input placeholder="Full Name" style={smallInput} required />
-        <input placeholder="Media Company" style={smallInput} />
-        <input type="email" placeholder="Official Email" style={smallInput} required />
-        <input placeholder="Phone Number" style={smallInput} />
-        <input placeholder="Publication / Channel" style={smallInput} />
-        <textarea placeholder="Media Request Details" rows="3" style={styles.textarea} required />
-        <button type="submit" style={styles.button}>Send Request</button>
-      </form>
-    ),
+  const activeForm = useMemo(() => FORM_CONFIG[selectedForm], [selectedForm]);
+  const smallInput = { ...styles.input, minHeight: "40px", fontSize: "13px", padding: "9px 12px" };
+
+  const switchForm = (nextForm) => {
+    setSelectedForm(nextForm);
+    setFormValues(createFormState(nextForm));
+    setStatus({ type: "", text: "" });
   };
+
+  const setFieldValue = (fieldName, value) => {
+    setFormValues((current) => ({
+      ...current,
+      [fieldName]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    for (const field of activeForm.fields) {
+      if (field.required && !String(formValues[field.name] || "").trim()) {
+        setStatus({ type: "error", text: `Please fill ${field.label}.` });
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+      const submissionId = await saveContactSubmission({
+        category: selectedForm,
+        title: activeForm.title,
+        values: formValues,
+      });
+      setFormValues(createFormState(selectedForm));
+      setStatus({ type: "success", text: `Submitted successfully. Reference ID: ${submissionId}` });
+    } catch (error) {
+      setStatus({ type: "error", text: error.message || "Failed to send your request." });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderField = (field) => {
+    if (field.type === "textarea") {
+      return (
+        <textarea
+          key={field.name}
+          placeholder={field.label}
+          rows="4"
+          style={styles.textarea}
+          value={formValues[field.name]}
+          onChange={(event) => setFieldValue(field.name, event.target.value)}
+          required={field.required}
+        />
+      );
+    }
+
+    if (field.type === "select") {
+      return (
+        <select
+          key={field.name}
+          style={smallInput}
+          value={formValues[field.name]}
+          onChange={(event) => setFieldValue(field.name, event.target.value)}
+          required={field.required}
+        >
+          <option value="">{field.label}</option>
+          {field.options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    return (
+      <input
+        key={field.name}
+        type={field.type}
+        placeholder={field.label}
+        style={{ ...smallInput, width: field.half ? "calc(50% - 5px)" : "100%" }}
+        value={formValues[field.name]}
+        onChange={(event) => setFieldValue(field.name, event.target.value)}
+        required={field.required}
+      />
+    );
+  };
+
+  const rowFields = activeForm.fields.filter((field) => field.half);
+  const blockFields = activeForm.fields.filter((field) => !field.half);
 
   return (
     <div style={styles.page}>
@@ -96,7 +191,7 @@ function Contactus() {
           <h1 style={styles.title}>Contact Us</h1>
           <p style={styles.description}>Select a category to get started</p>
           <div style={styles.tabs}>
-            {Object.keys(forms).map((key) => (
+            {Object.entries(FORM_CONFIG).map(([key, config]) => (
               <button
                 key={key}
                 style={{
@@ -105,14 +200,10 @@ function Contactus() {
                   color: selectedForm === key ? "#fff" : "#212121",
                   border: selectedForm === key ? "1px solid #1A237E" : "1px solid #ccc",
                 }}
-                onClick={() => setSelectedForm(key)}
+                onClick={() => switchForm(key)}
+                type="button"
               >
-                {key === "general" && "General Inquiry"}
-                {key === "business" && "Business"}
-                {key === "feedback" && "Feedback"}
-                {key === "technical" && "Technical Support"}
-                {key === "partnership" && "Partnership"}
-                {key === "media" && "Media & Press"}
+                {config.title}
               </button>
             ))}
           </div>
@@ -125,12 +216,28 @@ function Contactus() {
         </div>
         <div style={styles.formSection}>
           <div style={styles.formCard}>
-            <h2 style={styles.cardTitle}>{selectedForm.replace(/^\w/, (c) => c.toUpperCase())}</h2>
-            {forms[selectedForm]}
+            <h2 style={styles.cardTitle}>{activeForm.title}</h2>
+            <form style={styles.form} onSubmit={handleSubmit}>
+              {rowFields.length > 0 ? <div style={styles.row}>{rowFields.map((field) => renderField(field))}</div> : null}
+              {blockFields.map((field) => renderField(field))}
+              {status.text ? (
+                <div
+                  style={{
+                    ...styles.status,
+                    ...(status.type === "success" ? styles.successStatus : styles.errorStatus),
+                  }}
+                >
+                  {status.text}
+                </div>
+              ) : null}
+              <button type="submit" style={styles.button} disabled={submitting}>
+                {submitting ? "Submitting..." : activeForm.button}
+              </button>
+            </form>
           </div>
-          <div style={{ width: "100%", backgroundColor: "#E8EAF6", padding: "30px", borderRadius: "10px", boxShadow: "0 4px 16px rgba(0,0,0,0.06)", marginTop: "20px" }}>
-            <p style={{ fontSize: "13px", color: "#1A237E", fontWeight: "600", marginBottom: "8px" }}>
-              You can expect a response from us within three business days. We value your time and strive to resolve your issue or provide clarity as efficiently as possible.
+          <div style={styles.infoBanner}>
+            <p style={styles.infoText}>
+              Contact requests are now stored in Firebase so your team can review them later. You can expect a response from us within three business days.
             </p>
           </div>
         </div>
@@ -146,7 +253,7 @@ const styles = {
   title: { fontSize: "24px", color: "#1A237E", marginBottom: "12px" },
   description: { fontSize: "14px", color: "#546E7A", marginBottom: "20px" },
   tabs: { display: "flex", flexDirection: "column", gap: "10px" },
-  tab: { padding: "8px 12px", borderRadius: "6px", fontSize: "13px", cursor: "pointer", textAlign: "left", transition: "all 0.3s ease", backgroundColor: "#fff" },
+  tab: { padding: "10px 12px", borderRadius: "8px", fontSize: "13px", cursor: "pointer", textAlign: "left", transition: "all 0.3s ease", backgroundColor: "#fff", fontWeight: 600 },
   contactInfo: { marginTop: "30px", fontSize: "13px", color: "#546E7A" },
   contactTitle: { fontWeight: "bold", color: "#1A237E", marginBottom: "8px" },
   formSection: { flex: "2 1 1000px", padding: "40px", backgroundColor: "#FAFAFA" },
@@ -154,9 +261,14 @@ const styles = {
   cardTitle: { fontSize: "20px", marginBottom: "20px", color: "#212121" },
   form: { display: "flex", flexDirection: "column", gap: "10px" },
   row: { display: "flex", gap: "10px", flexWrap: "wrap" },
-  input: { flex: 1, border: "1px solid #CCC", borderRadius: "6px", fontSize: "14px", padding: "8px 10px" },
-  textarea: { border: "1px solid #CCC", borderRadius: "6px", fontSize: "14px", padding: "8px 10px", minHeight: "80px", resize: "vertical" },
-  button: { marginTop: "12px", padding: "10px", backgroundColor: "#1A237E", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "14px", cursor: "pointer", transition: "background 0.3s" },
+  input: { flex: 1, border: "1px solid #CCC", borderRadius: "6px", fontSize: "14px", padding: "8px 10px", boxSizing: "border-box" },
+  textarea: { border: "1px solid #CCC", borderRadius: "6px", fontSize: "14px", padding: "10px 12px", minHeight: "90px", resize: "vertical", boxSizing: "border-box" },
+  button: { marginTop: "12px", padding: "12px 16px", backgroundColor: "#1A237E", color: "#FFFFFF", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 700, cursor: "pointer", transition: "background 0.3s" },
+  status: { padding: "12px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600 },
+  successStatus: { backgroundColor: "#E8F5E9", color: "#1B5E20", border: "1px solid #A5D6A7" },
+  errorStatus: { backgroundColor: "#FFEBEE", color: "#B71C1C", border: "1px solid #FFCDD2" },
+  infoBanner: { width: "100%", backgroundColor: "#E8EAF6", padding: "30px", borderRadius: "10px", boxShadow: "0 4px 16px rgba(0,0,0,0.06)", marginTop: "20px" },
+  infoText: { fontSize: "13px", color: "#1A237E", fontWeight: "600", marginBottom: "8px" },
 };
 
 export default Contactus;

@@ -2512,3 +2512,28 @@ body.workspace-body-mode .workspace-inline-action {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.84);
 }
+
+body.workspace-body-mode .workspace-form-stack .header-dropdown-item {
+  width: auto;
+  min-width: 116px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  background: linear-gradient(135deg, rgba(232, 241, 255, 0.98), rgba(245, 249, 255, 0.98));
+}
+
+body.workspace-body-mode .workspace-form-stack .workspace-captcha-row .header-dropdown-item,
+body.workspace-body-mode .workspace-form-stack .workspace-inline-action .header-dropdown-item {
+  flex: 0 0 auto;
+}
+
+body.workspace-body-mode .workspace-form-stack .primary-button {
+  width: auto;
+  min-width: 180px;
+  justify-self: start;
+}
