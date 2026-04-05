@@ -164,6 +164,7 @@ const INFO_PAGE_CONFIG = {
       { id: "technical", label: "Technical Support", heading: "Technical", form: ["Full Name", "Email", "Ticket ID", "Platform (Web/App)", "Issue Type"], textarea: "Issue Description", button: "Submit Ticket" },
       { id: "partnership", label: "Partnership", heading: "Partnership", form: ["Full Name", "Organization", "Email", "Phone Number", "Website / Portfolio"], textarea: "Partnership Details", button: "Submit Proposal" },
       { id: "media", label: "Media & Press", heading: "Media", form: ["Full Name", "Media Company", "Official Email", "Phone Number", "Publication / Channel"], textarea: "Media Request Details", button: "Send Request" },
+      { id: "submittedRequests", label: "Submitted Requests", heading: "Submitted Requests" },
     ],
   },
   faqs: {
@@ -751,6 +752,78 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         items: contactRequests.filter((requestItem) => requestItem.category === categoryId),
       }));
 
+      if (activeInfoTab === "submittedRequests") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-form-stack">
+                <div className="workspace-mini-card">
+                  <h4>Submitted Requests</h4>
+                  <p>General Inquiry, Business, Feedback, Technical Support, Partnership, and Media & Press requests are grouped below with IDs and process status.</p>
+                </div>
+
+                {contactRequestsLoading ? (
+                  <p className="tool-copy">Loading requests...</p>
+                ) : (
+                  <div className="workspace-form-stack">
+                    {groupedContactRequests.map((group) => (
+                      <div key={group.categoryId} className="workspace-form-stack">
+                        <div className="workspace-mini-card">
+                          <h4>{group.label}</h4>
+                          <p>{group.items.length} request{group.items.length !== 1 ? "s" : ""} stored in this section.</p>
+                        </div>
+                        {group.items.length > 0 ? (
+                          <div className="workspace-info-grid">
+                            {group.items.map((requestItem) => (
+                              <div key={requestItem.id} className="workspace-mini-card">
+                                <h4>{requestItem.title}</h4>
+                                <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
+                                <p>Status: {requestItem.status}</p>
+                                <p>
+                                  {new Date(requestItem.createdAt).toLocaleString("en-GB", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                                <select
+                                  className="auth-input workspace-static-input"
+                                  value={requestItem.status}
+                                  onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
+                                >
+                                  <option>Submitted</option>
+                                  <option>In Review</option>
+                                  <option>In Process</option>
+                                  <option>Closed</option>
+                                </select>
+                                {Object.entries(requestItem.values).map(([key, value]) => (
+                                  <p key={key}>
+                                    <strong>{key}:</strong> {value || "Not provided"}
+                                  </p>
+                                ))}
+                                <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
+                                  Delete Request
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="workspace-mini-card">
+                            <p>No requests submitted in this category yet.</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
       return (
         <div className="content-grid single-column">
           <article className="tool-card workspace-copy-card">
@@ -841,68 +914,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                   {contactSubmitting ? "Submitting..." : activeInfoContent.button}
                 </button>
               </div>
-
-              <div className="workspace-mini-card">
-                <h4>Submitted Requests</h4>
-                <p>General Inquiry, Business, Feedback, Technical Support, Partnership, and Media & Press are shown here with IDs and process status.</p>
-              </div>
-
-              {contactRequestsLoading ? (
-                <p className="tool-copy">Loading requests...</p>
-              ) : groupedContactRequests.length > 0 ? (
-                <div className="workspace-form-stack">
-                  {groupedContactRequests.map((group) => (
-                    <div key={group.categoryId} className="workspace-form-stack">
-                      <div className="workspace-mini-card">
-                        <h4>{group.label}</h4>
-                        <p>{group.items.length} request{group.items.length > 1 ? "s" : ""} stored in this section.</p>
-                      </div>
-                      {group.items.length > 0 ? (
-                        <div className="workspace-info-grid">
-                          {group.items.map((requestItem) => (
-                            <div key={requestItem.id} className="workspace-mini-card">
-                              <h4>{requestItem.title}</h4>
-                              <p>{requestItem.requestCode || "No tracking ID for feedback"}</p>
-                              <p>Status: {requestItem.status}</p>
-                              <p>
-                                {new Date(requestItem.createdAt).toLocaleString("en-GB", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </p>
-                              <select
-                                className="auth-input workspace-static-input"
-                                value={requestItem.status}
-                                onChange={(event) => handleContactStatusChange(requestItem.id, event.target.value)}
-                              >
-                                <option>Submitted</option>
-                                <option>In Review</option>
-                                <option>In Process</option>
-                                <option>Closed</option>
-                              </select>
-                              {Object.entries(requestItem.values).map(([key, value]) => (
-                                <p key={key}>
-                                  <strong>{key}:</strong> {value || "Not provided"}
-                                </p>
-                              ))}
-                              <button className="primary-button secondary-tone" type="button" onClick={() => handleContactDelete(requestItem.id)}>
-                                Delete Request
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="workspace-mini-card">
-                          <p>No requests submitted in this category yet.</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
             </div>
           </article>
         </div>
