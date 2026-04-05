@@ -6,6 +6,7 @@ import hmac
 import secrets
 import uuid
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -22,8 +23,14 @@ class UserPayload:
     id: str
     full_name: str
     username: str
+    date_of_birth: date
+    gender: str
     email: str
+    alternate_email: str | None
     mobile: str
+    security_question: str
+    security_answer: str
+    referral_code: str | None
     email_verified: bool
     mobile_verified: bool
     created_at: str
@@ -107,8 +114,14 @@ class AuthService:
             id=user.id,
             full_name=user.full_name,
             username=user.username,
+            date_of_birth=user.date_of_birth,
+            gender=user.gender,
             email=user.email,
+            alternate_email=user.alternate_email,
             mobile=user.mobile,
+            security_question=user.security_question,
+            security_answer=user.security_answer,
+            referral_code=user.referral_code,
             email_verified=user.email_verified,
             mobile_verified=user.mobile_verified,
             created_at=user.created_at.isoformat(),

@@ -1,6 +1,6 @@
 import React from "react";
 
-function HomePage({ onLogin, onSignup, onContinue }) {
+function HomePage({ onLogin, onSignup }) {
   return (
     <section className="landing-page">
       <div className="landing-hero">
@@ -18,9 +18,6 @@ function HomePage({ onLogin, onSignup, onContinue }) {
             </button>
             <button className="hero-button hero-button-secondary" type="button" onClick={onLogin}>
               Login
-            </button>
-            <button className="hero-button hero-button-ghost" type="button" onClick={onContinue}>
-              Temporary workspace access
             </button>
           </div>
 
@@ -59,7 +56,7 @@ function HomePage({ onLogin, onSignup, onContinue }) {
         </article>
         <article className="highlight-card">
           <h3>Simple onboarding flow</h3>
-          <p>Users can sign up, log in, or use the temporary access button while backend auth is still pending.</p>
+          <p>Users can sign up and log in with a proper backend-backed account flow.</p>
         </article>
         <article className="highlight-card">
           <h3>Same project, better flow</h3>

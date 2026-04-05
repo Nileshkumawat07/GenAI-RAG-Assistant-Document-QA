@@ -60,7 +60,7 @@ function formatFirebaseMessage(message, type) {
   return message || "Verification failed.";
 }
 
-function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
+function SignupPage({ onSubmit, onBack, onShowLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
@@ -651,9 +651,6 @@ function SignupPage({ onSubmit, onBack, onBypass, onShowLogin }) {
           <div className="signup-actions">
             <button className="auth-primary-button" type="submit" disabled={submitting}>
               {submitting ? "Creating Account..." : "Create Account"}
-            </button>
-            <button className="auth-secondary-button" type="button" onClick={onBypass}>
-              Continue without signup
             </button>
           </div>
 

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = "" }) {
+function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "" }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -50,8 +50,8 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
         <p className="hero-kicker">Welcome Back</p>
         <h1>Return to your AI command center.</h1>
         <p>
-          Log in with the account you created from the shared backend, or use the temporary access
-          button to jump straight into the workspace.
+          Log in with the account you created from the shared backend and continue into the
+          workspace with your saved profile.
         </p>
         <div className="auth-showcase-points">
           <span>Fast access</span>
@@ -103,9 +103,6 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
         <button className="auth-primary-button" type="submit" disabled={submitting}>
           {submitting ? "Logging in..." : "Login"}
         </button>
-        <button className="auth-secondary-button" type="button" onClick={onBypass}>
-          Continue without login
-        </button>
 
         <div className="auth-login-fill">
           <div className="auth-login-fill-card">
@@ -131,8 +128,8 @@ function LoginPage({ onSubmit, onBack, onBypass, onShowSignup, initialError = ""
               <span>Turn prompts into visuals without leaving the same product flow.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>Guest Access Ready</strong>
-              <span>Need speed first? Jump in directly with temporary access and explore now.</span>
+              <strong>Account Sync</strong>
+              <span>Open the same saved account details and workspace entry from any supported session.</span>
             </div>
           </div>
         </div>

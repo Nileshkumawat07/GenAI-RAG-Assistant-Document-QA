@@ -83,14 +83,6 @@ function App() {
     moveToWorkspace(user);
   };
 
-  const handleGuestEntry = () => {
-    moveToWorkspace({
-      name: "Guest User",
-      email: "guest@local.demo",
-      mode: "guest",
-    });
-  };
-
   const handleLogout = () => {
     clearCurrentUser();
     setCurrentUserState(null);
@@ -102,7 +94,6 @@ function App() {
       return (
         <LoginPage
           onBack={() => navigateTo("home")}
-          onBypass={handleGuestEntry}
           onShowSignup={() => navigateTo("signup")}
           onSubmit={handleLogin}
         />
@@ -113,7 +104,6 @@ function App() {
       return (
         <SignupPage
           onBack={() => navigateTo("home")}
-          onBypass={handleGuestEntry}
           onShowLogin={() => navigateTo("login")}
           onSubmit={handleSignup}
         />
@@ -126,7 +116,6 @@ function App() {
 
     return (
       <HomePage
-        onContinue={handleGuestEntry}
         onLogin={() => navigateTo("login")}
         onSignup={() => navigateTo("signup")}
       />
@@ -248,16 +237,14 @@ function App() {
                       }}
                     >
                       <span className="profile-button-avatar">{profileInitial}</span>
-                      <span className="profile-button-text">
-                        {currentUser.mode === "guest" ? "Guest Access" : currentUser.name}
-                      </span>
+                      <span className="profile-button-text">{currentUser.name}</span>
                     </button>
                     {showProfileMenu ? (
                       <div className="profile-dropdown-menu">
                         <div className="profile-dropdown-head">
                           <div className="profile-dropdown-avatar">{profileInitial}</div>
                           <div className="profile-dropdown-meta">
-                            <strong>{currentUser.mode === "guest" ? "Guest Access" : currentUser.name}</strong>
+                            <strong>{currentUser.name}</strong>
                             <span>{currentUser.email}</span>
                           </div>
                         </div>
@@ -276,7 +263,7 @@ function App() {
                           Settings
                         </button>
                         <div className="profile-dropdown-summary">
-                          <span>Plan: {currentUser.mode === "guest" ? "Guest Access" : "Pro Member"}</span>
+                          <span>Plan: Pro Member</span>
                           <span>Status: Active</span>
                         </div>
                         <button className="header-dropdown-item" type="button" onClick={handleLogout}>

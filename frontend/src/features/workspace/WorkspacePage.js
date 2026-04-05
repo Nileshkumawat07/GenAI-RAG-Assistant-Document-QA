@@ -337,8 +337,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
   const activeInfoContent = infoConfig
     ? infoConfig.tabs.find((item) => item.id === activeInfoTab) || infoConfig.tabs[0]
     : null;
-  const profileName = currentUser?.name || "Guest User";
-  const profileEmail = currentUser?.email || "guest@local.demo";
+  const profileName = currentUser?.fullName || currentUser?.name || "User";
+  const profileEmail = currentUser?.email || "";
+  const profileUsername = currentUser?.username || profileEmail.split("@")[0] || "user_profile";
+  const profileAlternateEmail = currentUser?.alternateEmail || "Not provided";
+  const profileMobile = currentUser?.mobile || "Not provided";
+  const profileDateOfBirth = currentUser?.dateOfBirth || "Not provided";
+  const profileGender = currentUser?.gender || "Not provided";
+  const profileSecurityQuestion = currentUser?.securityQuestion || "Not provided";
+  const profileSecurityAnswer = currentUser?.securityAnswer || "Not provided";
+  const profileReferralCode = currentUser?.referralCode || "Not provided";
+  const profileJoined = currentUser?.createdAt
+    ? new Date(currentUser.createdAt).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "Not available";
 
   const refreshCaptcha = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -453,19 +468,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
           ? [
               { title: "Full Name", text: profileName },
               { title: "Account Email", text: profileEmail },
-              { title: "Plan", text: currentUser?.mode === "guest" ? "Guest Access" : "Pro Member" },
-              { title: "Workspace Role", text: currentUser?.mode === "guest" ? "Guest" : "Account Owner" },
+              { title: "Plan", text: "Pro Member" },
+              { title: "Workspace Role", text: "Account Owner" },
               { title: "Status", text: "Active" },
-              { title: "Joined", text: "04 Apr 2026" },
+              { title: "Joined", text: profileJoined },
             ]
           : activeInfoTab === "account"
             ? [
-                { title: "Username", text: profileEmail.split("@")[0] || "user_profile" },
-                { title: "Alternate Email", text: "backup@example.com" },
-                { title: "Mobile", text: "+91 98765 43210" },
-                { title: "Location", text: "Jaipur, India" },
-                { title: "Date of Birth", text: "15 Aug 1999" },
-                { title: "Gender", text: "Not specified" },
+                { title: "Username", text: profileUsername },
+                { title: "Alternate Email", text: profileAlternateEmail },
+                { title: "Mobile", text: profileMobile },
+                { title: "Date of Birth", text: profileDateOfBirth },
+                { title: "Gender", text: profileGender },
+                { title: "Referral Code", text: profileReferralCode },
               ]
           : activeInfoTab === "subscription"
               ? [
@@ -490,7 +505,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
                 : [
                     { title: "Password Status", text: "Updated recently" },
                     { title: "Two-Step Verification", text: "Enabled" },
-                    { title: "Recovery Email", text: "backup@example.com" },
+                    { title: "Recovery Email", text: profileAlternateEmail },
+                    { title: "Security Question", text: profileSecurityQuestion },
+                    { title: "Security Answer", text: profileSecurityAnswer },
                     { title: "Recent Device", text: "Windows Chrome Desktop" },
                   ];
 
@@ -543,11 +560,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null }) {
                 <div className="workspace-info-grid">
                   {[
                     ["Full Name", profileName],
-                    ["Username", profileEmail.split("@")[0] || "user_profile"],
+                    ["Username", profileUsername],
                     ["Email", profileEmail],
-                    ["Mobile", "+91 98765 43210"],
-                    ["Date of Birth", "15 Aug 1999"],
-                    ["Location", "Jaipur, India"],
+                    ["Alternate Email", profileAlternateEmail],
+                    ["Mobile", profileMobile],
+                    ["Date of Birth", profileDateOfBirth],
+                    ["Gender", profileGender],
+                    ["Security Question", profileSecurityQuestion],
+                    ["Security Answer", profileSecurityAnswer],
+                    ["Referral Code", profileReferralCode],
                   ].map(([title, text]) => (
                     <div key={title} className="workspace-mini-card">
                       <h4>{title}</h4>
