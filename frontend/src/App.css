@@ -17,6 +17,7 @@
   --success: #157347;
   --error: #b42318;
   --shadow-soft: 0 18px 50px rgba(25, 49, 94, 0.1);
+  --workspace-font-scale: 1;
 }
 
 * {
@@ -30,6 +31,7 @@ html {
 body {
   margin: 0;
   font-family: "Manrope", "Segoe UI", sans-serif;
+  font-size: calc(16px * var(--workspace-font-scale));
   background:
     radial-gradient(circle at top left, rgba(95, 143, 255, 0.28), transparent 32%),
     radial-gradient(circle at top right, rgba(7, 188, 193, 0.18), transparent 24%),
@@ -2944,6 +2946,47 @@ body.workspace-body-mode .billing-action-row .primary-button {
 
 body.workspace-body-mode .privacy-action-row .primary-button {
   flex: 0 1 auto;
+}
+
+body.workspace-body-mode .preference-action-row .primary-button {
+  flex: 0 1 auto;
+}
+
+body.workspace-body-mode .preference-panel-card {
+  background:
+    radial-gradient(circle at top right, rgba(76, 123, 209, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 246, 255, 0.96));
+}
+
+body.workspace-body-mode .preference-preview-shell {
+  gap: 14px;
+}
+
+body.workspace-body-mode .preference-preview-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+  padding-right: 6px;
+}
+
+body.workspace-body-mode .preference-preview-card {
+  display: grid;
+  gap: 8px;
+  min-height: 112px;
+  align-content: start;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 247, 255, 0.95));
+}
+
+body.workspace-body-mode .preference-preview-card h4 {
+  margin: 0;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .preference-preview-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 body.workspace-body-mode .privacy-export-card {

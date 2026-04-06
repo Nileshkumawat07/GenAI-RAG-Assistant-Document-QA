@@ -65,7 +65,7 @@ function createDefaultStoredSettings() {
     preferences: {
       theme: "Light",
       language: "English",
-      font: "Segoe UI",
+      fontSize: "Medium",
     },
     privacy: {
       allowAdPersonalization: false,
@@ -315,6 +315,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       : "Free access";
   const latestInvoice = billingInvoices[0] || null;
   const activityEntries = storedSettings.activity || [];
+  const preferenceFontSizeLabel = storedSettings.preferences.fontSize || "Medium";
+  const preferenceFontScale = preferenceFontSizeLabel === "Small" ? 0.94 : preferenceFontSizeLabel === "Large" ? 1.08 : 1;
 
   useEffect(() => {
     if (!storageKey) {
@@ -340,6 +342,13 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
     }
   }, [storageKey, storedSettings]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--workspace-font-scale", String(preferenceFontScale));
+    return () => {
+      document.documentElement.style.setProperty("--workspace-font-scale", "1");
+    };
+  }, [preferenceFontScale]);
 
   useEffect(() => {
     if (!currentUser?.id) {
@@ -1378,69 +1387,151 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   };
 
   const renderPreferences = () => {
-    const preferencesSubTabs = ["theme", "language", "font"];
+    const preferencesSubTabs = ["theme", "language", "fontSize"];
+    const languageOptions = [
+      "English",
+      "Hindi",
+      "Marathi",
+      "Gujarati",
+      "Tamil",
+      "Telugu",
+      "Kannada",
+      "Malayalam",
+      "Punjabi",
+      "Bengali",
+      "Odia",
+      "Urdu",
+      "French",
+      "German",
+      "Spanish",
+      "Japanese",
+      "Chinese",
+      "Arabic",
+    ];
+    const previewLines = [
+      { title: "Current language", copy: storedSettings.preferences.language },
+      { title: "Sample heading", copy: "Unified AI Workspace settings preview while you scroll." },
+      { title: "Sample body", copy: "Adjust the whole-workspace reading size for cards, controls, labels, and supporting copy." },
+      { title: "English", copy: "Stay productive with a readable layout across billing, support, pricing, and settings." },
+      { title: "Hindi", copy: "Aaram se padhne ke liye poore workspace ka font size badal sakte hain." },
+      { title: "Gujarati", copy: "Aakhi workspace ma vachan saral bane te mate font size badlo." },
+      { title: "Marathi", copy: "Sampurna workspace madhye vachanyasathi font size badalta yeil." },
+      { title: "Tamil", copy: "Muzhu workspace-il ezhuthu alavai maatri padikka sulabam seyyalaam." },
+      { title: "Telugu", copy: "Workspace mottam lo font size marchi chadavadam sulabham cheyyandi." },
+    ];
 
     return (
       <>
-        <div className="workspace-subtabs">
+        <div className="billing-action-row preference-action-row">
           {preferencesSubTabs.map((sub) => (
             <button
               key={sub}
-              className={`workspace-subtab ${preferencesTab === sub ? "active" : ""}`}
+              className={`primary-button ${preferencesTab === sub ? "" : "secondary-tone"}`}
               type="button"
               onClick={() => setPreferencesTab(sub)}
             >
-              Change {sub.charAt(0).toUpperCase() + sub.slice(1)}
+              {sub === "fontSize" ? "Change Font Size" : `Change ${sub.charAt(0).toUpperCase() + sub.slice(1)}`}
             </button>
           ))}
         </div>
         <div className="workspace-form-stack">
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
           {preferencesTab === "theme" ? (
-            <select
-              className="auth-input workspace-static-input"
-              value={storedSettings.preferences.theme}
-              onChange={(event) =>
-                updateStoredSettings((current) => ({
-                  ...current,
-                  preferences: { ...current.preferences, theme: event.target.value },
-                }))
-              }
-            >
-              <option>Light</option>
-              <option>Dark</option>
-            </select>
+            <div className="workspace-mini-card preference-panel-card">
+              <div className="billing-payment-card-head">
+                <div>
+                  <h4>Theme Selection</h4>
+                  <p>Keep the same workspace behavior and switch the preferred theme profile.</p>
+                </div>
+                <span className="billing-status-pill">{storedSettings.preferences.theme}</span>
+              </div>
+              <select
+                className="auth-input workspace-static-input"
+                value={storedSettings.preferences.theme}
+                onChange={(event) =>
+                  updateStoredSettings((current) => ({
+                    ...current,
+                    preferences: { ...current.preferences, theme: event.target.value },
+                  }))
+                }
+              >
+                <option>Light</option>
+                <option>Dark</option>
+              </select>
+            </div>
           ) : null}
           {preferencesTab === "language" ? (
-            <select
-              className="auth-input workspace-static-input"
-              value={storedSettings.preferences.language}
-              onChange={(event) =>
-                updateStoredSettings((current) => ({
-                  ...current,
-                  preferences: { ...current.preferences, language: event.target.value },
-                }))
-              }
-            >
-              <option>English</option>
-              <option>Hindi</option>
-            </select>
+            <div className="workspace-mini-card preference-panel-card">
+              <div className="billing-payment-card-head">
+                <div>
+                  <h4>Language Selection</h4>
+                  <p>Choose from a broader set of saved language preferences for your workspace.</p>
+                </div>
+                <span className="billing-status-pill">{storedSettings.preferences.language}</span>
+              </div>
+              <select
+                className="auth-input workspace-static-input"
+                value={storedSettings.preferences.language}
+                onChange={(event) =>
+                  updateStoredSettings((current) => ({
+                    ...current,
+                    preferences: { ...current.preferences, language: event.target.value },
+                  }))
+                }
+              >
+                {languageOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </div>
           ) : null}
-          {preferencesTab === "font" ? (
-            <select
-              className="auth-input workspace-static-input"
-              value={storedSettings.preferences.font}
-              onChange={(event) =>
-                updateStoredSettings((current) => ({
-                  ...current,
-                  preferences: { ...current.preferences, font: event.target.value },
-                }))
-              }
-            >
-              <option>Segoe UI</option>
-              <option>Roboto</option>
-              <option>Arial</option>
-            </select>
+          {preferencesTab === "fontSize" ? (
+            <div className="workspace-mini-card preference-panel-card">
+              <div className="billing-payment-card-head">
+                <div>
+                  <h4>Whole Workspace Font Size</h4>
+                  <p>Increase or decrease the reading size across the project instead of changing the font family.</p>
+                </div>
+                <span className="billing-status-pill">{preferenceFontSizeLabel}</span>
+              </div>
+              <div className="billing-action-row preference-action-row">
+                {["Small", "Medium", "Large"].map((size) => (
+                  <button
+                    key={size}
+                    className={`primary-button ${preferenceFontSizeLabel === size ? "" : "secondary-tone"}`}
+                    type="button"
+                    onClick={() =>
+                      updateStoredSettings((current) => ({
+                        ...current,
+                        preferences: { ...current.preferences, fontSize: size },
+                      }))
+                    }
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : null}
+          <div className="workspace-mini-card preference-preview-shell" style={{ fontSize: `${preferenceFontScale}em` }}>
+            <div className="billing-payment-card-head">
+              <div>
+                <h4>Scrollable Live Preview</h4>
+                <p>Scroll through this panel to see the language and font size preference before saving.</p>
+              </div>
+              <span className="billing-status-pill">{preferenceFontSizeLabel}</span>
+            </div>
+            <div className="preference-preview-scroll">
+              {previewLines.map((item) => (
+                <div key={item.title} className="workspace-mini-card preference-preview-card">
+                  <h4>{item.title}</h4>
+                  <p>{item.copy}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <button className="primary-button" type="button" onClick={savePreferences}>Save Preference</button>
         </div>
       </>
