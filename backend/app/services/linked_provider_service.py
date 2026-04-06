@@ -1,51 +1,36 @@
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.linked_provider import LinkedProvider
+from app.models.linked_provider import UserSocialLink
 from app.models.user import User
-from app.services.auth_service import AuthService, AuthServiceError
 
 
 class LinkedProviderServiceError(RuntimeError):
-    """Raised when linked-provider operations fail for an expected reason."""
+    """Raised when social-account linking fails for an expected reason."""
 
 
 @dataclass
 class LinkedProviderPayload:
-    provider_key: str
-    provider_email: str
-    provider_display_name: str
-    provider_identifier: str
-    callback_provider_id: str | None
-    callback_email: str | None
-    callback_display_name: str | None
-    callback_user_id: str | None
-    callback_received_at: str | None
-    verified: bool
-    linked_at: str
+    user_id: str
+    provider: str
+    provider_id: str
+    email: str
 
 
 class LinkedProviderService:
-    SUPPORTED_PROVIDERS = {"google", "facebook", "linkedin"}
-    CALLBACK_PROVIDER_IDS = {
-        "google": {"google.com"},
-        "facebook": {"facebook.com"},
-        "linkedin": {"oidc.linkedin", "linkedin.com", "linkedin"},
-    }
-
-    def __init__(self, auth_service: AuthService) -> None:
-        self.auth_service = auth_service
+    SUPPORTED_PROVIDERS = {"facebook", "linkedin"}
 
     def list_providers(self, db: Session, *, user_id: str) -> list[LinkedProviderPayload]:
         self._require_user(db, user_id)
         items = db.execute(
-            select(LinkedProvider).where(LinkedProvider.user_id == user_id).order_by(LinkedProvider.provider_key.asc())
+            select(UserSocialLink)
+            .where(UserSocialLink.user_id == user_id)
+            .order_by(UserSocialLink.provider.asc())
         ).scalars().all()
         return [self._serialize(item) for item in items]
 
@@ -54,100 +39,68 @@ class LinkedProviderService:
         db: Session,
         *,
         user_id: str,
-        provider_key: str,
-        provider_email: str,
-        provider_display_name: str,
-        provider_identifier: str,
-        callback_provider_id: str,
-        callback_email: str,
-        callback_display_name: str,
-        callback_user_id: str,
-        current_password: str,
+        provider: str,
+        provider_id: str,
+        email: str,
     ) -> LinkedProviderPayload:
-        user = self._require_user_model(db, user_id)
-        self._verify_password(current_password, user.password_hash)
+        self._require_user(db, user_id)
 
-        normalized_key = provider_key.strip().lower()
-        if normalized_key not in self.SUPPORTED_PROVIDERS:
+        normalized_provider = provider.strip().lower()
+        normalized_provider_id = provider_id.strip()
+        normalized_email = email.strip().lower()
+
+        if normalized_provider not in self.SUPPORTED_PROVIDERS:
             raise LinkedProviderServiceError("Unsupported provider.")
+        if not normalized_provider_id:
+            raise LinkedProviderServiceError("Provider account identifier is required.")
+        if not normalized_email:
+            raise LinkedProviderServiceError("Provider email is required.")
 
-        normalized_email = provider_email.strip().lower()
-        normalized_display_name = provider_display_name.strip()
-        normalized_identifier = provider_identifier.strip()
-        normalized_callback_provider = callback_provider_id.strip().lower()
-        normalized_callback_email = callback_email.strip().lower()
-        normalized_callback_display_name = callback_display_name.strip()
-        normalized_callback_user_id = callback_user_id.strip()
-
-        self._validate_callback(
-            provider_key=normalized_key,
-            provider_email=normalized_email,
-            provider_display_name=normalized_display_name,
-            provider_identifier=normalized_identifier,
-            callback_provider_id=normalized_callback_provider,
-            callback_email=normalized_callback_email,
-            callback_display_name=normalized_callback_display_name,
-            callback_user_id=normalized_callback_user_id,
-        )
-
-        if normalized_key == "google" and user.email.lower().endswith("@gmail.com"):
-            raise LinkedProviderServiceError("Google stays linked as the primary Gmail provider for this account.")
-
-        existing = db.execute(
-            select(LinkedProvider).where(
-                LinkedProvider.user_id == user_id,
-                LinkedProvider.provider_key == normalized_key,
+        existing_for_user = db.execute(
+            select(UserSocialLink).where(
+                UserSocialLink.user_id == user_id,
+                UserSocialLink.provider == normalized_provider,
             )
         ).scalar_one_or_none()
+        if existing_for_user:
+            raise LinkedProviderServiceError(f"{normalized_provider.title()} is already linked to this account.")
 
-        if existing:
-            item = existing
-        else:
-            item = LinkedProvider(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                provider_key=normalized_key,
-                provider_email=normalized_email,
-                provider_display_name=normalized_display_name,
-                provider_identifier=normalized_identifier,
-                verified=True,
+        existing_provider_account = db.execute(
+            select(UserSocialLink).where(
+                UserSocialLink.provider == normalized_provider,
+                UserSocialLink.provider_id == normalized_provider_id,
             )
-            db.add(item)
+        ).scalar_one_or_none()
+        if existing_provider_account:
+            raise LinkedProviderServiceError(
+                f"This {normalized_provider.title()} account is already linked to another user."
+            )
 
-        now = datetime.now(timezone.utc)
-        item.provider_email = normalized_email
-        item.provider_display_name = normalized_display_name
-        item.provider_identifier = normalized_identifier
-        item.callback_provider_id = normalized_callback_provider
-        item.callback_email = normalized_callback_email
-        item.callback_display_name = normalized_callback_display_name
-        item.callback_user_id = normalized_callback_user_id
-        item.callback_received_at = now
-        item.verified = True
-        item.linked_at = now
-        db.commit()
+        item = UserSocialLink(
+            user_id=user_id,
+            provider=normalized_provider,
+            provider_id=normalized_provider_id,
+            email=normalized_email,
+        )
+        db.add(item)
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise LinkedProviderServiceError(
+                f"{normalized_provider.title()} could not be linked because it is already connected."
+            ) from exc
         db.refresh(item)
         return self._serialize(item)
 
-    def unlink_provider(
-        self,
-        db: Session,
-        *,
-        user_id: str,
-        provider_key: str,
-        current_password: str,
-    ) -> None:
-        user = self._require_user_model(db, user_id)
-        self._verify_password(current_password, user.password_hash)
+    def unlink_provider(self, db: Session, *, user_id: str, provider: str) -> None:
+        self._require_user(db, user_id)
 
-        normalized_key = provider_key.strip().lower()
-        if normalized_key == "google" and user.email.lower().endswith("@gmail.com"):
-            raise LinkedProviderServiceError("Google cannot be unlinked from a Gmail-based account.")
-
+        normalized_provider = provider.strip().lower()
         item = db.execute(
-            select(LinkedProvider).where(
-                LinkedProvider.user_id == user_id,
-                LinkedProvider.provider_key == normalized_key,
+            select(UserSocialLink).where(
+                UserSocialLink.user_id == user_id,
+                UserSocialLink.provider == normalized_provider,
             )
         ).scalar_one_or_none()
         if not item:
@@ -161,60 +114,11 @@ class LinkedProviderService:
         if not user:
             raise LinkedProviderServiceError("User account was not found.")
 
-    def _require_user_model(self, db: Session, user_id: str) -> User:
-        user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
-        if not user:
-            raise LinkedProviderServiceError("User account was not found.")
-        return user
-
-    def _verify_password(self, current_password: str, stored_hash: str) -> None:
-        if not self.auth_service._verify_password(current_password, stored_hash):
-            raise LinkedProviderServiceError("Current password is incorrect.")
-
-    def _validate_callback(
-        self,
-        *,
-        provider_key: str,
-        provider_email: str,
-        provider_display_name: str,
-        provider_identifier: str,
-        callback_provider_id: str,
-        callback_email: str,
-        callback_display_name: str,
-        callback_user_id: str,
-    ) -> None:
-        if not provider_email:
-            raise LinkedProviderServiceError("Provider email is required.")
-        if not provider_display_name:
-            raise LinkedProviderServiceError("Provider profile name is required.")
-        if not provider_identifier:
-            raise LinkedProviderServiceError("Provider account identifier is required.")
-        if not callback_provider_id:
-            raise LinkedProviderServiceError("Provider validation callback is missing.")
-        if callback_provider_id not in self.CALLBACK_PROVIDER_IDS[provider_key]:
-            raise LinkedProviderServiceError("Provider validation callback does not match the selected provider.")
-        if not callback_email:
-            raise LinkedProviderServiceError("Validated provider email was not returned by the provider.")
-        if callback_email != provider_email:
-            raise LinkedProviderServiceError("Validated provider email does not match the account being linked.")
-        if not callback_display_name:
-            raise LinkedProviderServiceError("Validated provider profile name was not returned by the provider.")
-        if not callback_user_id:
-            raise LinkedProviderServiceError("Validated provider account identifier was not returned by the provider.")
-        if callback_user_id != provider_identifier:
-            raise LinkedProviderServiceError("Validated provider identifier does not match the account being linked.")
-
-    def _serialize(self, item: LinkedProvider) -> LinkedProviderPayload:
+    @staticmethod
+    def _serialize(item: UserSocialLink) -> LinkedProviderPayload:
         return LinkedProviderPayload(
-            provider_key=item.provider_key,
-            provider_email=item.provider_email,
-            provider_display_name=item.provider_display_name,
-            provider_identifier=item.provider_identifier,
-            callback_provider_id=item.callback_provider_id,
-            callback_email=item.callback_email,
-            callback_display_name=item.callback_display_name,
-            callback_user_id=item.callback_user_id,
-            callback_received_at=item.callback_received_at.isoformat() if item.callback_received_at else None,
-            verified=item.verified,
-            linked_at=item.linked_at.isoformat(),
+            user_id=item.user_id,
+            provider=item.provider,
+            provider_id=item.provider_id,
+            email=item.email,
         )

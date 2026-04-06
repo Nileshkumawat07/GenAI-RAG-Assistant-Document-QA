@@ -2,34 +2,15 @@ from pydantic import BaseModel, EmailStr
 
 
 class LinkedProviderAuthorizeRequest(BaseModel):
-    frontendOrigin: str
+    frontendOrigin: str | None = None
 
 
-class LinkedProviderCreateRequest(BaseModel):
-    providerKey: str
-    providerEmail: EmailStr
-    providerDisplayName: str
-    providerIdentifier: str
-    callbackProviderId: str
-    callbackEmail: EmailStr
-    callbackDisplayName: str
-    callbackUserId: str
-    currentPassword: str
-
-
-class LinkedProviderDeleteRequest(BaseModel):
-    currentPassword: str
+class LinkedProviderAuthorizeResponse(BaseModel):
+    authorizeUrl: str
 
 
 class LinkedProviderResponse(BaseModel):
-    providerKey: str
-    providerEmail: EmailStr
-    providerDisplayName: str
-    providerIdentifier: str
-    callbackProviderId: str | None = None
-    callbackEmail: EmailStr | None = None
-    callbackDisplayName: str | None = None
-    callbackUserId: str | None = None
-    callbackReceivedAt: str | None = None
-    verified: bool
-    linkedAt: str
+    userId: str
+    provider: str
+    providerId: str
+    email: EmailStr

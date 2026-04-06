@@ -29,6 +29,7 @@ class SocialProviderProfile:
     display_name: str
     provider_user_id: str
     frontend_origin: str
+    user_id: str
 
 
 class SocialOAuthService:
@@ -123,6 +124,7 @@ class SocialOAuthService:
             provider_id=provider_config["provider_id"],
             access_token=access_token,
             frontend_origin=payload["o"],
+            user_id=payload["u"],
             profile_url=provider_config["profile_url"],
         )
 
@@ -218,6 +220,7 @@ class SocialOAuthService:
         provider_id: str,
         access_token: str,
         frontend_origin: str,
+        user_id: str,
         profile_url: str,
     ) -> SocialProviderProfile:
         if provider_key == "facebook":
@@ -265,6 +268,7 @@ class SocialOAuthService:
             display_name=display_name,
             provider_user_id=provider_user_id,
             frontend_origin=frontend_origin,
+            user_id=user_id,
         )
 
     def _get_provider_config(self, db: Session, provider_key: str) -> dict:

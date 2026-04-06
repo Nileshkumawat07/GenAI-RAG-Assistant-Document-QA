@@ -24,31 +24,18 @@ from app.services.rag_service import RAGService
 from app.services.social_oauth_service import SocialOAuthService
 
 
-def ensure_linked_provider_schema() -> None:
+def ensure_user_social_link_schema() -> None:
     inspector = inspect(engine)
-    if "linked_providers" not in inspector.get_table_names():
+    if "user_social_links" not in inspector.get_table_names():
         return
 
-    existing_columns = {column["name"] for column in inspector.get_columns("linked_providers")}
-    statements: list[str] = []
-
-    if "callback_provider_id" not in existing_columns:
-        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_provider_id VARCHAR(100) NULL")
-    if "callback_email" not in existing_columns:
-        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_email VARCHAR(255) NULL")
-    if "callback_display_name" not in existing_columns:
-        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_display_name VARCHAR(255) NULL")
-    if "callback_user_id" not in existing_columns:
-        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_user_id VARCHAR(255) NULL")
-    if "callback_received_at" not in existing_columns:
-        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_received_at DATETIME NULL")
-
-    if not statements:
+    existing_columns = {column["name"] for column in inspector.get_columns("user_social_links")}
+    if {"user_id", "provider", "provider_id", "email"}.issubset(existing_columns):
         return
 
     with engine.begin() as connection:
-        for statement in statements:
-            connection.execute(text(statement))
+        connection.execute(text("DROP TABLE IF EXISTS user_social_links"))
+    Base.metadata.create_all(bind=engine)
 
 
 def ensure_social_oauth_config_seed(social_oauth_service: SocialOAuthService) -> None:
@@ -59,12 +46,12 @@ def ensure_social_oauth_config_seed(social_oauth_service: SocialOAuthService) ->
 def create_app() -> FastAPI:
     app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
     Base.metadata.create_all(bind=engine)
-    ensure_linked_provider_schema()
+    ensure_user_social_link_schema()
     rag_service = RAGService()
     otp_service = OTPService()
     auth_service = AuthService()
     contact_request_service = ContactRequestService()
-    linked_provider_service = LinkedProviderService(auth_service)
+    linked_provider_service = LinkedProviderService()
     social_oauth_service = SocialOAuthService()
     ensure_social_oauth_config_seed(social_oauth_service)
     base_dir = Path(__file__).resolve().parent

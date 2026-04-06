@@ -1,13 +1,12 @@
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.core.database import get_db
 from app.schemas.linked_provider import (
     LinkedProviderAuthorizeRequest,
-    LinkedProviderCreateRequest,
-    LinkedProviderDeleteRequest,
+    LinkedProviderAuthorizeResponse,
     LinkedProviderResponse,
 )
 from app.services.auth_service import AuthService, AuthServiceError
@@ -35,19 +34,12 @@ def build_linked_provider_router(
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
-    def serialize_item(item):
+    def serialize_item(item) -> LinkedProviderResponse:
         return LinkedProviderResponse(
-            providerKey=item.provider_key,
-            providerEmail=item.provider_email,
-            providerDisplayName=item.provider_display_name,
-            providerIdentifier=item.provider_identifier,
-            callbackProviderId=item.callback_provider_id,
-            callbackEmail=item.callback_email,
-            callbackDisplayName=item.callback_display_name,
-            callbackUserId=item.callback_user_id,
-            callbackReceivedAt=item.callback_received_at,
-            verified=item.verified,
-            linkedAt=item.linked_at,
+            userId=item.user_id,
+            provider=item.provider,
+            providerId=item.provider_id,
+            email=item.email,
         )
 
     @router.get("", response_model=list[LinkedProviderResponse])
@@ -61,7 +53,7 @@ def build_linked_provider_router(
         except LinkedProviderServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @router.post("/{provider_key}/authorize-url")
+    @router.post("/{provider_key}/authorize-url", response_model=LinkedProviderAuthorizeResponse)
     def get_provider_authorize_url(
         provider_key: str,
         payload: LinkedProviderAuthorizeRequest,
@@ -75,13 +67,31 @@ def build_linked_provider_router(
                 db,
                 provider_key=provider_key,
                 user_id=authenticated_user_id,
-                frontend_origin=payload.frontendOrigin,
+                frontend_origin=payload.frontendOrigin or "",
                 callback_url=callback_url,
             )
-            return {
-                "authorizeUrl": authorize_url,
-                "callbackOrigin": str(request.base_url).rstrip("/"),
-            }
+            return LinkedProviderAuthorizeResponse(authorizeUrl=authorize_url)
+        except SocialOAuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/{provider_key}/connect")
+    def redirect_to_provider(
+        provider_key: str,
+        request: Request,
+        frontend_origin: str | None = Query(default=None, alias="frontendOrigin"),
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            callback_url = str(request.url_for("provider_oauth_callback", provider_key=provider_key))
+            authorize_url = social_oauth_service.create_authorize_url(
+                db,
+                provider_key=provider_key,
+                user_id=authenticated_user_id,
+                frontend_origin=frontend_origin or "",
+                callback_url=callback_url,
+            )
+            return RedirectResponse(url=authorize_url, status_code=307)
         except SocialOAuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -101,10 +111,7 @@ def build_linked_provider_router(
                 social_oauth_service.build_popup_response_html(
                     provider_key=provider_key,
                     success=False,
-                    payload={
-                        "message": message,
-                        "frontendOrigin": "",
-                    },
+                    payload={"message": message, "frontendOrigin": ""},
                 )
             )
 
@@ -129,63 +136,39 @@ def build_linked_provider_router(
                 state=state,
                 callback_url=callback_url,
             )
+            linked_item = linked_provider_service.link_provider(
+                db,
+                user_id=profile.user_id,
+                provider=provider_key,
+                provider_id=profile.provider_user_id,
+                email=profile.email,
+            )
             return HTMLResponse(
                 social_oauth_service.build_popup_response_html(
                     provider_key=provider_key,
                     success=True,
                     payload={
                         "frontendOrigin": profile.frontend_origin,
-                        "providerId": profile.provider_id,
-                        "email": profile.email,
+                        "userId": linked_item.user_id,
+                        "provider": linked_item.provider,
+                        "providerId": linked_item.provider_id,
+                        "email": linked_item.email,
                         "displayName": profile.display_name,
-                        "providerUserId": profile.provider_user_id,
                     },
                 )
             )
-        except SocialOAuthServiceError as exc:
+        except (SocialOAuthServiceError, LinkedProviderServiceError) as exc:
             return HTMLResponse(
                 social_oauth_service.build_popup_response_html(
                     provider_key=provider_key,
                     success=False,
-                    payload={
-                        "message": str(exc),
-                        "frontendOrigin": "",
-                    },
+                    payload={"message": str(exc), "frontendOrigin": ""},
                 )
             )
-
-    @router.post("/{provider_key}", response_model=LinkedProviderResponse)
-    def link_provider(
-        provider_key: str,
-        payload: LinkedProviderCreateRequest,
-        db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
-    ):
-        try:
-            if payload.providerKey.strip().lower() != provider_key.strip().lower():
-                raise LinkedProviderServiceError("Provider details do not match the selected account.")
-
-            item = linked_provider_service.link_provider(
-                db,
-                user_id=authenticated_user_id,
-                provider_key=provider_key,
-                provider_email=payload.providerEmail,
-                provider_display_name=payload.providerDisplayName,
-                provider_identifier=payload.providerIdentifier,
-                callback_provider_id=payload.callbackProviderId,
-                callback_email=payload.callbackEmail,
-                callback_display_name=payload.callbackDisplayName,
-                callback_user_id=payload.callbackUserId,
-                current_password=payload.currentPassword,
-            )
-            return serialize_item(item)
-        except LinkedProviderServiceError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.delete("/{provider_key}")
     def unlink_provider(
         provider_key: str,
-        payload: LinkedProviderDeleteRequest,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
@@ -193,8 +176,7 @@ def build_linked_provider_router(
             linked_provider_service.unlink_provider(
                 db,
                 user_id=authenticated_user_id,
-                provider_key=provider_key,
-                current_password=payload.currentPassword,
+                provider=provider_key,
             )
             return {"message": "Provider unlinked successfully."}
         except LinkedProviderServiceError as exc:

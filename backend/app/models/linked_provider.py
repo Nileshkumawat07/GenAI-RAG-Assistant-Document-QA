@@ -1,25 +1,21 @@
-from datetime import datetime
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
 
-class LinkedProvider(Base):
-    __tablename__ = "linked_providers"
-    __table_args__ = (UniqueConstraint("user_id", "provider_key", name="uq_linked_provider_user_provider"),)
+class UserSocialLink(Base):
+    __tablename__ = "user_social_links"
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_user_social_links_user_provider"),
+        UniqueConstraint("provider", "provider_id", name="uq_user_social_links_provider_provider_id"),
+    )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    provider_key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    provider_email: Mapped[str] = mapped_column(String(255), nullable=False)
-    provider_display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    provider_identifier: Mapped[str] = mapped_column(String(255), nullable=False)
-    callback_provider_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    callback_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    callback_display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    callback_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    callback_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    provider: Mapped[str] = mapped_column(String(50), primary_key=True)
+    provider_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
