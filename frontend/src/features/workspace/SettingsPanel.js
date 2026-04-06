@@ -7,6 +7,7 @@ import {
   updateUsername,
 } from "../auth/authApi";
 import {
+  authorizeLinkedProvider,
   linkProvider,
   listLinkedProviders,
   unlinkProvider,
@@ -17,7 +18,6 @@ import {
   resetFirebaseRecaptcha,
   sendFirebaseEmailVerification,
   sendFirebaseOtp,
-  signInWithFirebaseProvider,
   verifyFirebaseOtp,
 } from "../../shared/firebase/phoneAuth";
 
@@ -1431,6 +1431,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
     ];
     return (
       <div className="workspace-form-stack">
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
         <div className="workspace-info-grid linked-provider-grid">
           {providers.map(({ key, label, description }) => {
             const linkedState = storedSettings.linked[key];
@@ -1522,7 +1527,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
 
                       try {
                         setLinkedSaving((current) => ({ ...current, [key]: true }));
-                        const callbackProfile = await signInWithFirebaseProvider(key);
+                        const callbackProfile = await authorizeLinkedProvider(key, window.location.origin);
                         if (!EMAIL_PATTERN.test((callbackProfile.email || "").trim())) {
                           throw new Error(`${label} did not return a valid email address.`);
                         }

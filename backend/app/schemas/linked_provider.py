@@ -1,6 +1,10 @@
 from pydantic import BaseModel, EmailStr
 
 
+class LinkedProviderAuthorizeRequest(BaseModel):
+    frontendOrigin: str
+
+
 class LinkedProviderCreateRequest(BaseModel):
     providerKey: str
     providerEmail: EmailStr

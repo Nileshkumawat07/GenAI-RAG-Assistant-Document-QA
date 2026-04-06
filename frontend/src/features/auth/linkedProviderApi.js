@@ -1,4 +1,4 @@
-import { requestJson } from "../../shared/api/http";
+import { apiUrl, requestJson } from "../../shared/api/http";
 
 export async function listLinkedProviders() {
   return requestJson(
@@ -22,6 +22,80 @@ export async function linkProvider(providerKey, payload) {
     },
     `Failed to link ${providerKey}.`
   );
+}
+
+export async function authorizeLinkedProvider(providerKey, frontendOrigin) {
+  const data = await requestJson(
+    `/linked-providers/${encodeURIComponent(providerKey)}/authorize-url`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ frontendOrigin }),
+    },
+    `Failed to start ${providerKey} sign-in.`
+  );
+
+  const popup = window.open(
+    data.authorizeUrl,
+    `link-${providerKey}`,
+    "width=620,height=760,menubar=no,toolbar=no,status=no"
+  );
+
+  if (!popup) {
+    throw new Error("Popup was blocked. Allow popups for this site and try again.");
+  }
+
+  return new Promise((resolve, reject) => {
+    const expectedOrigin = new URL(data.callbackOrigin || apiUrl("/") || window.location.origin).origin;
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      try {
+        popup.close();
+      } catch {}
+      reject(new Error("Provider sign-in timed out. Please try again."));
+    }, 120000);
+
+    const closedCheck = window.setInterval(() => {
+      if (popup.closed) {
+        cleanup();
+        reject(new Error("Provider sign-in was closed before validation completed."));
+      }
+    }, 500);
+
+    const onMessage = (event) => {
+      if (event.origin !== expectedOrigin) {
+        return;
+      }
+
+      const payload = event.data || {};
+      if (payload.source !== "provider-link" || payload.providerKey !== providerKey) {
+        return;
+      }
+
+      cleanup();
+      if (!payload.success) {
+        reject(new Error(payload.message || `Failed to validate ${providerKey}.`));
+        return;
+      }
+
+      resolve({
+        providerId: payload.providerId || "",
+        email: payload.email || "",
+        displayName: payload.displayName || "",
+        providerUserId: payload.providerUserId || "",
+      });
+    };
+
+    function cleanup() {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(closedCheck);
+      window.removeEventListener("message", onMessage);
+    }
+
+    window.addEventListener("message", onMessage);
+  });
 }
 
 export async function unlinkProvider(providerKey, payload) {

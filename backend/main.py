@@ -20,6 +20,7 @@ from app.services.contact_request_service import ContactRequestService
 from app.services.linked_provider_service import LinkedProviderService
 from app.services.otp_service import OTPService
 from app.services.rag_service import RAGService
+from app.services.social_oauth_service import SocialOAuthService
 
 
 def ensure_linked_provider_schema() -> None:
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     auth_service = AuthService()
     contact_request_service = ContactRequestService()
     linked_provider_service = LinkedProviderService(auth_service)
+    social_oauth_service = SocialOAuthService()
     base_dir = Path(__file__).resolve().parent
     frontend_build_dir = base_dir.parent / "frontend" / "build"
 
@@ -73,7 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router(rag_service))
     app.include_router(build_auth_router(otp_service, auth_service))
     app.include_router(build_contact_request_router(contact_request_service, auth_service))
-    app.include_router(build_linked_provider_router(linked_provider_service, auth_service))
+    app.include_router(build_linked_provider_router(linked_provider_service, auth_service, social_oauth_service))
     app.include_router(build_document_router(rag_service))
     app.include_router(build_object_detection_router())
     app.include_router(build_image_generation_router())

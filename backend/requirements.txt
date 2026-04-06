@@ -1,9 +1,9 @@
 fastapi
 openai
-pypdf
 python-dotenv
 python-multipart
 pymysql
+requests
 uvicorn
 
 # Use CPU-only PyTorch wheels for free-tier and non-GPU deployments.
