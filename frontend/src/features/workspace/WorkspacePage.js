@@ -392,6 +392,112 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
+  const prettifyKey = (value) =>
+    (value || "")
+      .replace(/_/g, " ")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  const getDatabaseSections = () => {
+    const sectionConfigs = [
+      {
+        id: "accounts",
+        title: "Accounts",
+        copy: "User account records with the main identity and contact fields.",
+        tableNames: ["users"],
+        columns: ["id", "full_name", "username", "email", "mobile", "created_at"],
+      },
+      {
+        id: "requests",
+        title: "Support Requests",
+        copy: "Submitted contact and support issues with status and admin reply.",
+        tableNames: ["contact_requests"],
+        columns: ["id", "user_id", "category", "title", "request_code", "status", "admin_message", "created_at"],
+      },
+      {
+        id: "providers",
+        title: "Linked Providers",
+        copy: "Connected provider accounts and provider profile details.",
+        tableNames: ["user_social_links"],
+        columns: ["id", "user_id", "provider", "provider_email", "provider_display_name", "provider_photo_url", "created_at"],
+      },
+      {
+        id: "provider-config",
+        title: "Provider Configuration",
+        copy: "OAuth and provider setup entries used by the workspace.",
+        tableNames: ["social_oauth_configs"],
+        columns: ["id", "provider", "display_name", "client_id", "enabled", "created_at"],
+      },
+    ];
+
+    const usedTableNames = new Set();
+    const sections = sectionConfigs
+      .map((section) => {
+        const tables = section.tableNames
+          .map((tableName) => adminTables.find((table) => table.tableName === tableName))
+          .filter(Boolean);
+
+        tables.forEach((table) => usedTableNames.add(table.tableName));
+
+        return tables.length > 0 ? { ...section, tables } : null;
+      })
+      .filter(Boolean);
+
+    const otherTables = adminTables.filter((table) => !usedTableNames.has(table.tableName));
+    if (otherTables.length > 0) {
+      sections.push({
+        id: "other",
+        title: "Other Tables",
+        copy: "Additional database tables available in this environment.",
+        columns: null,
+        tables: otherTables,
+      });
+    }
+
+    return sections;
+  };
+  const getVisibleColumnsForTable = (table, preferredColumns = null) => {
+    const availableColumns = (table?.columns || []).map((column) => column.name);
+    const selectedColumns = preferredColumns
+      ? preferredColumns.filter((columnName) => availableColumns.includes(columnName))
+      : availableColumns.filter((columnName) => {
+          const normalized = columnName.toLowerCase();
+          return !normalized.includes("password") && !normalized.includes("token") && !normalized.includes("secret");
+        });
+
+    return selectedColumns.length > 0 ? selectedColumns : availableColumns.slice(0, 6);
+  };
+  const renderDatabaseCell = (columnName, value) => {
+    if (value == null || value === "") {
+      return <span className="admin-table-empty">Not available</span>;
+    }
+
+    if (columnName.toLowerCase().includes("photo") && String(value).startsWith("http")) {
+      return (
+        <div className="provider-photo-cell">
+          <img src={String(value)} alt="Provider profile" className="provider-photo-preview" />
+          <a href={String(value)} target="_blank" rel="noreferrer">
+            Open Photo
+          </a>
+        </div>
+      );
+    }
+
+    if (typeof value === "boolean") {
+      return value ? "Yes" : "No";
+    }
+
+    return String(value);
+  };
+  const getAdminRequestSections = () => {
+    const statuses = adminStatusOptions.length > 0
+      ? adminStatusOptions
+      : ["In Progress", "In Review", "Completed"];
+
+    return statuses.map((status) => ({
+      title: status,
+      items: adminRequests.filter((item) => (item.status || statuses[0]) === status),
+    }));
+  };
 
   const hasQuestion = question.trim().length > 0;
 
@@ -790,6 +896,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       }
 
       if (activeInfoTab === "requests") {
+        const requestSections = getAdminRequestSections();
+
         return (
           <>
             <div className="insight-section">
@@ -808,67 +916,106 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     <p>New requests will appear here once users submit them from the contact pages.</p>
                   </div>
                 ) : (
-                  <div className="workspace-form-stack">
-                    {adminRequests.map((requestItem) => (
-                      <div key={requestItem.id} className="workspace-mini-card">
-                        <h4>{requestItem.requestCode || requestItem.title || "Contact Request"}</h4>
-                        <p>
-                          {requestItem.category || "general"} | {new Date(requestItem.createdAt).toLocaleString("en-GB")}
-                        </p>
-                        <div className="admin-request-topbar">
-                          <span className={`contact-request-status-chip status-${formatRequestStatusClass(requestItem.status)}`}>
-                            {requestItem.status || statusChoices[0]}
-                          </span>
-                          <div className="admin-request-user-meta">
-                            <strong>{requestItem.userFullName || "User"}</strong>
-                            <span>{requestItem.userEmail || "No email"}</span>
-                            <span>{requestItem.userMobile || "No mobile"}</span>
+                  <div className="admin-request-section-stack">
+                    {requestSections.map((section) => (
+                      <section key={section.title} className="admin-request-section">
+                        <div className="admin-request-section-header">
+                          <div>
+                            <h4>{section.title}</h4>
+                            <p>{section.items.length} request{section.items.length === 1 ? "" : "s"}</p>
                           </div>
                         </div>
-                        <div className="workspace-info-grid">
-                          {Object.entries(requestItem.values || {}).map(([key, value]) => (
-                            <div key={key} className="workspace-mini-card">
-                              <h4>{key}</h4>
-                              <p>{value || "Not provided"}</p>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="workspace-form-stack admin-request-actions">
-                          <textarea
-                            className="question-input workspace-static-textarea"
-                            rows={4}
-                            placeholder="Write the message that the user should see with this status update."
-                            value={adminReplyDrafts[requestItem.id] || ""}
-                            onChange={(event) =>
-                              setAdminReplyDrafts((current) => ({
-                                ...current,
-                                [requestItem.id]: event.target.value,
-                              }))
-                            }
-                            disabled={adminActionRequestId === requestItem.id}
-                          />
-                          <select
-                            className="auth-input workspace-static-input"
-                            value={requestItem.status || statusChoices[0]}
-                            onChange={(event) => handleAdminStatusChange(requestItem.id, event.target.value)}
-                            disabled={adminActionRequestId === requestItem.id}
-                          >
-                            {statusChoices.map((statusOption) => (
-                              <option key={statusOption} value={statusOption}>
-                                {statusOption}
-                              </option>
+                        {section.items.length === 0 ? (
+                          <div className="workspace-mini-card">
+                            <p>No requests in this section.</p>
+                          </div>
+                        ) : (
+                          <div className="admin-request-grid">
+                            {section.items.map((requestItem) => (
+                              <article key={requestItem.id} className="admin-request-card">
+                                <div className="admin-request-card-header">
+                                  <div>
+                                    <p className="contact-request-type">{requestItem.category || "General Request"}</p>
+                                    <h4>{requestItem.requestCode || requestItem.title || "Contact Request"}</h4>
+                                  </div>
+                                  <span className={`contact-request-status-chip status-${formatRequestStatusClass(requestItem.status)}`}>
+                                    {requestItem.status || statusChoices[0]}
+                                  </span>
+                                </div>
+
+                                <div className="admin-request-user-banner">
+                                  <div className="admin-request-user-avatar">
+                                    {(requestItem.userFullName || requestItem.userEmail || "U").trim().charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="admin-request-user-copy">
+                                    <strong>{requestItem.userFullName || "User"}</strong>
+                                    <span>{requestItem.userEmail || "No email"}</span>
+                                    <span>{requestItem.userMobile || "No mobile"}</span>
+                                  </div>
+                                </div>
+
+                                <div className="admin-request-meta-grid">
+                                  <div className="contact-request-meta-item">
+                                    <span>Created</span>
+                                    <strong>{new Date(requestItem.createdAt).toLocaleString("en-GB")}</strong>
+                                  </div>
+                                  <div className="contact-request-meta-item">
+                                    <span>Title</span>
+                                    <strong>{requestItem.title || "Not provided"}</strong>
+                                  </div>
+                                </div>
+
+                                <div className="admin-request-detail-grid">
+                                  {Object.entries(requestItem.values || {}).map(([key, value]) => (
+                                    <div key={key} className="contact-request-detail-item">
+                                      <span>{prettifyKey(key)}</span>
+                                      <strong>{value || "Not provided"}</strong>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="workspace-form-stack admin-request-actions">
+                                  <textarea
+                                    className="question-input workspace-static-textarea"
+                                    rows={4}
+                                    placeholder="Write the message that the user should see with this status update."
+                                    value={adminReplyDrafts[requestItem.id] || ""}
+                                    onChange={(event) =>
+                                      setAdminReplyDrafts((current) => ({
+                                        ...current,
+                                        [requestItem.id]: event.target.value,
+                                      }))
+                                    }
+                                    disabled={adminActionRequestId === requestItem.id}
+                                  />
+                                  <div className="admin-request-action-row">
+                                    <select
+                                      className="auth-input workspace-static-input"
+                                      value={requestItem.status || statusChoices[0]}
+                                      onChange={(event) => handleAdminStatusChange(requestItem.id, event.target.value)}
+                                      disabled={adminActionRequestId === requestItem.id}
+                                    >
+                                      {statusChoices.map((statusOption) => (
+                                        <option key={statusOption} value={statusOption}>
+                                          {statusOption}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button
+                                      className="primary-button"
+                                      type="button"
+                                      onClick={() => handleAdminDelete(requestItem.id)}
+                                      disabled={adminActionRequestId === requestItem.id}
+                                    >
+                                      {adminActionRequestId === requestItem.id ? "Working..." : "Delete Request"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </article>
                             ))}
-                          </select>
-                          <button
-                            className="primary-button"
-                            type="button"
-                            onClick={() => handleAdminDelete(requestItem.id)}
-                            disabled={adminActionRequestId === requestItem.id}
-                          >
-                            {adminActionRequestId === requestItem.id ? "Working..." : "Delete Request"}
-                          </button>
-                        </div>
-                      </div>
+                          </div>
+                        )}
+                      </section>
                     ))}
                   </div>
                 )}
@@ -897,38 +1044,52 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                 </div>
               ) : (
                 <div className="workspace-form-stack">
-                  {adminTables.map((table) => (
-                    <section key={table.tableName} className="admin-table-section">
-                      <div className="admin-table-header">
+                  {getDatabaseSections().map((section) => (
+                    <section key={section.id} className="admin-db-group">
+                      <div className="admin-db-group-header">
                         <div>
-                          <h4>{table.tableName}</h4>
-                          <p>{table.rowCount || 0} rows</p>
+                          <h4>{section.title}</h4>
+                          <p>{section.copy}</p>
                         </div>
                       </div>
-                      <div className="admin-table-scroll">
-                        <table className="admin-data-table">
-                          <thead>
-                            <tr>
-                              {table.columns?.map((column) => (
-                                <th key={column.name}>
-                                  <span>{column.name}</span>
-                                  <small>{column.type}</small>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(table.rows || []).slice(0, 12).map((row, index) => (
-                              <tr key={`${table.tableName}-${index}`}>
-                                {table.columns?.map((column) => (
-                                  <td key={`${table.tableName}-${index}-${column.name}`}>
-                                    {String(row[column.name] ?? "null")}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      <div className="workspace-form-stack">
+                        {section.tables.map((table) => {
+                          const visibleColumns = getVisibleColumnsForTable(table, section.columns);
+                          return (
+                            <section key={table.tableName} className="admin-table-section">
+                              <div className="admin-table-header">
+                                <div>
+                                  <h4>{prettifyKey(table.tableName)}</h4>
+                                  <p>{table.rowCount || 0} rows</p>
+                                </div>
+                              </div>
+                              <div className="admin-table-scroll">
+                                <table className="admin-data-table">
+                                  <thead>
+                                    <tr>
+                                      {visibleColumns.map((columnName) => (
+                                        <th key={columnName}>
+                                          <span>{prettifyKey(columnName)}</span>
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(table.rows || []).slice(0, 10).map((row, index) => (
+                                      <tr key={`${table.tableName}-${index}`}>
+                                        {visibleColumns.map((columnName) => (
+                                          <td key={`${table.tableName}-${index}-${columnName}`}>
+                                            {renderDatabaseCell(columnName, row[columnName])}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </section>
+                          );
+                        })}
                       </div>
                     </section>
                   ))}
