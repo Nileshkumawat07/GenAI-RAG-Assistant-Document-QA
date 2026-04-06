@@ -2999,6 +2999,15 @@ body.workspace-body-mode .admin-request-card {
   box-shadow: 0 10px 26px rgba(13, 36, 76, 0.06);
 }
 
+body.workspace-body-mode .admin-request-card.is-focused {
+  border-color: rgba(220, 38, 38, 0.7);
+  background: linear-gradient(180deg, rgba(255, 248, 248, 1), rgba(255, 238, 238, 0.98));
+  box-shadow:
+    0 0 0 4px rgba(220, 38, 38, 0.16),
+    0 18px 40px rgba(127, 29, 29, 0.16),
+    inset 0 0 0 1px rgba(220, 38, 38, 0.18);
+}
+
 body.workspace-body-mode .contact-request-card.is-focused {
   border-color: rgba(45, 107, 192, 0.42);
   box-shadow: 0 0 0 3px rgba(45, 107, 192, 0.12), 0 12px 30px rgba(13, 36, 76, 0.1);

@@ -587,10 +587,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       CONTACT_REQUEST_FOCUS_STORAGE_KEY,
       JSON.stringify({
         requestId: requestRow.id,
-        category: requestRow.category || "general",
+        status: requestRow.status || "In Progress",
       })
     );
-    window.location.hash = "#/workspace/contact";
+    window.location.hash = "#/workspace/administration";
   };
 
   const clearFocusedContactRequest = (requestId) => {
@@ -616,10 +616,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   }, [selectedInfoPage, currentUser?.id]);
 
   useEffect(() => {
-    if (selectedInfoPage !== "contact") {
-      return;
-    }
-
     const pendingFocus = window.sessionStorage.getItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
     if (!pendingFocus) {
       return;
@@ -627,12 +623,16 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
     try {
       const parsedFocus = JSON.parse(pendingFocus);
-      if (parsedFocus?.requestId) {
+      if (!parsedFocus?.requestId) {
+        return;
+      }
+
+      if (selectedInfoPage === "administration") {
         setInfoTabs((current) => ({
           ...current,
-          contact: "submittedRequests",
+          administration: "requests",
         }));
-        setActiveSubmittedCategory(parsedFocus.category || "general");
+        setActiveAdminRequestSection(parsedFocus.status || "In Progress");
         setFocusedContactRequestId(parsedFocus.requestId);
       }
     } catch {
@@ -641,15 +641,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   }, [selectedInfoPage]);
 
   useEffect(() => {
-    if (selectedInfoPage !== "contact" || !focusedContactRequestId) {
+    if (selectedInfoPage !== "administration" || activeInfoTab !== "requests" || !focusedContactRequestId) {
       return;
     }
 
-    const targetCard = document.getElementById(`contact-request-${focusedContactRequestId}`);
+    const targetCard = document.getElementById(`admin-request-${focusedContactRequestId}`);
     if (targetCard) {
       targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [selectedInfoPage, focusedContactRequestId, contactRequests, activeSubmittedCategory]);
+  }, [selectedInfoPage, activeInfoTab, focusedContactRequestId, adminRequests, activeAdminRequestSection]);
 
   useEffect(() => {
     if (selectedInfoPage === "administration" && isAdmin) {
@@ -1043,7 +1043,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                         ) : (
                           <div className="admin-request-grid">
                             {selectedRequestSection.items.map((requestItem) => (
-                              <article key={requestItem.id} className="admin-request-card">
+                              <article
+                                key={requestItem.id}
+                                id={`admin-request-${requestItem.id}`}
+                                className={`admin-request-card ${focusedContactRequestId === requestItem.id ? "is-focused" : ""}`}
+                              >
                                 <div className="admin-request-card-header">
                                   <div>
                                     <p className="contact-request-type">{requestItem.category || "General Request"}</p>
