@@ -4,6 +4,7 @@
   vars:
     groq_api_key_value: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
     frontend_origin_value: "{{ frontend_origin | default(lookup('env', 'FRONTEND_ORIGIN'), true) }}"
+    app_base_url_value: "{{ app_base_url | default(lookup('env', 'APP_BASE_URL'), true) }}"
     mysql_root_password_value: "{{ mysql_root_password | default('genai_root_123', true) }}"
     mysql_database_value: "{{ mysql_database | default('genai_app', true) }}"
     mysql_user_value: "{{ mysql_user | default('genai_user', true) }}"
@@ -18,6 +19,8 @@
       ansible.builtin.assert:
         that:
           - groq_api_key_value | length > 0
+          - frontend_origin_value | length > 0
+          - app_base_url_value | length > 0
           - mysql_root_password_value | length > 0
           - mysql_database_value | length > 0
           - mysql_user_value | length > 0
@@ -106,6 +109,7 @@
         -v genai-hf-cache:/app/.cache/huggingface
         -e GROQ_API_KEY={{ groq_api_key_value | quote }}
         -e FRONTEND_ORIGIN={{ frontend_origin_value | default('http://localhost:3000', true) | quote }}
+        -e APP_BASE_URL={{ app_base_url_value | quote }}
         -e MYSQL_HOST=mysql
         -e MYSQL_PORT=3306
         -e MYSQL_DATABASE={{ mysql_database_value | quote }}
