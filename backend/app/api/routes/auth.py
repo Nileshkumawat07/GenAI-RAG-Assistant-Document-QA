@@ -33,6 +33,20 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             return value.isoformat()
         return str(value)
 
+    def append_virtual_columns(columns, extra_columns: list[tuple[str, str]]):
+        existing_names = {column["name"] for column in columns}
+        for name, column_type in extra_columns:
+            if name in existing_names:
+                continue
+            columns.append(
+                {
+                    "name": name,
+                    "type": column_type,
+                    "nullable": True,
+                    "default": None,
+                }
+            )
+
     def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing authorization token.")
@@ -175,6 +189,21 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         tables = []
 
         with engine.connect() as connection:
+            users_lookup = {}
+            table_names = set(inspector.get_table_names())
+            if "users" in table_names:
+                raw_users = connection.execute(
+                    text("SELECT id, full_name, username, email FROM users")
+                ).mappings().all()
+                users_lookup = {
+                    serialize_scalar(row["id"]): {
+                        "linked_user_name": serialize_scalar(row["full_name"]),
+                        "linked_user_username": serialize_scalar(row["username"]),
+                        "linked_user_email": serialize_scalar(row["email"]),
+                    }
+                    for row in raw_users
+                }
+
             for table_name in sorted(inspector.get_table_names()):
                 quoted_table = quote_identifier(table_name)
                 columns = [
@@ -196,6 +225,21 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     {key: serialize_scalar(value) for key, value in row.items()}
                     for row in raw_rows
                 ]
+
+                if table_name in {"contact_requests", "user_social_links"}:
+                    append_virtual_columns(
+                        columns,
+                        [
+                            ("linked_user_name", "VARCHAR"),
+                            ("linked_user_username", "VARCHAR"),
+                            ("linked_user_email", "VARCHAR"),
+                        ],
+                    )
+                    for row in rows:
+                        linked_user_id = serialize_scalar(row.get("user_id"))
+                        user_details = users_lookup.get(linked_user_id, {})
+                        row.update(user_details)
+
                 tables.append(
                     {
                         "tableName": table_name,

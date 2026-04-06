@@ -3086,7 +3086,7 @@ body.workspace-body-mode .admin-db-group-header p {
 }
 
 body.workspace-body-mode .admin-table-section {
-  border: 1px solid rgba(42, 75, 140, 0.14);
+  border: 1px solid rgba(42, 75, 140, 0.22);
   border-radius: 4px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 255, 0.96));
   box-shadow: 0 10px 26px rgba(13, 36, 76, 0.06);
@@ -3117,24 +3117,34 @@ body.workspace-body-mode .admin-table-header p {
 body.workspace-body-mode .admin-table-scroll {
   width: 100%;
   overflow-x: auto;
+  border-top: 1px solid rgba(42, 75, 140, 0.12);
 }
 
 body.workspace-body-mode .admin-data-table {
   width: 100%;
   min-width: 720px;
   border-collapse: collapse;
+  border-left: 1px solid rgba(42, 75, 140, 0.12);
+  border-right: 1px solid rgba(42, 75, 140, 0.12);
 }
 
 body.workspace-body-mode .admin-data-table th,
 body.workspace-body-mode .admin-data-table td {
   padding: 12px 14px;
   text-align: left;
-  border-bottom: 1px solid rgba(42, 75, 140, 0.08);
+  border-right: 1px solid rgba(42, 75, 140, 0.12);
+  border-bottom: 1px solid rgba(42, 75, 140, 0.12);
   vertical-align: top;
+}
+
+body.workspace-body-mode .admin-data-table th:last-child,
+body.workspace-body-mode .admin-data-table td:last-child {
+  border-right: none;
 }
 
 body.workspace-body-mode .admin-data-table th {
   background: rgba(237, 244, 255, 0.96);
+  border-bottom: 1px solid rgba(42, 75, 140, 0.18);
 }
 
 body.workspace-body-mode .admin-data-table th span {
