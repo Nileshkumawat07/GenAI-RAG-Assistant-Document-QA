@@ -360,6 +360,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [adminReplyDrafts, setAdminReplyDrafts] = useState({});
   const [activeAdminRequestSection, setActiveAdminRequestSection] = useState("In Progress");
   const [activeAdminDatabaseSection, setActiveAdminDatabaseSection] = useState("accounts");
+  const [activeAdminDatabaseRequestFilter, setActiveAdminDatabaseRequestFilter] = useState("All");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -506,6 +507,22 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       title: status,
       items: adminRequests.filter((item) => (item.status || statuses[0]) === status),
     }));
+  };
+  const getAdminDatabaseRequestFilters = () => {
+    const statuses = adminStatusOptions.length > 0
+      ? adminStatusOptions
+      : ["In Progress", "In Review", "Completed"];
+
+    return [
+      {
+        id: "All",
+        title: "All",
+      },
+      ...statuses.map((status) => ({
+        id: status,
+        title: status,
+      })),
+    ];
   };
 
   const hasQuestion = question.trim().length > 0;
@@ -1099,15 +1116,59 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                 <p>{selectedDatabaseSection.copy}</p>
                               </div>
                             </div>
+                            {selectedDatabaseSection.id === "requests" ? (
+                              <div className="contact-request-category-row">
+                                {(() => {
+                                  const requestFilters = getAdminDatabaseRequestFilters();
+                                  const requestTable = selectedDatabaseSection.tables.find(
+                                    (table) => table.tableName === "contact_requests"
+                                  );
+                                  const requestRows = requestTable?.rows || [];
+
+                                  return requestFilters.map((filter) => {
+                                    const count =
+                                      filter.id === "All"
+                                        ? requestRows.length
+                                        : requestRows.filter(
+                                            (row) => (row.status || "In Progress") === filter.id
+                                          ).length;
+
+                                    return (
+                                      <button
+                                        key={filter.id}
+                                        type="button"
+                                        className={`contact-request-category-button ${activeAdminDatabaseRequestFilter === filter.id ? "active" : ""}`}
+                                        onClick={() => setActiveAdminDatabaseRequestFilter(filter.id)}
+                                      >
+                                        <span>{filter.title}</span>
+                                        <strong>{count}</strong>
+                                      </button>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            ) : null}
                             <div className="workspace-form-stack">
                               {selectedDatabaseSection.tables.map((table) => {
                                 const visibleColumns = getVisibleColumnsForTable(table, selectedDatabaseSection.columns);
+                                const filteredRows =
+                                  selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
+                                    ? (table.rows || []).filter(
+                                        (row) =>
+                                          activeAdminDatabaseRequestFilter === "All" ||
+                                          (row.status || "In Progress") === activeAdminDatabaseRequestFilter
+                                      )
+                                    : table.rows || [];
                                 return (
                                   <section key={table.tableName} className="admin-table-section">
                                     <div className="admin-table-header">
                                       <div>
                                         <h4>{prettifyKey(table.tableName)}</h4>
-                                        <p>{table.rowCount || 0} rows</p>
+                                        <p>
+                                          {selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
+                                            ? `${filteredRows.length} filtered rows`
+                                            : `${table.rowCount || 0} rows`}
+                                        </p>
                                       </div>
                                     </div>
                                     <div className="admin-table-scroll">
@@ -1122,7 +1183,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {(table.rows || []).slice(0, 10).map((row, index) => (
+                                          {filteredRows.slice(0, 10).map((row, index) => (
                                             <tr key={`${table.tableName}-${index}`}>
                                               {visibleColumns.map((columnName) => (
                                                 <td key={`${table.tableName}-${index}-${columnName}`}>
