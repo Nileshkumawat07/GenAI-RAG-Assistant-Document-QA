@@ -67,7 +67,7 @@ export async function authorizeLinkedProvider(providerKey, frontendOrigin) {
   }
 
   return new Promise((resolve, reject) => {
-    const expectedOrigin = new URL(data.callbackOrigin || apiUrl("/") || window.location.origin).origin;
+    const expectedOrigin = new URL(apiUrl("/"), window.location.origin).origin;
     const timeoutId = window.setTimeout(() => {
       cleanup();
       try {
@@ -103,10 +103,11 @@ export async function authorizeLinkedProvider(providerKey, frontendOrigin) {
       }
 
       resolve({
+        userId: payload.userId || "",
+        provider: payload.provider || providerKey,
         providerId: payload.providerId || "",
         email: payload.email || "",
         displayName: payload.displayName || "",
-        providerUserId: payload.providerUserId || "",
       });
     };
 
@@ -125,10 +126,6 @@ export async function unlinkProvider(providerKey, payload) {
     `/linked-providers/${encodeURIComponent(providerKey)}`,
     {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
     },
     `Failed to unlink ${providerKey}.`
   );

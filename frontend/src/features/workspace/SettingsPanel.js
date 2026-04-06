@@ -8,7 +8,6 @@ import {
 } from "../auth/authApi";
 import {
   authorizeLinkedProvider,
-  linkProvider,
   listLinkedProviders,
   unlinkProvider,
 } from "../auth/linkedProviderApi";
@@ -338,13 +337,13 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
           };
 
           items.forEach((item) => {
-            nextLinked[item.providerKey] = {
+            nextLinked[item.provider] = {
               linked: true,
               locked: false,
-              email: item.providerEmail,
-              displayName: item.providerDisplayName,
-              providerId: item.providerIdentifier,
-              linkedAt: item.linkedAt,
+              email: item.email,
+              displayName: current.linked[item.provider]?.displayName || profileName,
+              providerId: item.providerId,
+              linkedAt: current.linked[item.provider]?.linkedAt || new Date().toISOString(),
             };
           });
 
@@ -1491,14 +1490,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
                       }
 
                       if (isLinked) {
-                        if (!form.currentPassword.trim()) {
-                          setFeedback({ type: "error", text: `Enter your current password to unlink ${label}.` });
-                          return;
-                        }
-
                         try {
                           setLinkedSaving((current) => ({ ...current, [key]: true }));
-                          await unlinkProvider(key, { currentPassword: form.currentPassword.trim() });
+                          await unlinkProvider(key);
                           updateStoredSettings((current) => ({
                             ...current,
                             linked: {
@@ -1520,32 +1514,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
                         return;
                       }
 
-                      if (!form.currentPassword.trim()) {
-                        setFeedback({ type: "error", text: "Enter your current password to validate this link." });
-                        return;
-                      }
-
                       try {
                         setLinkedSaving((current) => ({ ...current, [key]: true }));
-                        const callbackProfile = await authorizeLinkedProvider(key, window.location.origin);
-                        if (!EMAIL_PATTERN.test((callbackProfile.email || "").trim())) {
+                        const providerProfile = await authorizeLinkedProvider(key, window.location.origin);
+                        if (!EMAIL_PATTERN.test((providerProfile.email || "").trim())) {
                           throw new Error(`${label} did not return a valid email address.`);
                         }
-                        if (!(callbackProfile.providerUserId || "").trim()) {
+                        if (!(providerProfile.providerId || "").trim()) {
                           throw new Error(`${label} did not return a valid account identifier.`);
                         }
 
-                        const providerProfile = await linkProvider(key, {
-                          providerKey: key,
-                          providerEmail: callbackProfile.email.trim().toLowerCase(),
-                          providerDisplayName: (callbackProfile.displayName || profileName).trim(),
-                          providerIdentifier: callbackProfile.providerUserId.trim(),
-                          callbackProviderId: callbackProfile.providerId,
-                          callbackEmail: callbackProfile.email.trim().toLowerCase(),
-                          callbackDisplayName: (callbackProfile.displayName || profileName).trim(),
-                          callbackUserId: callbackProfile.providerUserId.trim(),
-                          currentPassword: form.currentPassword.trim(),
-                        });
                         updateStoredSettings((current) => ({
                           ...current,
                           linked: {
@@ -1553,10 +1531,10 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
                             [key]: {
                               linked: true,
                               locked: false,
-                              email: providerProfile.providerEmail || "",
-                              displayName: providerProfile.providerDisplayName || "",
-                              providerId: providerProfile.providerIdentifier || "",
-                              linkedAt: providerProfile.linkedAt,
+                              email: providerProfile.email || "",
+                              displayName: providerProfile.displayName || profileName,
+                              providerId: providerProfile.providerId || "",
+                              linkedAt: new Date().toISOString(),
                             },
                           },
                         }));
@@ -1564,7 +1542,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
                           ...current,
                           [key]: { currentPassword: "" },
                         }));
-                        setFeedback({ type: "success", text: `${label} linked and validated successfully.` });
+                        setFeedback({ type: "success", text: `${label} linked successfully.` });
                         pushActivity(`${label} account linked successfully.`);
                       } catch (error) {
                         setFeedback({ type: "error", text: error.message || `Failed to link ${label}.` });
@@ -1579,11 +1557,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
 
                 {!isLocked ? (
                   <div className="linked-provider-form">
-                    {!isLinked ? <p className="tool-copy workspace-copy-paragraph">Click the link button to open the provider popup. The verified callback returned by the provider will be stored in MySQL only after your current password is confirmed.</p> : null}
+                    {!isLinked ? <p className="tool-copy workspace-copy-paragraph">Click the link button to open the provider popup. The provider account will be linked to your current signed-in account after OAuth completes.</p> : null}
                     <input
                       className="auth-input workspace-static-input"
                       type="password"
-                      placeholder={isLinked ? "Enter current password to unlink" : "Enter current password to validate link"}
+                      placeholder={isLinked ? "Linked account can be unlinked directly" : "No password required for provider linking"}
                       value={form.currentPassword}
                       onChange={(event) =>
                         setLinkedForms((current) => ({
@@ -1591,6 +1569,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
                           [key]: { ...current[key], currentPassword: event.target.value },
                         }))
                       }
+                      disabled
                     />
                   </div>
                 ) : null}
