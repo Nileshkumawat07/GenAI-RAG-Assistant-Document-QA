@@ -325,6 +325,7 @@ const INFO_PAGE_CONFIG = {
     tabs: [
       { id: "overview", label: "Overview", heading: "Administration Overview" },
       { id: "requests", label: "Contact Requests", heading: "Contact Request Queue" },
+      { id: "support", label: "Support", heading: "Support Request Table" },
       { id: "database", label: "Database", heading: "MySQL Table Overview" },
     ],
   },
@@ -410,13 +411,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         title: "Accounts",
         copy: "User account records with all stored non-secret fields.",
         tableNames: ["users"],
-        columns: null,
-      },
-      {
-        id: "requests",
-        title: "Support Requests",
-        copy: "Submitted contact and support issues with all stored request fields.",
-        tableNames: ["contact_requests"],
         columns: null,
       },
       {
@@ -1149,6 +1143,139 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     ) : null}
                   </div>
                 )}
+              </article>
+            </div>
+          </>
+        );
+      }
+
+      if (activeInfoTab === "support") {
+        const requestTable = getAdminTableByName("contact_requests");
+        const requestRows = requestTable?.rows || [];
+        const requestFilters = getAdminDatabaseRequestFilters();
+        const categoryFilters = getAdminDatabaseRequestCategoryFilters();
+        const visibleColumns = requestTable ? getVisibleColumnsForTable(requestTable, null) : [];
+        const tableColumns = requestTable ? [...visibleColumns, "__open_request__"] : [];
+        const filteredRows = requestRows.filter(
+          (row) =>
+            (activeAdminDatabaseRequestFilter === "All" ||
+              (row.status || "In Progress") === activeAdminDatabaseRequestFilter) &&
+            (activeAdminDatabaseRequestCategory === "All" ||
+              (row.category || "").toLowerCase() === activeAdminDatabaseRequestCategory)
+        );
+
+        return (
+          <>
+            <div className="insight-section">
+              <div className="insight-card">
+                <h3 className="tool-title">{activeInfoContent.heading}</h3>
+                <p className="tool-copy">Browse support requests with status and category filters in one dedicated admin section.</p>
+              </div>
+            </div>
+            <div className="content-grid single-column">
+              <article className="tool-card workspace-copy-card">
+                <div className="workspace-form-stack">
+                  <div className="contact-request-category-row">
+                    {requestFilters.map((filter) => {
+                      const count =
+                        filter.id === "All"
+                          ? requestRows.length
+                          : requestRows.filter(
+                              (row) => (row.status || "In Progress") === filter.id
+                            ).length;
+
+                      return (
+                        <button
+                          key={filter.id}
+                          type="button"
+                          className={`contact-request-category-button ${activeAdminDatabaseRequestFilter === filter.id ? "active" : ""}`}
+                          onClick={() => setActiveAdminDatabaseRequestFilter(filter.id)}
+                        >
+                          <span>{filter.title}</span>
+                          <strong>{count}</strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="contact-request-category-row">
+                    {categoryFilters.map((filter) => {
+                      const rowsForStatus = requestRows.filter(
+                        (row) =>
+                          activeAdminDatabaseRequestFilter === "All" ||
+                          (row.status || "In Progress") === activeAdminDatabaseRequestFilter
+                      );
+                      const count =
+                        filter.id === "All"
+                          ? rowsForStatus.length
+                          : rowsForStatus.filter(
+                              (row) => (row.category || "").toLowerCase() === filter.id
+                            ).length;
+
+                      return (
+                        <button
+                          key={filter.id}
+                          type="button"
+                          className={`contact-request-category-button ${activeAdminDatabaseRequestCategory === filter.id ? "active" : ""}`}
+                          onClick={() => setActiveAdminDatabaseRequestCategory(filter.id)}
+                        >
+                          <span>{filter.title}</span>
+                          <strong>{count}</strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <section className="admin-table-section">
+                    <div className="admin-table-header">
+                      <div>
+                        <h4>Contact Requests</h4>
+                      </div>
+                    </div>
+                    <div className="admin-table-scroll">
+                      <table className="admin-data-table">
+                        <thead>
+                          <tr>
+                            {tableColumns.map((columnName) => (
+                              <th key={columnName}>
+                                <span>{columnName === "__open_request__" ? "Open Request" : prettifyKey(columnName)}</span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRows.length > 0 ? (
+                            filteredRows.slice(0, 10).map((row, index) => (
+                              <tr key={`support-${index}`}>
+                                {tableColumns.map((columnName) => (
+                                  <td key={`support-${index}-${columnName}`}>
+                                    {columnName === "__open_request__" ? (
+                                      <button
+                                        type="button"
+                                        className="admin-table-action-button"
+                                        onClick={() => openContactRequestFromAdmin(row)}
+                                      >
+                                        Open Request
+                                      </button>
+                                    ) : (
+                                      renderDatabaseCell(columnName, row[columnName])
+                                    )}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={tableColumns.length || 1} className="admin-table-empty-row">
+                                No data available
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
               </article>
             </div>
           </>
