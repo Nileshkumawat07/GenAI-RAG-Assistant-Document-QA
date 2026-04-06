@@ -358,6 +358,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [adminError, setAdminError] = useState("");
   const [adminActionRequestId, setAdminActionRequestId] = useState("");
   const [adminReplyDrafts, setAdminReplyDrafts] = useState({});
+  const [activeAdminRequestSection, setActiveAdminRequestSection] = useState("In Progress");
+  const [activeAdminDatabaseSection, setActiveAdminDatabaseSection] = useState("accounts");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -402,30 +404,30 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       {
         id: "accounts",
         title: "Accounts",
-        copy: "User account records with the main identity and contact fields.",
+        copy: "User account records with all stored non-secret fields.",
         tableNames: ["users"],
-        columns: ["id", "full_name", "username", "email", "mobile", "created_at"],
+        columns: null,
       },
       {
         id: "requests",
         title: "Support Requests",
-        copy: "Submitted contact and support issues with status and admin reply.",
+        copy: "Submitted contact and support issues with all stored request fields.",
         tableNames: ["contact_requests"],
-        columns: ["id", "user_id", "category", "title", "request_code", "status", "admin_message", "created_at"],
+        columns: null,
       },
       {
         id: "providers",
         title: "Linked Providers",
-        copy: "Connected provider accounts and provider profile details.",
+        copy: "Connected Facebook, LinkedIn, and other provider records with all stored non-secret details.",
         tableNames: ["user_social_links"],
-        columns: ["id", "user_id", "provider", "provider_email", "provider_display_name", "provider_photo_url", "created_at"],
+        columns: null,
       },
       {
         id: "provider-config",
         title: "Provider Configuration",
-        copy: "OAuth and provider setup entries used by the workspace.",
+        copy: "OAuth and provider setup entries, excluding secrets.",
         tableNames: ["social_oauth_configs"],
-        columns: ["id", "provider", "display_name", "client_id", "enabled", "created_at"],
+        columns: null,
       },
     ];
 
@@ -461,7 +463,13 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       ? preferredColumns.filter((columnName) => availableColumns.includes(columnName))
       : availableColumns.filter((columnName) => {
           const normalized = columnName.toLowerCase();
-          return !normalized.includes("password") && !normalized.includes("token") && !normalized.includes("secret");
+          return (
+            !normalized.includes("password") &&
+            !normalized.includes("token") &&
+            !normalized.includes("secret") &&
+            !normalized.includes("hash") &&
+            !normalized.includes("security_answer")
+          );
         });
 
     return selectedColumns.length > 0 ? selectedColumns : availableColumns.slice(0, 6);
@@ -494,6 +502,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       : ["In Progress", "In Review", "Completed"];
 
     return statuses.map((status) => ({
+      id: status,
       title: status,
       items: adminRequests.filter((item) => (item.status || statuses[0]) === status),
     }));
@@ -897,6 +906,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
       if (activeInfoTab === "requests") {
         const requestSections = getAdminRequestSections();
+        const selectedRequestSection =
+          requestSections.find((section) => section.id === activeAdminRequestSection) ||
+          requestSections[0];
 
         return (
           <>
@@ -917,21 +929,35 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                   </div>
                 ) : (
                   <div className="admin-request-section-stack">
-                    {requestSections.map((section) => (
-                      <section key={section.title} className="admin-request-section">
+                    <div className="contact-request-category-row">
+                      {requestSections.map((section) => (
+                        <button
+                          key={section.id}
+                          type="button"
+                          className={`contact-request-category-button ${selectedRequestSection?.id === section.id ? "active" : ""}`}
+                          onClick={() => setActiveAdminRequestSection(section.id)}
+                        >
+                          <span>{section.title}</span>
+                          <strong>{section.items.length}</strong>
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedRequestSection ? (
+                      <section className="admin-request-section">
                         <div className="admin-request-section-header">
                           <div>
-                            <h4>{section.title}</h4>
-                            <p>{section.items.length} request{section.items.length === 1 ? "" : "s"}</p>
+                            <h4>{selectedRequestSection.title}</h4>
+                            <p>{selectedRequestSection.items.length} request{selectedRequestSection.items.length === 1 ? "" : "s"}</p>
                           </div>
                         </div>
-                        {section.items.length === 0 ? (
+                        {selectedRequestSection.items.length === 0 ? (
                           <div className="workspace-mini-card">
                             <p>No requests in this section.</p>
                           </div>
                         ) : (
                           <div className="admin-request-grid">
-                            {section.items.map((requestItem) => (
+                            {selectedRequestSection.items.map((requestItem) => (
                               <article key={requestItem.id} className="admin-request-card">
                                 <div className="admin-request-card-header">
                                   <div>
@@ -1016,7 +1042,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                           </div>
                         )}
                       </section>
-                    ))}
+                    ) : null}
                   </div>
                 )}
               </article>
@@ -1044,55 +1070,82 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                 </div>
               ) : (
                 <div className="workspace-form-stack">
-                  {getDatabaseSections().map((section) => (
-                    <section key={section.id} className="admin-db-group">
-                      <div className="admin-db-group-header">
-                        <div>
-                          <h4>{section.title}</h4>
-                          <p>{section.copy}</p>
+                  {(() => {
+                    const databaseSections = getDatabaseSections();
+                    const selectedDatabaseSection =
+                      databaseSections.find((section) => section.id === activeAdminDatabaseSection) ||
+                      databaseSections[0];
+
+                    return (
+                      <>
+                        <div className="contact-request-category-row">
+                          {databaseSections.map((section) => (
+                            <button
+                              key={section.id}
+                              type="button"
+                              className={`contact-request-category-button ${selectedDatabaseSection?.id === section.id ? "active" : ""}`}
+                              onClick={() => setActiveAdminDatabaseSection(section.id)}
+                            >
+                              <span>{section.title}</span>
+                              <strong>
+                                {section.tables.reduce((sum, table) => sum + (table.rowCount || 0), 0)}
+                              </strong>
+                            </button>
+                          ))}
                         </div>
-                      </div>
-                      <div className="workspace-form-stack">
-                        {section.tables.map((table) => {
-                          const visibleColumns = getVisibleColumnsForTable(table, section.columns);
-                          return (
-                            <section key={table.tableName} className="admin-table-section">
-                              <div className="admin-table-header">
-                                <div>
-                                  <h4>{prettifyKey(table.tableName)}</h4>
-                                  <p>{table.rowCount || 0} rows</p>
-                                </div>
+
+                        {selectedDatabaseSection ? (
+                          <section className="admin-db-group">
+                            <div className="admin-db-group-header">
+                              <div>
+                                <h4>{selectedDatabaseSection.title}</h4>
+                                <p>{selectedDatabaseSection.copy}</p>
                               </div>
-                              <div className="admin-table-scroll">
-                                <table className="admin-data-table">
-                                  <thead>
-                                    <tr>
-                                      {visibleColumns.map((columnName) => (
-                                        <th key={columnName}>
-                                          <span>{prettifyKey(columnName)}</span>
-                                        </th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {(table.rows || []).slice(0, 10).map((row, index) => (
-                                      <tr key={`${table.tableName}-${index}`}>
-                                        {visibleColumns.map((columnName) => (
-                                          <td key={`${table.tableName}-${index}-${columnName}`}>
-                                            {renderDatabaseCell(columnName, row[columnName])}
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </section>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  ))}
+                            </div>
+                            <div className="workspace-form-stack">
+                              {selectedDatabaseSection.tables.map((table) => {
+                                const visibleColumns = getVisibleColumnsForTable(table, selectedDatabaseSection.columns);
+                                return (
+                                  <section key={table.tableName} className="admin-table-section">
+                                    <div className="admin-table-header">
+                                      <div>
+                                        <h4>{prettifyKey(table.tableName)}</h4>
+                                        <p>{table.rowCount || 0} rows</p>
+                                      </div>
+                                    </div>
+                                    <div className="admin-table-scroll">
+                                      <table className="admin-data-table">
+                                        <thead>
+                                          <tr>
+                                            {visibleColumns.map((columnName) => (
+                                              <th key={columnName}>
+                                                <span>{prettifyKey(columnName)}</span>
+                                              </th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {(table.rows || []).slice(0, 10).map((row, index) => (
+                                            <tr key={`${table.tableName}-${index}`}>
+                                              {visibleColumns.map((columnName) => (
+                                                <td key={`${table.tableName}-${index}-${columnName}`}>
+                                                  {renderDatabaseCell(columnName, row[columnName])}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </section>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </article>
