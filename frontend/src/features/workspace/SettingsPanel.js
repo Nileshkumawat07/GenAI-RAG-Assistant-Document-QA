@@ -1483,6 +1483,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (activeTab === "privacy") {
     return (
       <div className="workspace-form-stack">
+        <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+          <p>{feedback.text}</p>
+        </div>
         <p className="tool-copy workspace-copy-paragraph">Manage your data preferences below:</p>
         <div className="billing-action-row privacy-action-row">
           <button
@@ -1592,32 +1595,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           </div>
         ) : null}
-        <label className="terms-check">
-          <input
-            type="checkbox"
-            checked={storedSettings.privacy.allowAdPersonalization}
-            onChange={(event) =>
-              updateStoredSettings((current) => ({
-                ...current,
-                privacy: { ...current.privacy, allowAdPersonalization: event.target.checked },
-              }))
-            }
-          />
-          <span>Allow Ad Personalization</span>
-        </label>
-        <label className="terms-check">
-          <input
-            type="checkbox"
-            checked={storedSettings.privacy.enableCookieTracking}
-            onChange={(event) =>
-              updateStoredSettings((current) => ({
-                ...current,
-                privacy: { ...current.privacy, enableCookieTracking: event.target.checked },
-              }))
-            }
-          />
-          <span>Enable Cookie Tracking</span>
-        </label>
       </div>
     );
   }
