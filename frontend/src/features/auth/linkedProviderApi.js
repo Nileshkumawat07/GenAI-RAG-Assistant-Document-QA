@@ -35,17 +35,29 @@ export async function authorizeLinkedProvider(providerKey, frontendOrigin) {
     throw new Error("Popup was blocked. Allow popups for this site and try again.");
   }
 
-  const data = await requestJson(
-    `/linked-providers/${encodeURIComponent(providerKey)}/authorize-url`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+  try {
+    popup.document.write(`<p style="font-family:Segoe UI,sans-serif;padding:16px">Opening ${providerKey} sign-in...</p>`);
+  } catch {}
+
+  let data;
+  try {
+    data = await requestJson(
+      `/linked-providers/${encodeURIComponent(providerKey)}/authorize-url`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ frontendOrigin }),
       },
-      body: JSON.stringify({ frontendOrigin }),
-    },
-    `Failed to start ${providerKey} sign-in.`
-  );
+      `Failed to start ${providerKey} sign-in.`
+    );
+  } catch (error) {
+    try {
+      popup.close();
+    } catch {}
+    throw error;
+  }
 
   try {
     popup.location.replace(data.authorizeUrl);
