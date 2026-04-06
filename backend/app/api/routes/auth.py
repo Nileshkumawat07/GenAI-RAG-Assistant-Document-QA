@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect, text
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import HTMLResponse
 
-from app.core.database import get_db
+from app.core.database import engine, get_db
 from app.schemas.auth import (
     AuthUserResponse,
     ChangePasswordRequest,
@@ -21,6 +22,16 @@ from app.services.otp_service import OTPService, OTPServiceError
 
 def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["auth"])
+
+    def quote_identifier(identifier: str) -> str:
+        return f"`{identifier.replace('`', '``')}`"
+
+    def serialize_scalar(value):
+        if value is None or isinstance(value, (bool, int, float, str)):
+            return value
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
+        return str(value)
 
     def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.startswith("Bearer "):
@@ -51,6 +62,8 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             emailVerified=user.email_verified,
             mobileVerified=user.mobile_verified,
             createdAt=user.created_at,
+            isAdmin=auth_service.is_admin_email(user.email),
+            mode="admin" if auth_service.is_admin_email(user.email) else "member",
             authToken=auth_service.create_access_token(user_id=user.id),
         )
 
@@ -149,6 +162,50 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             return {"message": "Password updated successfully."}
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/settings/admin/mysql-overview")
+    def admin_mysql_overview(
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
+            raise HTTPException(status_code=403, detail="Admin access is required.")
+
+        inspector = inspect(engine)
+        tables = []
+
+        with engine.connect() as connection:
+            for table_name in sorted(inspector.get_table_names()):
+                quoted_table = quote_identifier(table_name)
+                columns = [
+                    {
+                        "name": column["name"],
+                        "type": str(column["type"]),
+                        "nullable": column.get("nullable", True),
+                        "default": serialize_scalar(column.get("default")),
+                    }
+                    for column in inspector.get_columns(table_name)
+                ]
+                total_rows = connection.execute(
+                    text(f"SELECT COUNT(*) AS total FROM {quoted_table}")
+                ).scalar_one()
+                raw_rows = connection.execute(
+                    text(f"SELECT * FROM {quoted_table} ORDER BY 1 DESC LIMIT 100")
+                ).mappings().all()
+                rows = [
+                    {key: serialize_scalar(value) for key, value in row.items()}
+                    for row in raw_rows
+                ]
+                tables.append(
+                    {
+                        "tableName": table_name,
+                        "columns": columns,
+                        "rowCount": total_rows,
+                        "rows": rows,
+                    }
+                )
+
+        return {"tables": tables, "statusOptions": list(contact_request_service.STATUS_OPTIONS) if False else ["In Progress", "In Review", "Completed"]}
 
     @router.post("/email/send-verification")
     def send_email_verification(payload: SendEmailVerificationRequest):

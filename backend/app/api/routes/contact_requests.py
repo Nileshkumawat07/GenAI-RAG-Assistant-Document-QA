@@ -38,6 +38,9 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
             status=item.status,
             values=item.values,
             createdAt=item.created_at,
+            userFullName=item.user_full_name,
+            userEmail=item.user_email,
+            userMobile=item.user_mobile,
         )
 
     @router.post("", response_model=ContactRequestResponse)
@@ -74,6 +77,19 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
         except ContactRequestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.get("/admin/all", response_model=list[ContactRequestResponse])
+    def list_all_contact_requests(
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
+                raise HTTPException(status_code=403, detail="Admin access is required.")
+            items = contact_request_service.list_all_requests(db)
+            return [serialize_contact_request(item) for item in items]
+        except ContactRequestServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.patch("/{request_id}", response_model=ContactRequestResponse)
     def update_contact_request_status(
         request_id: str,
@@ -94,6 +110,25 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
         except ContactRequestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.patch("/admin/{request_id}", response_model=ContactRequestResponse)
+    def admin_update_contact_request_status(
+        request_id: str,
+        payload: ContactRequestUpdateStatus,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
+                raise HTTPException(status_code=403, detail="Admin access is required.")
+            item = contact_request_service.admin_update_status(
+                db,
+                request_id=request_id,
+                status=payload.status,
+            )
+            return serialize_contact_request(item)
+        except ContactRequestServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.delete("/{request_id}")
     def delete_contact_request(
         request_id: str,
@@ -105,6 +140,20 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
             if user_id != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only delete your own contact requests.")
             contact_request_service.delete_request(db, user_id=authenticated_user_id, request_id=request_id)
+            return {"message": "Contact request deleted successfully."}
+        except ContactRequestServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.delete("/admin/{request_id}")
+    def admin_delete_contact_request(
+        request_id: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
+                raise HTTPException(status_code=403, detail="Admin access is required.")
+            contact_request_service.admin_delete_request(db, request_id=request_id)
             return {"message": "Contact request deleted successfully."}
         except ContactRequestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

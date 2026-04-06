@@ -38,6 +38,40 @@ export async function updateContactRequestStatus(requestId, payload) {
   );
 }
 
+export async function listAllContactRequests() {
+  return requestJson(
+    "/contact-requests/admin/all",
+    {
+      method: "GET",
+    },
+    "Failed to load all contact requests."
+  );
+}
+
+export async function adminUpdateContactRequestStatus(requestId, payload) {
+  return requestJson(
+    `/contact-requests/admin/${encodeURIComponent(requestId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update admin contact request."
+  );
+}
+
+export async function adminDeleteContactRequest(requestId) {
+  return requestJson(
+    `/contact-requests/admin/${encodeURIComponent(requestId)}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete admin contact request."
+  );
+}
+
 export async function deleteContactRequest(requestId, userId) {
   return requestJson(
     `/contact-requests/${encodeURIComponent(requestId)}?userId=${encodeURIComponent(userId)}`,

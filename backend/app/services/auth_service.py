@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 
+ADMIN_EMAILS = {"knilesh769@gmail.com"}
+
 
 class AuthServiceError(RuntimeError):
     """Raised when signup or login fails for an expected reason."""
@@ -35,6 +37,7 @@ class UserPayload:
     email_verified: bool
     mobile_verified: bool
     created_at: str
+    is_admin: bool
 
 
 class AuthService:
@@ -52,6 +55,13 @@ class AuthService:
         payload = user_id.encode("utf-8")
         signature = hmac.new(self._token_secret, payload, hashlib.sha256).digest()
         return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+    def is_admin_email(self, email: str | None) -> bool:
+        return (email or "").strip().lower() in ADMIN_EMAILS
+
+    def user_is_admin(self, db: Session, *, user_id: str) -> bool:
+        user = self._get_user_model_by_id(db, user_id)
+        return self.is_admin_email(user.email)
 
     def verify_access_token(self, token: str) -> str:
         try:
@@ -243,6 +253,7 @@ class AuthService:
             email_verified=user.email_verified,
             mobile_verified=user.mobile_verified,
             created_at=user.created_at.isoformat(),
+            is_admin=self.is_admin_email(user.email),
         )
 
     @staticmethod

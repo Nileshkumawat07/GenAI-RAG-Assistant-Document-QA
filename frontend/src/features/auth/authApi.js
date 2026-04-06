@@ -18,7 +18,8 @@ export function normalizeAuthUser(user) {
     mobileVerified: user.mobileVerified,
     createdAt: user.createdAt,
     authToken: user.authToken,
-    mode: "member",
+    isAdmin: !!user.isAdmin,
+    mode: user.mode || (user.isAdmin ? "admin" : "member"),
   };
 }
 
@@ -113,5 +114,15 @@ export async function changePassword(payload) {
       body: JSON.stringify(payload),
     },
     "Failed to update password."
+  );
+}
+
+export async function getAdminMysqlOverview() {
+  return requestJson(
+    "/auth/settings/admin/mysql-overview",
+    {
+      method: "GET",
+    },
+    "Failed to load MySQL overview."
   );
 }

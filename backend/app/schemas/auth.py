@@ -68,4 +68,6 @@ class AuthUserResponse(BaseModel):
     emailVerified: bool
     mobileVerified: bool
     createdAt: str
+    isAdmin: bool
+    mode: str
     authToken: str

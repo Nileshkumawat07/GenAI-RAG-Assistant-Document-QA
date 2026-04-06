@@ -150,6 +150,7 @@ function App() {
     { id: "faqs", label: "FAQs", copy: "General, billing, technical, and account answers" },
     { id: "pricing", label: "Pricing", copy: "Plans, tiers, notes, and subscription options" },
   ];
+  const isAdmin = !!currentUser?.isAdmin;
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
 
   useEffect(() => {
@@ -295,9 +296,18 @@ function App() {
                         >
                           Settings
                         </button>
+                        {isAdmin ? (
+                          <button
+                            className="header-dropdown-item"
+                            type="button"
+                            onClick={() => navigateTo("workspace", "administration")}
+                          >
+                            Administration
+                          </button>
+                        ) : null}
                         <div className="profile-dropdown-summary">
                           <span>Plan: Pro Member</span>
-                          <span>Status: Active</span>
+                          <span>Status: {isAdmin ? "Admin Access" : "Active"}</span>
                         </div>
                         <button className="header-dropdown-item" type="button" onClick={handleLogout}>
                           Logout

@@ -25,6 +25,9 @@ class ContactRequestPayload:
     status: str
     values: dict[str, str]
     created_at: str
+    user_full_name: str | None = None
+    user_email: str | None = None
+    user_mobile: str | None = None
 
 
 class ContactRequestService:
@@ -36,7 +39,19 @@ class ContactRequestService:
         "media": "MPR",
     }
 
-    STATUS_OPTIONS = {"Submitted", "In Review", "In Process", "Closed"}
+    STATUS_OPTIONS = ("In Progress", "In Review", "Completed")
+    STATUS_ALIASES = {
+        "submitted": "In Progress",
+        "in process": "In Progress",
+        "in_progress": "In Progress",
+        "in-progress": "In Progress",
+        "in review": "In Review",
+        "in_review": "In Review",
+        "in-review": "In Review",
+        "closed": "Completed",
+        "complete": "Completed",
+        "completed": "Completed",
+    }
 
     def create_request(
         self,
@@ -56,7 +71,7 @@ class ContactRequestService:
             category=normalized_category,
             title=title.strip(),
             request_code=self._build_request_code(normalized_category),
-            status="Submitted",
+            status="In Progress",
             payload_json=json.dumps(values),
         )
         db.add(request)
@@ -73,20 +88,55 @@ class ContactRequestService:
         ).scalars().all()
         return [self._serialize(item) for item in requests]
 
+    def list_all_requests(self, db: Session) -> list[ContactRequestPayload]:
+        records = db.execute(
+            select(ContactRequest, User)
+            .join(User, User.id == ContactRequest.user_id)
+            .order_by(desc(ContactRequest.created_at))
+        ).all()
+        return [self._serialize(request, user) for request, user in records]
+
     def delete_request(self, db: Session, *, user_id: str, request_id: str) -> None:
         request = self._require_request(db, user_id, request_id)
         db.delete(request)
         db.commit()
 
+    def admin_delete_request(self, db: Session, *, request_id: str) -> None:
+        request = db.execute(
+            select(ContactRequest).where(ContactRequest.id == request_id)
+        ).scalar_one_or_none()
+        if not request:
+            raise ContactRequestServiceError("Contact request was not found.")
+        db.delete(request)
+        db.commit()
+
     def update_status(self, db: Session, *, user_id: str, request_id: str, status: str) -> ContactRequestPayload:
-        if status not in self.STATUS_OPTIONS:
+        normalized_status = self._normalize_status(status)
+        if not normalized_status:
             raise ContactRequestServiceError("Invalid request status.")
 
         request = self._require_request(db, user_id, request_id)
-        request.status = status
+        request.status = normalized_status
         db.commit()
         db.refresh(request)
         return self._serialize(request)
+
+    def admin_update_status(self, db: Session, *, request_id: str, status: str) -> ContactRequestPayload:
+        normalized_status = self._normalize_status(status)
+        if not normalized_status:
+            raise ContactRequestServiceError("Invalid request status.")
+
+        request = db.execute(
+            select(ContactRequest).where(ContactRequest.id == request_id)
+        ).scalar_one_or_none()
+        if not request:
+            raise ContactRequestServiceError("Contact request was not found.")
+
+        request.status = normalized_status
+        db.commit()
+        db.refresh(request)
+        user = db.execute(select(User).where(User.id == request.user_id)).scalar_one_or_none()
+        return self._serialize(request, user)
 
     def _require_user(self, db: Session, user_id: str) -> None:
         user = db.execute(select(User.id).where(User.id == user_id)).scalar_one_or_none()
@@ -111,14 +161,27 @@ class ContactRequestService:
 
         return f"{prefix}-{uuid.uuid4().hex[:8].upper()}"
 
-    def _serialize(self, request: ContactRequest) -> ContactRequestPayload:
+    def _normalize_status(self, status: str) -> str | None:
+        normalized = (status or "").strip()
+        if not normalized:
+            return None
+
+        if normalized in self.STATUS_OPTIONS:
+            return normalized
+
+        return self.STATUS_ALIASES.get(normalized.lower())
+
+    def _serialize(self, request: ContactRequest, user: User | None = None) -> ContactRequestPayload:
         return ContactRequestPayload(
             id=request.id,
             user_id=request.user_id,
             category=request.category,
             title=request.title,
             request_code=request.request_code,
-            status=request.status,
+            status=self._normalize_status(request.status) or request.status,
             values=json.loads(request.payload_json),
             created_at=request.created_at.isoformat(),
+            user_full_name=user.full_name if user else None,
+            user_email=user.email if user else None,
+            user_mobile=user.mobile if user else None,
         )

@@ -22,3 +22,6 @@ class ContactRequestResponse(BaseModel):
     status: str
     values: dict[str, str]
     createdAt: str
+    userFullName: str | None = None
+    userEmail: str | None = None
+    userMobile: str | None = None
