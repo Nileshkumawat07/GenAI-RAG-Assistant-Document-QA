@@ -1306,94 +1306,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                 );
                               })}
                             </div>
-                            {selectedDatabaseSection.id === "accounts" && selectedAdminUserId ? (
-                              (() => {
-                                const userDetails = getAdminUserDetails(selectedAdminUserId);
-                                if (!userDetails) {
-                                  return null;
-                                }
-
-                                const { userRow, userRequests, userProviders, requestStatusCounts, timelineItems } = userDetails;
-                                const detailCards = [
-                                  { title: "Full Name", text: userRow.full_name || "Not available" },
-                                  { title: "Username", text: userRow.username || "Not available" },
-                                  { title: "Email", text: userRow.email || "Not available" },
-                                  { title: "Alternate Email", text: userRow.alternate_email || "Not available" },
-                                  { title: "Mobile", text: userRow.mobile || "Not available" },
-                                  { title: "Joined", text: userRow.created_at || "Not available" },
-                                  { title: "Gender", text: userRow.gender || "Not available" },
-                                  { title: "Date Of Birth", text: userRow.date_of_birth || "Not available" },
-                                  { title: "Referral Code", text: userRow.referral_code || "Not available" },
-                                  { title: "Email Verified", text: userRow.email_verified ? "Yes" : "No" },
-                                  { title: "Mobile Verified", text: userRow.mobile_verified ? "Yes" : "No" },
-                                  { title: "Security Question", text: userRow.security_question || "Not available" },
-                                ];
-
-                                return (
-                                  <section className="admin-user-profile-panel">
-                                    <div className="admin-user-profile-header">
-                                      <div className="admin-user-profile-avatar">
-                                        {(userRow.full_name || userRow.email || "U").trim().charAt(0).toUpperCase()}
-                                      </div>
-                                      <div className="admin-user-profile-copy">
-                                        <h4>{userRow.full_name || "User Profile"}</h4>
-                                        <p>{userRow.email || "No email available"}</p>
-                                        <span>{userRow.username || "No username"} | {userRow.mobile || "No mobile"}</span>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        className="admin-table-action-button"
-                                        onClick={() => setSelectedAdminUserId("")}
-                                      >
-                                        Close
-                                      </button>
-                                    </div>
-
-                                    <div className="workspace-info-grid">
-                                      {detailCards.map((card) => (
-                                        <div key={card.title} className="workspace-mini-card">
-                                          <h4>{card.title}</h4>
-                                          <p>{card.text}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-
-                                    <div className="admin-user-summary-grid">
-                                      <div className="admin-user-summary-card">
-                                        <h4>Request Status Summary</h4>
-                                        {requestStatusCounts.map((item) => (
-                                          <p key={item.status}>
-                                            <strong>{item.status}:</strong> {item.count}
-                                          </p>
-                                        ))}
-                                        <p><strong>Total Requests:</strong> {userRequests.length}</p>
-                                      </div>
-
-                                      <div className="admin-user-summary-card">
-                                        <h4>Linked Providers</h4>
-                                        {userProviders.length > 0 ? userProviders.map((provider) => (
-                                          <p key={`${provider.user_id}-${provider.provider}`}>
-                                            <strong>{prettifyKey(provider.provider)}:</strong> {provider.email || provider.provider_id}
-                                          </p>
-                                        )) : <p>No linked providers found.</p>}
-                                      </div>
-                                    </div>
-
-                                    <div className="admin-user-history-panel">
-                                      <h4>User Timeline</h4>
-                                      <div className="admin-user-history-list">
-                                        {timelineItems.map((item, index) => (
-                                          <div key={`${item.title}-${index}`} className="admin-user-history-item">
-                                            <strong>{item.title}</strong>
-                                            <p>{item.text}</p>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </section>
-                                );
-                              })()
-                            ) : null}
                           </section>
                         ) : null}
                       </>
@@ -1852,6 +1764,24 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     );
   };
 
+  const selectedAdminUserDetails = getAdminUserDetails(selectedAdminUserId);
+  const selectedAdminUserDetailCards = selectedAdminUserDetails
+    ? [
+        { title: "Full Name", text: selectedAdminUserDetails.userRow.full_name || "Not available" },
+        { title: "Username", text: selectedAdminUserDetails.userRow.username || "Not available" },
+        { title: "Email", text: selectedAdminUserDetails.userRow.email || "Not available" },
+        { title: "Alternate Email", text: selectedAdminUserDetails.userRow.alternate_email || "Not available" },
+        { title: "Mobile", text: selectedAdminUserDetails.userRow.mobile || "Not available" },
+        { title: "Joined", text: selectedAdminUserDetails.userRow.created_at || "Not available" },
+        { title: "Gender", text: selectedAdminUserDetails.userRow.gender || "Not available" },
+        { title: "Date Of Birth", text: selectedAdminUserDetails.userRow.date_of_birth || "Not available" },
+        { title: "Referral Code", text: selectedAdminUserDetails.userRow.referral_code || "Not available" },
+        { title: "Email Verified", text: selectedAdminUserDetails.userRow.email_verified ? "Yes" : "No" },
+        { title: "Mobile Verified", text: selectedAdminUserDetails.userRow.mobile_verified ? "Yes" : "No" },
+        { title: "Security Question", text: selectedAdminUserDetails.userRow.security_question || "Not available" },
+      ]
+    : [];
+
   return (
     <section id="workspace" className="workspace-page">
       <div className="workspace-shell">
@@ -1968,6 +1898,75 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
           </div>
         </div>
       </div>
+      {selectedAdminUserDetails ? (
+        <div className="admin-user-modal-backdrop" onClick={() => setSelectedAdminUserId("")}>
+          <div className="admin-user-modal" onClick={(event) => event.stopPropagation()}>
+            <section className="admin-user-profile-panel">
+              <div className="admin-user-profile-header">
+                <div className="admin-user-profile-avatar">
+                  {(selectedAdminUserDetails.userRow.full_name || selectedAdminUserDetails.userRow.email || "U").trim().charAt(0).toUpperCase()}
+                </div>
+                <div className="admin-user-profile-copy">
+                  <h4>{selectedAdminUserDetails.userRow.full_name || "User Profile"}</h4>
+                  <p>{selectedAdminUserDetails.userRow.email || "No email available"}</p>
+                  <span>
+                    {selectedAdminUserDetails.userRow.username || "No username"} | {selectedAdminUserDetails.userRow.mobile || "No mobile"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="admin-table-action-button"
+                  onClick={() => setSelectedAdminUserId("")}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="workspace-info-grid">
+                {selectedAdminUserDetailCards.map((card) => (
+                  <div key={card.title} className="workspace-mini-card">
+                    <h4>{card.title}</h4>
+                    <p>{card.text}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="admin-user-summary-grid">
+                <div className="admin-user-summary-card">
+                  <h4>Request Status Summary</h4>
+                  {selectedAdminUserDetails.requestStatusCounts.map((item) => (
+                    <p key={item.status}>
+                      <strong>{item.status}:</strong> {item.count}
+                    </p>
+                  ))}
+                  <p><strong>Total Requests:</strong> {selectedAdminUserDetails.userRequests.length}</p>
+                </div>
+
+                <div className="admin-user-summary-card">
+                  <h4>Linked Providers</h4>
+                  {selectedAdminUserDetails.userProviders.length > 0 ? selectedAdminUserDetails.userProviders.map((provider) => (
+                    <p key={`${provider.user_id}-${provider.provider}`}>
+                      <strong>{prettifyKey(provider.provider)}:</strong> {provider.email || provider.provider_id}
+                    </p>
+                  )) : <p>No linked providers found.</p>}
+                </div>
+              </div>
+
+              <div className="admin-user-history-panel">
+                <h4>User Timeline</h4>
+                <div className="admin-user-history-list">
+                  {selectedAdminUserDetails.timelineItems.map((item, index) => (
+                    <div key={`${item.title}-${index}`} className="admin-user-history-item">
+                      <strong>{item.title}</strong>
+                      <p>{item.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

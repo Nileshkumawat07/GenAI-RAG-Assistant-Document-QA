@@ -3109,6 +3109,24 @@ body.workspace-body-mode .admin-user-profile-panel {
   box-shadow: 0 12px 28px rgba(13, 36, 76, 0.08);
 }
 
+body.workspace-body-mode .admin-user-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(12, 28, 56, 0.42);
+  backdrop-filter: blur(6px);
+}
+
+body.workspace-body-mode .admin-user-modal {
+  width: min(1120px, 100%);
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+
 body.workspace-body-mode .admin-user-profile-header {
   display: flex;
   align-items: center;
