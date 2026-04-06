@@ -9,7 +9,6 @@ import {
   getCurrentUser,
   setCurrentUser,
 } from "./features/auth/authStorage";
-import { getTranslator } from "./shared/i18n";
 import WorkspacePage from "./features/workspace/WorkspacePage";
 
 function getWorkspaceSettings(userId) {
@@ -28,35 +27,8 @@ function getWorkspaceSettings(userId) {
 function applyWorkspacePreferences(user) {
   const settings = getWorkspaceSettings(user?.id);
   const fontSize = settings?.preferences?.fontSize || "Medium";
-  const language = settings?.preferences?.language || "English";
-  const fontScale = fontSize === "Small" ? "0.94" : fontSize === "Large" ? "1.08" : "1";
-  const localeMap = {
-    English: "en",
-    Hindi: "hi",
-    Marathi: "mr",
-    Gujarati: "gu",
-    Tamil: "ta",
-    Telugu: "te",
-    Kannada: "kn",
-    Malayalam: "ml",
-    Punjabi: "pa",
-    Bengali: "bn",
-    Odia: "or",
-    Urdu: "ur",
-    French: "fr",
-    German: "de",
-    Spanish: "es",
-    Japanese: "ja",
-    Chinese: "zh",
-    Arabic: "ar",
-  };
-  const nextLang = localeMap[language] || "en";
-  const isRtl = nextLang === "ar" || nextLang === "ur";
-
+  const fontScale = fontSize === "Small" ? "0.9" : fontSize === "Large" ? "1.2" : "1";
   document.documentElement.style.setProperty("--workspace-font-scale", fontScale);
-  document.documentElement.lang = nextLang;
-  document.documentElement.dir = isRtl ? "rtl" : "ltr";
-  return language;
 }
 
 function App() {
@@ -65,8 +37,6 @@ function App() {
   const [showInfoMenu, setShowInfoMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
-  const [workspaceLanguage, setWorkspaceLanguage] = useState(() => getWorkspaceSettings(getCurrentUser()?.id)?.preferences?.language || "English");
-  const t = getTranslator(workspaceLanguage);
 
   const buildRouteHash = (nextScreen, nextInfoPage = null) => {
     if (nextScreen !== "workspace") {
@@ -120,14 +90,12 @@ function App() {
   const moveToWorkspace = (user) => {
     setCurrentUser(user);
     setCurrentUserState(user);
-    setWorkspaceLanguage(getWorkspaceSettings(user?.id)?.preferences?.language || "English");
     navigateTo("workspace", null);
   };
 
   const handleUserUpdate = (user) => {
     setCurrentUser(user);
     setCurrentUserState(user);
-    setWorkspaceLanguage(getWorkspaceSettings(user?.id)?.preferences?.language || "English");
   };
 
   const handleSignup = async (formData) => {
@@ -143,14 +111,12 @@ function App() {
   const handleLogout = () => {
     clearCurrentUser();
     setCurrentUserState(null);
-    setWorkspaceLanguage("English");
     navigateTo("home", null);
   };
 
   const handleAccountDeleted = () => {
     clearCurrentUser();
     setCurrentUserState(null);
-    setWorkspaceLanguage("English");
     navigateTo("home", null);
   };
 
@@ -161,7 +127,6 @@ function App() {
           onBack={() => navigateTo("home")}
           onShowSignup={() => navigateTo("signup")}
           onSubmit={handleLogin}
-          t={t}
         />
       );
     }
@@ -172,7 +137,6 @@ function App() {
           onBack={() => navigateTo("home")}
           onShowLogin={() => navigateTo("login")}
           onSubmit={handleSignup}
-          t={t}
         />
       );
     }
@@ -183,7 +147,6 @@ function App() {
           <HomePage
             onLogin={() => navigateTo("login")}
             onSignup={() => navigateTo("signup")}
-            t={t}
           />
         );
       }
@@ -194,7 +157,6 @@ function App() {
           selectedInfoPage={selectedInfoPage}
           onUserUpdate={handleUserUpdate}
           onAccountDeleted={handleAccountDeleted}
-          t={t}
         />
       );
     }
@@ -203,18 +165,17 @@ function App() {
       <HomePage
         onLogin={() => navigateTo("login")}
         onSignup={() => navigateTo("signup")}
-        t={t}
       />
     );
   };
 
   const isWorkspace = screen === "workspace";
   const infoPages = [
-    { id: "about", label: t("about_us", "About Us"), copy: "Company story, mission, leadership, and milestones" },
-    { id: "careers", label: t("careers", "Careers"), copy: "Open roles, hiring flow, and work culture" },
-    { id: "contact", label: t("contact_us", "Contact Us"), copy: "Inquiry forms, support paths, and response details" },
-    { id: "faqs", label: t("faqs", "FAQs"), copy: "General, billing, technical, and account answers" },
-    { id: "pricing", label: t("pricing", "Pricing"), copy: "Plans, tiers, notes, and subscription options" },
+    { id: "about", label: "About Us", copy: "Company story, mission, leadership, and milestones" },
+    { id: "careers", label: "Careers", copy: "Open roles, hiring flow, and work culture" },
+    { id: "contact", label: "Contact Us", copy: "Inquiry forms, support paths, and response details" },
+    { id: "faqs", label: "FAQs", copy: "General, billing, technical, and account answers" },
+    { id: "pricing", label: "Pricing", copy: "Plans, tiers, notes, and subscription options" },
   ];
   const isAdmin = !!currentUser?.isAdmin;
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
@@ -255,8 +216,7 @@ function App() {
   }, [screen, currentUser]);
 
   useEffect(() => {
-    const nextLanguage = applyWorkspacePreferences(currentUser);
-    setWorkspaceLanguage(nextLanguage || "English");
+    applyWorkspacePreferences(currentUser);
   }, [currentUser]);
 
   useEffect(() => {
@@ -265,8 +225,7 @@ function App() {
       if (!currentUser?.id || changedUserId !== currentUser.id) {
         return;
       }
-      const nextLanguage = applyWorkspacePreferences(currentUser);
-      setWorkspaceLanguage(nextLanguage || "English");
+      applyWorkspacePreferences(currentUser);
     };
 
     window.addEventListener("workspace-settings-changed", handlePreferenceChange);
@@ -311,8 +270,8 @@ function App() {
             </div>
             <div className="app-brand-copy">
               <div className="app-brand-title-row">
-                <h2 className="app-title">{isWorkspace ? "Unified AI Workspace" : t("professional_ai_platform", "Professional AI Platform")}</h2>
-                {!isWorkspace ? <span className="app-brand-mini-tag">{t("trusted_platform", "Trusted Platform")}</span> : null}
+                <h2 className="app-title">{isWorkspace ? "Unified AI Workspace" : "Professional AI Platform"}</h2>
+                {!isWorkspace ? <span className="app-brand-mini-tag">Trusted Platform</span> : null}
               </div>
             </div>
           </div>
@@ -327,7 +286,7 @@ function App() {
                       type="button"
                       onClick={() => navigateTo("workspace", null)}
                     >
-                      {t("assistant", "Assistant")}
+                      Assistant
                     </button>
                   ) : null}
                   <button
@@ -338,7 +297,7 @@ function App() {
                       setShowInfoMenu((current) => !current);
                     }}
                   >
-                    {t("pages", "Pages")}
+                    Pages
                   </button>
                   {showInfoMenu ? (
                     <div className="header-dropdown-menu">
@@ -368,7 +327,7 @@ function App() {
                     >
                       <span className="profile-button-avatar">{profileInitial}</span>
                       <span className="profile-button-text">{currentUser.name}</span>
-                      {isPremiumMember ? <span className="profile-plan-badge">{t("premium", "Premium")}</span> : null}
+                      {isPremiumMember ? <span className="profile-plan-badge">Premium</span> : null}
                     </button>
                     {showProfileMenu ? (
                       <div className="profile-dropdown-menu">
@@ -377,7 +336,7 @@ function App() {
                           <div className="profile-dropdown-meta">
                             <strong>{currentUser.name}</strong>
                             <span>{currentUser.email}</span>
-                            {isPremiumMember ? <span className="profile-dropdown-badge">{t("premium_member", "Premium Member")}</span> : null}
+                            {isPremiumMember ? <span className="profile-dropdown-badge">Premium Member</span> : null}
                           </div>
                         </div>
                         <button
@@ -385,14 +344,14 @@ function App() {
                           type="button"
                           onClick={() => navigateTo("workspace", "profile")}
                         >
-                          {t("profile", "Profile")}
+                          Profile
                         </button>
                         <button
                           className="header-dropdown-item"
                           type="button"
                           onClick={() => navigateTo("workspace", "settings")}
                         >
-                          {t("settings", "Settings")}
+                          Settings
                         </button>
                         {isAdmin ? (
                           <button
@@ -400,15 +359,15 @@ function App() {
                             type="button"
                             onClick={() => navigateTo("workspace", "administration")}
                           >
-                            {t("administration", "Administration")}
+                            Administration
                           </button>
                         ) : null}
                         <div className="profile-dropdown-summary">
-                          <span>{t("plan", "Plan")}: {userPlanName}</span>
-                          <span>{t("status", "Status")}: {userPlanStatus}</span>
+                          <span>Plan: {userPlanName}</span>
+                          <span>Status: {userPlanStatus}</span>
                         </div>
                         <button className="header-dropdown-item" type="button" onClick={handleLogout}>
-                          {t("logout", "Logout")}
+                          Logout
                         </button>
                       </div>
                     ) : null}
