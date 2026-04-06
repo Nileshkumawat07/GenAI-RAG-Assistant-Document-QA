@@ -528,15 +528,12 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       })),
     ];
   };
-  const getAdminDatabaseRequestCategoryFilters = (rows) => {
+  const getAdminDatabaseRequestCategoryFilters = () => {
     const orderedCategories = ["general", "business", "feedback", "technical", "partnership", "media"];
-    const availableCategories = orderedCategories.filter((category) =>
-      rows.some((row) => (row.category || "").toLowerCase() === category)
-    );
 
     return [
       { id: "All", title: "All" },
-      ...availableCategories.map((category) => ({
+      ...orderedCategories.map((category) => ({
         id: category,
         title: prettifyKey(category),
       })),
@@ -1251,7 +1248,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                         activeAdminDatabaseRequestFilter === "All" ||
                                         (row.status || "In Progress") === activeAdminDatabaseRequestFilter
                                     );
-                                    const categoryFilters = getAdminDatabaseRequestCategoryFilters(requestRows);
+                                    const categoryFilters = getAdminDatabaseRequestCategoryFilters();
 
                                     return categoryFilters.map((filter) => {
                                       const count =
@@ -1324,33 +1321,41 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {filteredRows.slice(0, 10).map((row, index) => (
-                                            <tr key={`${table.tableName}-${index}`}>
-                                              {tableColumns.map((columnName) => (
-                                                <td key={`${table.tableName}-${index}-${columnName}`}>
-                                                  {columnName === "__open_request__" ? (
-                                                    <button
-                                                      type="button"
-                                                      className="admin-table-action-button"
-                                                      onClick={() => openContactRequestFromAdmin(row)}
-                                                    >
-                                                      Open Request
-                                                    </button>
-                                                  ) : columnName === "__view_user__" ? (
-                                                    <button
-                                                      type="button"
-                                                      className="admin-table-action-button"
-                                                      onClick={() => setSelectedAdminUserId(row.id)}
-                                                    >
-                                                      View User
-                                                    </button>
-                                                  ) : (
-                                                    renderDatabaseCell(columnName, row[columnName])
-                                                  )}
-                                                </td>
-                                              ))}
+                                          {filteredRows.length > 0 ? (
+                                            filteredRows.slice(0, 10).map((row, index) => (
+                                              <tr key={`${table.tableName}-${index}`}>
+                                                {tableColumns.map((columnName) => (
+                                                  <td key={`${table.tableName}-${index}-${columnName}`}>
+                                                    {columnName === "__open_request__" ? (
+                                                      <button
+                                                        type="button"
+                                                        className="admin-table-action-button"
+                                                        onClick={() => openContactRequestFromAdmin(row)}
+                                                      >
+                                                        Open Request
+                                                      </button>
+                                                    ) : columnName === "__view_user__" ? (
+                                                      <button
+                                                        type="button"
+                                                        className="admin-table-action-button"
+                                                        onClick={() => setSelectedAdminUserId(row.id)}
+                                                      >
+                                                        View User
+                                                      </button>
+                                                    ) : (
+                                                      renderDatabaseCell(columnName, row[columnName])
+                                                    )}
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            ))
+                                          ) : (
+                                            <tr>
+                                              <td colSpan={tableColumns.length} className="admin-table-empty-row">
+                                                No data available
+                                              </td>
                                             </tr>
-                                          ))}
+                                          )}
                                         </tbody>
                                       </table>
                                     </div>

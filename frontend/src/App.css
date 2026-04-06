@@ -3336,6 +3336,14 @@ body.workspace-body-mode .admin-table-empty {
   font-style: italic;
 }
 
+body.workspace-body-mode .admin-table-empty-row {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  background: rgba(248, 251, 255, 0.94);
+}
+
 body.workspace-body-mode .provider-photo-cell {
   display: grid;
   gap: 8px;
