@@ -590,7 +590,12 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         status: requestRow.status || "In Progress",
       })
     );
-    window.location.hash = "#/workspace/administration";
+    setInfoTabs((current) => ({
+      ...current,
+      administration: "requests",
+    }));
+    setActiveAdminRequestSection(requestRow.status || "In Progress");
+    setFocusedContactRequestId(requestRow.id);
   };
 
   const clearFocusedContactRequest = (requestId) => {
