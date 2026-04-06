@@ -16,6 +16,8 @@ import {
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 
+const CONTACT_REQUEST_FOCUS_STORAGE_KEY = "workspace_contact_request_focus";
+
 const INFO_PAGE_CONFIG = {
   about: {
     title: "About Us",
@@ -361,6 +363,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [activeAdminRequestSection, setActiveAdminRequestSection] = useState("In Progress");
   const [activeAdminDatabaseSection, setActiveAdminDatabaseSection] = useState("accounts");
   const [activeAdminDatabaseRequestFilter, setActiveAdminDatabaseRequestFilter] = useState("All");
+  const [focusedContactRequestId, setFocusedContactRequestId] = useState("");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -579,11 +582,59 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     }
   };
 
+  const openContactRequestFromAdmin = (requestRow) => {
+    window.sessionStorage.setItem(
+      CONTACT_REQUEST_FOCUS_STORAGE_KEY,
+      JSON.stringify({
+        requestId: requestRow.id,
+        category: requestRow.category || "general",
+      })
+    );
+    window.location.hash = "#/workspace/contact";
+  };
+
   useEffect(() => {
     if (selectedInfoPage === "contact" && currentUser?.id) {
       loadContactRequests();
     }
   }, [selectedInfoPage, currentUser?.id]);
+
+  useEffect(() => {
+    if (selectedInfoPage !== "contact") {
+      return;
+    }
+
+    const pendingFocus = window.sessionStorage.getItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
+    if (!pendingFocus) {
+      return;
+    }
+
+    try {
+      const parsedFocus = JSON.parse(pendingFocus);
+      if (parsedFocus?.requestId) {
+        setInfoTabs((current) => ({
+          ...current,
+          contact: "submittedRequests",
+        }));
+        setActiveSubmittedCategory(parsedFocus.category || "general");
+        setFocusedContactRequestId(parsedFocus.requestId);
+      }
+    } catch {
+      window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
+    }
+  }, [selectedInfoPage]);
+
+  useEffect(() => {
+    if (selectedInfoPage !== "contact" || !focusedContactRequestId) {
+      return;
+    }
+
+    const targetCard = document.getElementById(`contact-request-${focusedContactRequestId}`);
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
+    }
+  }, [selectedInfoPage, focusedContactRequestId, contactRequests, activeSubmittedCategory]);
 
   useEffect(() => {
     if (selectedInfoPage === "administration" && isAdmin) {
@@ -923,6 +974,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
       if (activeInfoTab === "requests") {
         const requestSections = getAdminRequestSections();
+        const selectedRequestSection =
+          requestSections.find((section) => section.id === activeAdminRequestSection) ||
+          requestSections[0];
 
         return (
           <>
@@ -948,7 +1002,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                         <button
                           key={section.id}
                           type="button"
-                          className={`contact-request-category-button ${activeAdminRequestSection === section.id ? "active" : ""}`}
+                          className={`contact-request-category-button ${selectedRequestSection?.id === section.id ? "active" : ""}`}
                           onClick={() => setActiveAdminRequestSection(section.id)}
                         >
                           <span>{section.title}</span>
@@ -957,21 +1011,21 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                       ))}
                     </div>
 
-                    {requestSections.map((section) => (
-                      <section key={section.id} className="admin-request-section">
+                    {selectedRequestSection ? (
+                      <section className="admin-request-section">
                         <div className="admin-request-section-header">
                           <div>
-                            <h4>{section.title}</h4>
-                            <p>{section.items.length} request{section.items.length === 1 ? "" : "s"}</p>
+                            <h4>{selectedRequestSection.title}</h4>
+                            <p>{selectedRequestSection.items.length} request{selectedRequestSection.items.length === 1 ? "" : "s"}</p>
                           </div>
                         </div>
-                        {section.items.length === 0 ? (
+                        {selectedRequestSection.items.length === 0 ? (
                           <div className="workspace-mini-card">
                             <p>No requests in this section.</p>
                           </div>
                         ) : (
                           <div className="admin-request-grid">
-                            {section.items.map((requestItem) => (
+                            {selectedRequestSection.items.map((requestItem) => (
                               <article key={requestItem.id} className="admin-request-card">
                                 <div className="admin-request-card-header">
                                   <div>
@@ -1056,7 +1110,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                           </div>
                         )}
                       </section>
-                    ))}
+                    ) : null}
                   </div>
                 )}
               </article>
@@ -1151,6 +1205,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                             <div className="workspace-form-stack">
                               {selectedDatabaseSection.tables.map((table) => {
                                 const visibleColumns = getVisibleColumnsForTable(table, selectedDatabaseSection.columns);
+                                const tableColumns =
+                                  selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
+                                    ? [...visibleColumns, "__open_request__"]
+                                    : visibleColumns;
                                 const filteredRows =
                                   selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
                                     ? (table.rows || []).filter(
@@ -1175,9 +1233,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                       <table className="admin-data-table">
                                         <thead>
                                           <tr>
-                                            {visibleColumns.map((columnName) => (
+                                            {tableColumns.map((columnName) => (
                                               <th key={columnName}>
-                                                <span>{prettifyKey(columnName)}</span>
+                                                <span>{columnName === "__open_request__" ? "Action" : prettifyKey(columnName)}</span>
                                               </th>
                                             ))}
                                           </tr>
@@ -1185,9 +1243,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                         <tbody>
                                           {filteredRows.slice(0, 10).map((row, index) => (
                                             <tr key={`${table.tableName}-${index}`}>
-                                              {visibleColumns.map((columnName) => (
+                                              {tableColumns.map((columnName) => (
                                                 <td key={`${table.tableName}-${index}-${columnName}`}>
-                                                  {renderDatabaseCell(columnName, row[columnName])}
+                                                  {columnName === "__open_request__" ? (
+                                                    <button
+                                                      type="button"
+                                                      className="admin-table-action-button"
+                                                      onClick={() => openContactRequestFromAdmin(row)}
+                                                    >
+                                                      Open Request
+                                                    </button>
+                                                  ) : (
+                                                    renderDatabaseCell(columnName, row[columnName])
+                                                  )}
                                                 </td>
                                               ))}
                                             </tr>
@@ -1352,7 +1420,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                           <div className="contact-request-card-scroll">
                             <div className="contact-request-card-grid">
                               {selectedSubmittedGroup.items.map((requestItem) => (
-                                <div key={requestItem.id} className="contact-request-card">
+                                <div
+                                  key={requestItem.id}
+                                  id={`contact-request-${requestItem.id}`}
+                                  className={`contact-request-card ${focusedContactRequestId === requestItem.id ? "is-focused" : ""}`}
+                                >
                                   <div className="contact-request-card-head">
                                     <div>
                                       <p className="contact-request-type">{requestItem.title || selectedSubmittedGroup.label}</p>

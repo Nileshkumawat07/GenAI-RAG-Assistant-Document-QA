@@ -2999,6 +2999,11 @@ body.workspace-body-mode .admin-request-card {
   box-shadow: 0 10px 26px rgba(13, 36, 76, 0.06);
 }
 
+body.workspace-body-mode .contact-request-card.is-focused {
+  border-color: rgba(45, 107, 192, 0.42);
+  box-shadow: 0 0 0 3px rgba(45, 107, 192, 0.12), 0 12px 30px rgba(13, 36, 76, 0.1);
+}
+
 body.workspace-body-mode .admin-request-card-header {
   display: flex;
   align-items: flex-start;
@@ -3168,6 +3173,24 @@ body.workspace-body-mode .admin-data-table td {
   line-height: 1.5;
   color: var(--text);
   word-break: break-word;
+}
+
+body.workspace-body-mode .admin-table-action-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(18, 61, 122, 0.14);
+  background: linear-gradient(135deg, #123d7a, #2d6bc0);
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(18, 61, 122, 0.18);
+}
+
+body.workspace-body-mode .admin-table-action-button:hover {
+  transform: translateY(-1px);
 }
 
 body.workspace-body-mode .admin-table-empty {
