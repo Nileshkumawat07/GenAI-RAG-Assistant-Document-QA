@@ -2942,6 +2942,39 @@ body.workspace-body-mode .billing-action-row .primary-button {
   min-width: 190px;
 }
 
+body.workspace-body-mode .privacy-action-row .primary-button {
+  flex: 0 1 auto;
+}
+
+body.workspace-body-mode .privacy-export-card {
+  background:
+    radial-gradient(circle at top right, rgba(76, 123, 209, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 246, 255, 0.96));
+}
+
+body.workspace-body-mode .privacy-capability-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+body.workspace-body-mode .privacy-capability-grid .workspace-mini-card {
+  min-height: 138px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+body.workspace-body-mode .privacy-capability-grid .workspace-mini-card h4 {
+  margin: 0;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .privacy-capability-grid .workspace-mini-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
 body.workspace-body-mode .billing-payment-card,
 body.workspace-body-mode .billing-invoice-shell {
   display: grid;

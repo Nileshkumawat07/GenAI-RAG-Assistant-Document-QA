@@ -135,3 +135,34 @@ export async function getAdminMysqlOverview() {
     "Failed to load MySQL overview."
   );
 }
+
+export async function downloadAccountDataPdf() {
+  const authToken = window.sessionStorage.getItem("genai_assistant_auth_token");
+  const response = await fetch("/auth/settings/data-export/pdf", {
+    method: "GET",
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to download account data PDF.";
+    try {
+      const data = await response.json();
+      errorMessage = data.detail || errorMessage;
+    } catch {
+      // Keep fallback message for non-JSON responses.
+    }
+    throw new Error(errorMessage);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const header = response.headers.get("Content-Disposition") || "";
+  const matchedFileName = header.match(/filename=\"?([^"]+)\"?/i);
+  link.href = url;
+  link.download = matchedFileName?.[1] || "account-data-export.pdf";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}

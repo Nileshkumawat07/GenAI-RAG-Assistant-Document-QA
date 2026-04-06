@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   changePassword,
+  downloadAccountDataPdf,
   updateEmail,
   updateMobile,
   updateUsername,
@@ -271,6 +272,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingActionLoading, setBillingActionLoading] = useState("");
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
+  const [privacyActionLoading, setPrivacyActionLoading] = useState("");
 
   const usernameRecaptchaId = useRef(`settings-username-mobile-${Math.random().toString(36).slice(2, 10)}`);
   const emailRecaptchaId = useRef(`settings-email-mobile-${Math.random().toString(36).slice(2, 10)}`);
@@ -612,20 +614,17 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
     }
   };
 
-  const downloadMyData = () => {
-    const payload = {
-      user: currentUser,
-      settings: storedSettings,
-      exportedAt: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${profileUsername}-settings-export.json`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    setFeedback({ type: "success", text: "Your settings export has been downloaded." });
-    pushActivity("Downloaded account data export.");
+  const downloadMyData = async () => {
+    try {
+      setPrivacyActionLoading("download");
+      await downloadAccountDataPdf();
+      setFeedback({ type: "success", text: "Your account data PDF has been downloaded." });
+      pushActivity("Downloaded account data PDF.");
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to download account data PDF." });
+    } finally {
+      setPrivacyActionLoading("");
+    }
   };
 
   const resetAllSettings = () => {
@@ -1432,8 +1431,30 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
     return (
       <div className="workspace-form-stack">
         <p className="tool-copy workspace-copy-paragraph">Manage your data preferences below:</p>
-        <button className="primary-button" type="button" onClick={downloadMyData}>Download My Data</button>
-        <button className="primary-button secondary-tone" type="button" onClick={() => setFeedback({ type: "info", text: "Delete account is not enabled in this build." })}>Delete My Account</button>
+        <div className="billing-action-row privacy-action-row">
+          <button className="primary-button" type="button" onClick={downloadMyData} disabled={privacyActionLoading === "download"}>
+            {privacyActionLoading === "download" ? "Downloading..." : "Download My Data"}
+          </button>
+          <button
+            className="primary-button secondary-tone"
+            type="button"
+            onClick={() => setFeedback({ type: "info", text: "Delete account is not enabled in this build." })}
+          >
+            Delete My Account
+          </button>
+          <button className="primary-button" type="button" onClick={savePrivacy}>
+            Save Privacy Settings
+          </button>
+        </div>
+        <div className="workspace-mini-card privacy-export-card">
+          <div className="billing-payment-card-head">
+            <div>
+              <h4>Portable Data Export</h4>
+              <p>Downloads directly as a polished PDF with account details, subscription data, payment history, linked providers, and support records.</p>
+            </div>
+            <span className="billing-status-pill">Download only</span>
+          </div>
+        </div>
         <label className="terms-check">
           <input
             type="checkbox"
@@ -1460,7 +1481,28 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
           />
           <span>Enable Cookie Tracking</span>
         </label>
-        <button className="primary-button" type="button" onClick={savePrivacy}>Save Privacy Settings</button>
+        <div className="workspace-info-grid privacy-capability-grid">
+          <div className="workspace-mini-card">
+            <h4>Production Hardening</h4>
+            <p>Secured authenticated downloads, persisted billing records, and server-generated documents make the export flow deployment-ready.</p>
+          </div>
+          <div className="workspace-mini-card">
+            <h4>Documentation</h4>
+            <p>Your PDF organizes identity, subscription, support, and payment records in one clean handover document.</p>
+          </div>
+          <div className="workspace-mini-card">
+            <h4>Bug Support</h4>
+            <p>Saved support request history stays attached to the export so troubleshooting context travels with the member record.</p>
+          </div>
+          <div className="workspace-mini-card">
+            <h4>Analytics</h4>
+            <p>Transactions, invoice counts, lifecycle dates, and member billing status stay grouped for quick audit and reporting.</p>
+          </div>
+          <div className="workspace-mini-card">
+            <h4>Payment Lifecycle</h4>
+            <p>Activation, expiry, cancel state, invoice numbers, and Razorpay payment references remain visible in one timeline.</p>
+          </div>
+        </div>
       </div>
     );
   }
