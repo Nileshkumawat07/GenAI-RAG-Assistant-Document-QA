@@ -361,6 +361,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [activeAdminRequestSection, setActiveAdminRequestSection] = useState("In Progress");
   const [activeAdminDatabaseSection, setActiveAdminDatabaseSection] = useState("accounts");
   const [activeAdminDatabaseRequestFilter, setActiveAdminDatabaseRequestFilter] = useState("All");
+  const [activeAdminDatabaseRequestCategory, setActiveAdminDatabaseRequestCategory] = useState("All");
   const [focusedContactRequestId, setFocusedContactRequestId] = useState("");
   const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
 
@@ -464,14 +465,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     const availableColumns = (table?.columns || []).map((column) => column.name);
     const selectedColumns = preferredColumns
       ? preferredColumns.filter((columnName) => availableColumns.includes(columnName))
-      : availableColumns.filter((columnName) => {
+        : availableColumns.filter((columnName) => {
           const normalized = columnName.toLowerCase();
           return (
             !normalized.includes("password") &&
             !normalized.includes("token") &&
             !normalized.includes("secret") &&
             !normalized.includes("hash") &&
-            !normalized.includes("security_answer")
+            !normalized.includes("security_answer") &&
+            normalized !== "payload_json"
           );
         });
 
@@ -523,6 +525,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       ...statuses.map((status) => ({
         id: status,
         title: status,
+      })),
+    ];
+  };
+  const getAdminDatabaseRequestCategoryFilters = (rows) => {
+    const orderedCategories = ["general", "business", "feedback", "technical", "partnership", "media"];
+    const availableCategories = orderedCategories.filter((category) =>
+      rows.some((row) => (row.category || "").toLowerCase() === category)
+    );
+
+    return [
+      { id: "All", title: "All" },
+      ...availableCategories.map((category) => ({
+        id: category,
+        title: prettifyKey(category),
       })),
     ];
   };
@@ -1194,36 +1210,72 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                               </div>
                             </div>
                             {selectedDatabaseSection.id === "requests" ? (
-                              <div className="contact-request-category-row">
-                                {(() => {
-                                  const requestFilters = getAdminDatabaseRequestFilters();
-                                  const requestTable = selectedDatabaseSection.tables.find(
-                                    (table) => table.tableName === "contact_requests"
-                                  );
-                                  const requestRows = requestTable?.rows || [];
-
-                                  return requestFilters.map((filter) => {
-                                    const count =
-                                      filter.id === "All"
-                                        ? requestRows.length
-                                        : requestRows.filter(
-                                            (row) => (row.status || "In Progress") === filter.id
-                                          ).length;
-
-                                    return (
-                                      <button
-                                        key={filter.id}
-                                        type="button"
-                                        className={`contact-request-category-button ${activeAdminDatabaseRequestFilter === filter.id ? "active" : ""}`}
-                                        onClick={() => setActiveAdminDatabaseRequestFilter(filter.id)}
-                                      >
-                                        <span>{filter.title}</span>
-                                        <strong>{count}</strong>
-                                      </button>
+                              <>
+                                <div className="contact-request-category-row">
+                                  {(() => {
+                                    const requestFilters = getAdminDatabaseRequestFilters();
+                                    const requestTable = selectedDatabaseSection.tables.find(
+                                      (table) => table.tableName === "contact_requests"
                                     );
-                                  });
-                                })()}
-                              </div>
+                                    const requestRows = requestTable?.rows || [];
+
+                                    return requestFilters.map((filter) => {
+                                      const count =
+                                        filter.id === "All"
+                                          ? requestRows.length
+                                          : requestRows.filter(
+                                              (row) => (row.status || "In Progress") === filter.id
+                                            ).length;
+
+                                      return (
+                                        <button
+                                          key={filter.id}
+                                          type="button"
+                                          className={`contact-request-category-button ${activeAdminDatabaseRequestFilter === filter.id ? "active" : ""}`}
+                                          onClick={() => setActiveAdminDatabaseRequestFilter(filter.id)}
+                                        >
+                                          <span>{filter.title}</span>
+                                          <strong>{count}</strong>
+                                        </button>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                                <div className="contact-request-category-row">
+                                  {(() => {
+                                    const requestTable = selectedDatabaseSection.tables.find(
+                                      (table) => table.tableName === "contact_requests"
+                                    );
+                                    const requestRows = (requestTable?.rows || []).filter(
+                                      (row) =>
+                                        activeAdminDatabaseRequestFilter === "All" ||
+                                        (row.status || "In Progress") === activeAdminDatabaseRequestFilter
+                                    );
+                                    const categoryFilters = getAdminDatabaseRequestCategoryFilters(requestRows);
+
+                                    return categoryFilters.map((filter) => {
+                                      const count =
+                                        filter.id === "All"
+                                          ? requestRows.length
+                                          : requestRows.filter(
+                                              (row) => (row.category || "").toLowerCase() === filter.id
+                                            ).length;
+
+                                      return (
+                                        <button
+                                          key={filter.id}
+                                          type="button"
+                                          className={`contact-request-category-button ${activeAdminDatabaseRequestCategory === filter.id ? "active" : ""}`}
+                                          onClick={() => setActiveAdminDatabaseRequestCategory(filter.id)}
+                                        >
+                                          <span>{filter.title}</span>
+                                          <strong>{count}</strong>
+                                        </button>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </>
                             ) : null}
                             <div className="workspace-form-stack">
                               {selectedDatabaseSection.tables.map((table) => {
@@ -1238,8 +1290,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                   selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
                                     ? (table.rows || []).filter(
                                         (row) =>
-                                          activeAdminDatabaseRequestFilter === "All" ||
-                                          (row.status || "In Progress") === activeAdminDatabaseRequestFilter
+                                          (activeAdminDatabaseRequestFilter === "All" ||
+                                            (row.status || "In Progress") === activeAdminDatabaseRequestFilter) &&
+                                          (activeAdminDatabaseRequestCategory === "All" ||
+                                            (row.category || "").toLowerCase() === activeAdminDatabaseRequestCategory)
                                       )
                                     : table.rows || [];
                                 return (
@@ -1247,11 +1301,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                     <div className="admin-table-header">
                                       <div>
                                         <h4>{prettifyKey(table.tableName)}</h4>
-                                        <p>
-                                          {selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
-                                            ? `${filteredRows.length} filtered rows`
-                                            : `${table.rowCount || 0} rows`}
-                                        </p>
+                                        {selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests" ? null : (
+                                          <p>{`${table.rowCount || 0} rows`}</p>
+                                        )}
                                       </div>
                                     </div>
                                     <div className="admin-table-scroll">
