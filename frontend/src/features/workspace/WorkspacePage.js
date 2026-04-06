@@ -16,8 +16,6 @@ import {
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 
-const CONTACT_REQUEST_FOCUS_STORAGE_KEY = "workspace_contact_request_focus";
-
 const INFO_PAGE_CONFIG = {
   about: {
     title: "About Us",
@@ -364,6 +362,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [activeAdminDatabaseSection, setActiveAdminDatabaseSection] = useState("accounts");
   const [activeAdminDatabaseRequestFilter, setActiveAdminDatabaseRequestFilter] = useState("All");
   const [focusedContactRequestId, setFocusedContactRequestId] = useState("");
+  const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -527,6 +526,48 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       })),
     ];
   };
+  const getAdminTableByName = (tableName) =>
+    adminTables.find((table) => table.tableName === tableName);
+  const getAdminUserDetails = (userId) => {
+    if (!userId) return null;
+
+    const usersTable = getAdminTableByName("users");
+    const providersTable = getAdminTableByName("user_social_links");
+    const requestsTable = getAdminTableByName("contact_requests");
+
+    const userRow = (usersTable?.rows || []).find((row) => row.id === userId);
+    if (!userRow) return null;
+
+    const userRequests = (requestsTable?.rows || []).filter((row) => row.user_id === userId);
+    const userProviders = (providersTable?.rows || []).filter((row) => row.user_id === userId);
+    const requestStatusCounts = ["In Progress", "In Review", "Completed"].map((status) => ({
+      status,
+      count: userRequests.filter((row) => (row.status || "In Progress") === status).length,
+    }));
+
+    const timelineItems = [
+      {
+        title: "Joined Workspace",
+        text: userRow.created_at || "Not available",
+      },
+      ...userRequests.slice(0, 6).map((requestRow) => ({
+        title: `${prettifyKey(requestRow.category || "request")} request`,
+        text: `${requestRow.status || "In Progress"} | ${requestRow.created_at || "Unknown date"}`,
+      })),
+      ...userProviders.slice(0, 4).map((providerRow) => ({
+        title: `Linked ${prettifyKey(providerRow.provider || "provider")}`,
+        text: providerRow.email || providerRow.provider_id || "Connected provider",
+      })),
+    ];
+
+    return {
+      userRow,
+      userRequests,
+      userProviders,
+      requestStatusCounts,
+      timelineItems,
+    };
+  };
 
   const hasQuestion = question.trim().length > 0;
 
@@ -583,13 +624,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   };
 
   const openContactRequestFromAdmin = (requestRow) => {
-    window.sessionStorage.setItem(
-      CONTACT_REQUEST_FOCUS_STORAGE_KEY,
-      JSON.stringify({
-        requestId: requestRow.id,
-        status: requestRow.status || "In Progress",
-      })
-    );
     setInfoTabs((current) => ({
       ...current,
       administration: "requests",
@@ -599,18 +633,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   };
 
   const clearFocusedContactRequest = (requestId) => {
-    const pendingFocus = window.sessionStorage.getItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
-    if (pendingFocus) {
-      try {
-        const parsedFocus = JSON.parse(pendingFocus);
-        if (!requestId || parsedFocus?.requestId === requestId) {
-          window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
-        }
-      } catch {
-        window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
-      }
-    }
-
     setFocusedContactRequestId((current) => (current === requestId || !requestId ? "" : current));
   };
 
@@ -619,31 +641,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       loadContactRequests();
     }
   }, [selectedInfoPage, currentUser?.id]);
-
-  useEffect(() => {
-    const pendingFocus = window.sessionStorage.getItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
-    if (!pendingFocus) {
-      return;
-    }
-
-    try {
-      const parsedFocus = JSON.parse(pendingFocus);
-      if (!parsedFocus?.requestId) {
-        return;
-      }
-
-      if (selectedInfoPage === "administration") {
-        setInfoTabs((current) => ({
-          ...current,
-          administration: "requests",
-        }));
-        setActiveAdminRequestSection(parsedFocus.status || "In Progress");
-        setFocusedContactRequestId(parsedFocus.requestId);
-      }
-    } catch {
-      window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
-    }
-  }, [selectedInfoPage]);
 
   useEffect(() => {
     if (selectedInfoPage !== "administration" || activeInfoTab !== "requests" || !focusedContactRequestId) {
@@ -1234,6 +1231,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                 const tableColumns =
                                   selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
                                     ? [...visibleColumns, "__open_request__"]
+                                    : selectedDatabaseSection.id === "accounts" && table.tableName === "users"
+                                      ? [...visibleColumns, "__view_user__"]
                                     : visibleColumns;
                                 const filteredRows =
                                   selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
@@ -1261,7 +1260,13 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                           <tr>
                                             {tableColumns.map((columnName) => (
                                               <th key={columnName}>
-                                                <span>{columnName === "__open_request__" ? "Action" : prettifyKey(columnName)}</span>
+                                                <span>
+                                                  {columnName === "__open_request__"
+                                                    ? "Open Request"
+                                                    : columnName === "__view_user__"
+                                                      ? "View User"
+                                                      : prettifyKey(columnName)}
+                                                </span>
                                               </th>
                                             ))}
                                           </tr>
@@ -1279,6 +1284,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                                     >
                                                       Open Request
                                                     </button>
+                                                  ) : columnName === "__view_user__" ? (
+                                                    <button
+                                                      type="button"
+                                                      className="admin-table-action-button"
+                                                      onClick={() => setSelectedAdminUserId(row.id)}
+                                                    >
+                                                      View User
+                                                    </button>
                                                   ) : (
                                                     renderDatabaseCell(columnName, row[columnName])
                                                   )}
@@ -1293,6 +1306,94 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                 );
                               })}
                             </div>
+                            {selectedDatabaseSection.id === "accounts" && selectedAdminUserId ? (
+                              (() => {
+                                const userDetails = getAdminUserDetails(selectedAdminUserId);
+                                if (!userDetails) {
+                                  return null;
+                                }
+
+                                const { userRow, userRequests, userProviders, requestStatusCounts, timelineItems } = userDetails;
+                                const detailCards = [
+                                  { title: "Full Name", text: userRow.full_name || "Not available" },
+                                  { title: "Username", text: userRow.username || "Not available" },
+                                  { title: "Email", text: userRow.email || "Not available" },
+                                  { title: "Alternate Email", text: userRow.alternate_email || "Not available" },
+                                  { title: "Mobile", text: userRow.mobile || "Not available" },
+                                  { title: "Joined", text: userRow.created_at || "Not available" },
+                                  { title: "Gender", text: userRow.gender || "Not available" },
+                                  { title: "Date Of Birth", text: userRow.date_of_birth || "Not available" },
+                                  { title: "Referral Code", text: userRow.referral_code || "Not available" },
+                                  { title: "Email Verified", text: userRow.email_verified ? "Yes" : "No" },
+                                  { title: "Mobile Verified", text: userRow.mobile_verified ? "Yes" : "No" },
+                                  { title: "Security Question", text: userRow.security_question || "Not available" },
+                                ];
+
+                                return (
+                                  <section className="admin-user-profile-panel">
+                                    <div className="admin-user-profile-header">
+                                      <div className="admin-user-profile-avatar">
+                                        {(userRow.full_name || userRow.email || "U").trim().charAt(0).toUpperCase()}
+                                      </div>
+                                      <div className="admin-user-profile-copy">
+                                        <h4>{userRow.full_name || "User Profile"}</h4>
+                                        <p>{userRow.email || "No email available"}</p>
+                                        <span>{userRow.username || "No username"} | {userRow.mobile || "No mobile"}</span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="admin-table-action-button"
+                                        onClick={() => setSelectedAdminUserId("")}
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+
+                                    <div className="workspace-info-grid">
+                                      {detailCards.map((card) => (
+                                        <div key={card.title} className="workspace-mini-card">
+                                          <h4>{card.title}</h4>
+                                          <p>{card.text}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <div className="admin-user-summary-grid">
+                                      <div className="admin-user-summary-card">
+                                        <h4>Request Status Summary</h4>
+                                        {requestStatusCounts.map((item) => (
+                                          <p key={item.status}>
+                                            <strong>{item.status}:</strong> {item.count}
+                                          </p>
+                                        ))}
+                                        <p><strong>Total Requests:</strong> {userRequests.length}</p>
+                                      </div>
+
+                                      <div className="admin-user-summary-card">
+                                        <h4>Linked Providers</h4>
+                                        {userProviders.length > 0 ? userProviders.map((provider) => (
+                                          <p key={`${provider.user_id}-${provider.provider}`}>
+                                            <strong>{prettifyKey(provider.provider)}:</strong> {provider.email || provider.provider_id}
+                                          </p>
+                                        )) : <p>No linked providers found.</p>}
+                                      </div>
+                                    </div>
+
+                                    <div className="admin-user-history-panel">
+                                      <h4>User Timeline</h4>
+                                      <div className="admin-user-history-list">
+                                        {timelineItems.map((item, index) => (
+                                          <div key={`${item.title}-${index}`} className="admin-user-history-item">
+                                            <strong>{item.title}</strong>
+                                            <p>{item.text}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </section>
+                                );
+                              })()
+                            ) : null}
                           </section>
                         ) : null}
                       </>

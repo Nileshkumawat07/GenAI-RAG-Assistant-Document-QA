@@ -3099,6 +3099,117 @@ body.workspace-body-mode .admin-db-group-header p {
   color: var(--muted);
 }
 
+body.workspace-body-mode .admin-user-profile-panel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(42, 75, 140, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 255, 0.97));
+  box-shadow: 0 12px 28px rgba(13, 36, 76, 0.08);
+}
+
+body.workspace-body-mode .admin-user-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+body.workspace-body-mode .admin-user-profile-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #123d7a, #2d6bc0);
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 800;
+  box-shadow: 0 12px 24px rgba(18, 61, 122, 0.22);
+}
+
+body.workspace-body-mode .admin-user-profile-copy {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+body.workspace-body-mode .admin-user-profile-copy h4 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .admin-user-profile-copy p,
+body.workspace-body-mode .admin-user-profile-copy span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+body.workspace-body-mode .admin-user-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+body.workspace-body-mode .admin-user-summary-card {
+  padding: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(42, 75, 140, 0.12);
+  background: rgba(237, 244, 255, 0.92);
+}
+
+body.workspace-body-mode .admin-user-summary-card h4,
+body.workspace-body-mode .admin-user-history-panel h4 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .admin-user-summary-card p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+body.workspace-body-mode .admin-user-history-panel {
+  padding: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(42, 75, 140, 0.12);
+  background: rgba(248, 251, 255, 0.94);
+}
+
+body.workspace-body-mode .admin-user-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+body.workspace-body-mode .admin-user-history-item {
+  padding: 12px 14px;
+  border-radius: 4px;
+  border-left: 4px solid #2d6bc0;
+  background: rgba(255, 255, 255, 0.94);
+  border-top: 1px solid rgba(42, 75, 140, 0.1);
+  border-right: 1px solid rgba(42, 75, 140, 0.1);
+  border-bottom: 1px solid rgba(42, 75, 140, 0.1);
+}
+
+body.workspace-body-mode .admin-user-history-item strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .admin-user-history-item p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 body.workspace-body-mode .admin-table-section {
   border: 1px solid rgba(42, 75, 140, 0.22);
   border-radius: 4px;
@@ -3272,7 +3383,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 
   body.workspace-body-mode .admin-request-grid,
   body.workspace-body-mode .admin-request-meta-grid,
-  body.workspace-body-mode .admin-request-detail-grid {
+  body.workspace-body-mode .admin-request-detail-grid,
+  body.workspace-body-mode .admin-user-summary-grid {
     grid-template-columns: 1fr;
   }
 
