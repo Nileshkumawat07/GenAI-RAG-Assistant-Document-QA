@@ -7,6 +7,11 @@ import {
   updateUsername,
 } from "../auth/authApi";
 import {
+  linkProvider,
+  listLinkedProviders,
+  unlinkProvider,
+} from "../auth/linkedProviderApi";
+import {
   checkFirebaseEmailVerification,
   resetFirebaseEmailVerification,
   resetFirebaseRecaptcha,
@@ -74,15 +79,103 @@ function createDefaultStoredSettings() {
       country: "India",
     },
     linked: {
-      google: true,
-      facebook: true,
-      apple: true,
+      google: { linked: false, locked: false, email: "", displayName: "", providerId: "", linkedAt: "" },
+      facebook: { linked: false, locked: false, email: "", displayName: "", providerId: "", linkedAt: "" },
+      apple: { linked: false, locked: false, email: "", displayName: "", providerId: "", linkedAt: "" },
     },
     security: {
       twoStepEnabled: false,
     },
     activity: [],
   };
+}
+
+function normalizeStoredSettings(rawSettings, currentUser) {
+  const defaults = createDefaultStoredSettings();
+  const merged = {
+    ...defaults,
+    ...(rawSettings || {}),
+    linked: { ...defaults.linked },
+  };
+
+  ["google", "facebook", "apple"].forEach((providerKey) => {
+    const rawProvider = rawSettings?.linked?.[providerKey];
+    if (typeof rawProvider === "boolean") {
+      merged.linked[providerKey] = {
+        ...defaults.linked[providerKey],
+        linked: rawProvider,
+      };
+    } else {
+      merged.linked[providerKey] = {
+        ...defaults.linked[providerKey],
+        ...(rawProvider || {}),
+      };
+    }
+  });
+
+  const gmailLinked = /@gmail\.com$/i.test(currentUser?.email || "");
+  if (gmailLinked) {
+    merged.linked.google = {
+      ...merged.linked.google,
+      linked: true,
+      locked: true,
+      email: merged.linked.google.email || currentUser.email || "",
+      displayName: merged.linked.google.displayName || currentUser?.fullName || currentUser?.name || "",
+      providerId: "google.com",
+      linkedAt: merged.linked.google.linkedAt || currentUser?.createdAt || new Date().toISOString(),
+    };
+  } else {
+    merged.linked.google = {
+      ...merged.linked.google,
+      locked: false,
+    };
+  }
+
+  return merged;
+}
+
+function formatLinkedDate(value) {
+  if (!value) return "Recently linked";
+  try {
+    return new Date(value).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "Recently linked";
+  }
+}
+
+function ProviderIcon({ providerKey }) {
+  const commonProps = { width: 22, height: 22, viewBox: "0 0 24 24", ariaHidden: "true" };
+
+  if (providerKey === "google") {
+    return (
+      <svg {...commonProps}>
+        <path fill="#4285F4" d="M21.8 12.23c0-.76-.07-1.49-.19-2.18H12v4.13h5.5a4.7 4.7 0 0 1-2.04 3.08v2.56h3.3c1.93-1.78 3.04-4.41 3.04-7.59Z" />
+        <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.44l-3.3-2.56c-.91.61-2.07.98-3.31.98-2.54 0-4.69-1.72-5.46-4.03H3.13v2.64A9.98 9.98 0 0 0 12 22Z" />
+        <path fill="#FBBC05" d="M6.54 13.95A5.98 5.98 0 0 1 6.24 12c0-.68.12-1.34.3-1.95V7.41H3.13A9.97 9.97 0 0 0 2 12c0 1.61.39 3.13 1.13 4.59l3.41-2.64Z" />
+        <path fill="#EA4335" d="M12 6.02c1.47 0 2.79.5 3.83 1.49l2.87-2.87C16.95 2.98 14.69 2 12 2A9.98 9.98 0 0 0 3.13 7.41l3.41 2.64C7.31 7.74 9.46 6.02 12 6.02Z" />
+      </svg>
+    );
+  }
+
+  if (providerKey === "facebook") {
+    return (
+      <svg {...commonProps}>
+        <path fill="#1877F2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.7 4.53-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.88v2.26h3.32l-.53 3.49h-2.79V24C19.61 23.1 24 18.1 24 12.07Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...commonProps}>
+      <path fill="#111111" d="M16.37 12.74c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.63-1.7-3.2-1.72-1.36-.15-2.66.8-3.35.8-.69 0-1.75-.78-2.88-.76-1.48.02-2.85.86-3.61 2.19-1.54 2.68-.39 6.64 1.1 8.79.73 1.05 1.61 2.24 2.75 2.2 1.1-.04 1.52-.71 2.85-.71 1.33 0 1.71.71 2.87.69 1.18-.02 1.93-1.07 2.66-2.13.84-1.22 1.19-2.4 1.21-2.46-.03-.01-2.31-.89-2.33-3.58Zm-2.21-6.49c.61-.74 1.03-1.77.92-2.8-.88.04-1.95.58-2.58 1.32-.57.66-1.06 1.71-.93 2.72.98.08 1.98-.5 2.59-1.24Z" />
+    </svg>
+  );
 }
 
 function createActivityEntry(text) {
@@ -157,6 +250,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   const [passwordOtpVerified, setPasswordOtpVerified] = useState(false);
   const [passwordOtpCooldown, setPasswordOtpCooldown] = useState(0);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [linkedForms, setLinkedForms] = useState({
+    google: { providerEmail: "", providerDisplayName: "", providerIdentifier: "", currentPassword: "" },
+    facebook: { providerEmail: "", providerDisplayName: "", providerIdentifier: "", currentPassword: "" },
+    apple: { providerEmail: "", providerDisplayName: "", providerIdentifier: "", currentPassword: "" },
+  });
+  const [linkedSaving, setLinkedSaving] = useState({
+    google: false,
+    facebook: false,
+    apple: false,
+  });
 
   const [resetPassword, setResetPassword] = useState("");
 
@@ -185,31 +288,81 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
 
   useEffect(() => {
     if (!storageKey) {
-      setStoredSettings(createDefaultStoredSettings());
+      setStoredSettings(normalizeStoredSettings(null, currentUser));
       return;
     }
 
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (!raw) {
-        setStoredSettings(createDefaultStoredSettings());
+        setStoredSettings(normalizeStoredSettings(null, currentUser));
         return;
       }
 
-      setStoredSettings({
-        ...createDefaultStoredSettings(),
-        ...JSON.parse(raw),
-      });
+      setStoredSettings(normalizeStoredSettings(JSON.parse(raw), currentUser));
     } catch {
-      setStoredSettings(createDefaultStoredSettings());
+      setStoredSettings(normalizeStoredSettings(null, currentUser));
     }
-  }, [storageKey]);
+  }, [storageKey, currentUser]);
 
   useEffect(() => {
     if (storageKey) {
       window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
     }
   }, [storageKey, storedSettings]);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const syncLinkedProviders = async () => {
+      try {
+        const items = await listLinkedProviders();
+        if (!isMounted) {
+          return;
+        }
+
+        updateStoredSettings((current) => {
+          const nextLinked = {
+            ...current.linked,
+            facebook: { ...createDefaultStoredSettings().linked.facebook },
+            apple: { ...createDefaultStoredSettings().linked.apple },
+          };
+
+          items.forEach((item) => {
+            nextLinked[item.providerKey] = {
+              linked: true,
+              locked: false,
+              email: item.providerEmail,
+              displayName: item.providerDisplayName,
+              providerId: item.providerIdentifier,
+              linkedAt: item.linkedAt,
+            };
+          });
+
+          if (current.linked.google?.locked) {
+            nextLinked.google = current.linked.google;
+          }
+
+          return {
+            ...current,
+            linked: nextLinked,
+          };
+        });
+      } catch {
+        // Keep local provider state if sync is temporarily unavailable.
+      }
+    };
+
+    syncLinkedProviders();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const timers = [];
@@ -1252,27 +1405,225 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   }
 
   if (activeTab === "linked") {
-    const providers = [["google", "Google"], ["facebook", "Facebook"], ["apple", "Apple"]];
+    const providers = [
+      {
+        key: "google",
+        label: "Google",
+        description: /@gmail\.com$/i.test(profileEmail)
+          ? "Primary Google sign-in for this Gmail account. It stays linked."
+          : "Connect your Google account for verified sign-in access.",
+      },
+      {
+        key: "facebook",
+        label: "Facebook",
+        description: "Link Facebook with a valid account popup and save the verified profile.",
+      },
+      {
+        key: "apple",
+        label: "Apple",
+        description: "Link Apple ID with popup verification and save the validated provider details.",
+      },
+    ];
     return (
       <div className="workspace-form-stack">
-        {providers.map(([key, label]) => (
-          <div key={key} className="workspace-inline-action">
-            <span>{label}</span>
-            <button
-              className="header-dropdown-item"
-              type="button"
-              onClick={() => {
-                updateStoredSettings((current) => ({
-                  ...current,
-                  linked: { ...current.linked, [key]: !current.linked[key] },
-                }));
-                setFeedback({ type: "success", text: `${label} account link updated.` });
-              }}
-            >
-              {storedSettings.linked[key] ? `Unlink ${label}` : `Link ${label}`}
-            </button>
-          </div>
-        ))}
+        <div className="workspace-info-grid linked-provider-grid">
+          {providers.map(({ key, label, description }) => {
+            const linkedState = storedSettings.linked[key];
+            const isLinked = !!linkedState?.linked;
+            const isLocked = !!linkedState?.locked;
+            const form = linkedForms[key];
+
+            return (
+              <div key={key} className={`workspace-mini-card linked-provider-card ${isLinked ? "is-linked" : ""}`}>
+                <div className="linked-provider-head">
+                  <div className="linked-provider-brand">
+                    <span className={`linked-provider-icon ${key}`}>
+                      <ProviderIcon providerKey={key} />
+                    </span>
+                    <div>
+                      <h4>{label}</h4>
+                      <p>{description}</p>
+                    </div>
+                  </div>
+                  <span className={`linked-provider-badge ${isLinked ? "linked" : "not-linked"}`}>
+                    {isLocked ? "Primary" : isLinked ? "Linked" : "Not Linked"}
+                  </span>
+                </div>
+
+                <div className="linked-provider-meta">
+                  <div className="linked-provider-meta-item">
+                    <span>Status</span>
+                    <strong>{isLocked ? "Primary linked provider" : isLinked ? "Validated and linked" : "Waiting to be linked"}</strong>
+                  </div>
+                  <div className="linked-provider-meta-item">
+                    <span>Linked Email</span>
+                    <strong>{linkedState?.email || "Not linked yet"}</strong>
+                  </div>
+                  <div className="linked-provider-meta-item">
+                    <span>Profile</span>
+                    <strong>{linkedState?.displayName || profileName}</strong>
+                  </div>
+                  <div className="linked-provider-meta-item">
+                    <span>Validated</span>
+                    <strong>{isLinked ? formatLinkedDate(linkedState?.linkedAt) : "Not verified yet"}</strong>
+                  </div>
+                </div>
+
+                <div className="linked-provider-actions">
+                  <button
+                    className={`primary-button ${isLinked && !isLocked ? "secondary-tone" : ""}`}
+                    type="button"
+                    disabled={linkedSaving[key] || isLocked}
+                    onClick={async () => {
+                      if (isLocked) {
+                        setFeedback({ type: "info", text: "Google stays linked because this account is using Gmail as the primary sign-in." });
+                        return;
+                      }
+
+                      if (isLinked) {
+                        if (!form.currentPassword.trim()) {
+                          setFeedback({ type: "error", text: `Enter your current password to unlink ${label}.` });
+                          return;
+                        }
+
+                        try {
+                          setLinkedSaving((current) => ({ ...current, [key]: true }));
+                          await unlinkProvider(key, { currentPassword: form.currentPassword.trim() });
+                          updateStoredSettings((current) => ({
+                            ...current,
+                            linked: {
+                              ...current.linked,
+                              [key]: createDefaultStoredSettings().linked[key],
+                            },
+                          }));
+                          setLinkedForms((current) => ({
+                            ...current,
+                            [key]: { providerEmail: "", providerDisplayName: "", providerIdentifier: "", currentPassword: "" },
+                          }));
+                          setFeedback({ type: "success", text: `${label} account unlinked successfully.` });
+                          pushActivity(`${label} account was unlinked.`);
+                        } catch (error) {
+                          setFeedback({ type: "error", text: error.message || `Failed to unlink ${label}.` });
+                        } finally {
+                          setLinkedSaving((current) => ({ ...current, [key]: false }));
+                        }
+                        return;
+                      }
+
+                      if (!EMAIL_PATTERN.test(form.providerEmail.trim())) {
+                        setFeedback({ type: "error", text: `Enter a valid ${label} email before linking.` });
+                        return;
+                      }
+                      if (!form.providerDisplayName.trim()) {
+                        setFeedback({ type: "error", text: `Enter the ${label} profile name before linking.` });
+                        return;
+                      }
+                      if (!form.providerIdentifier.trim()) {
+                        setFeedback({ type: "error", text: `Enter the ${label} account identifier before linking.` });
+                        return;
+                      }
+                      if (!form.currentPassword.trim()) {
+                        setFeedback({ type: "error", text: "Enter your current password to validate this link." });
+                        return;
+                      }
+
+                      try {
+                        setLinkedSaving((current) => ({ ...current, [key]: true }));
+                        const providerProfile = await linkProvider(key, {
+                          providerKey: key,
+                          providerEmail: form.providerEmail.trim(),
+                          providerDisplayName: form.providerDisplayName.trim(),
+                          providerIdentifier: form.providerIdentifier.trim(),
+                          currentPassword: form.currentPassword.trim(),
+                        });
+                        updateStoredSettings((current) => ({
+                          ...current,
+                          linked: {
+                            ...current.linked,
+                            [key]: {
+                              linked: true,
+                              locked: false,
+                              email: providerProfile.providerEmail || "",
+                              displayName: providerProfile.providerDisplayName || "",
+                              providerId: providerProfile.providerIdentifier || "",
+                              linkedAt: providerProfile.linkedAt,
+                            },
+                          },
+                        }));
+                        setLinkedForms((current) => ({
+                          ...current,
+                          [key]: { providerEmail: "", providerDisplayName: "", providerIdentifier: "", currentPassword: "" },
+                        }));
+                        setFeedback({ type: "success", text: `${label} linked and validated successfully.` });
+                        pushActivity(`${label} account linked successfully.`);
+                      } catch (error) {
+                        setFeedback({ type: "error", text: error.message || `Failed to link ${label}.` });
+                      } finally {
+                        setLinkedSaving((current) => ({ ...current, [key]: false }));
+                      }
+                    }}
+                  >
+                    {isLocked ? "Primary Gmail" : linkedSaving[key] ? "Saving..." : isLinked ? `Unlink ${label}` : `Link ${label}`}
+                  </button>
+                </div>
+
+                {!isLocked ? (
+                  <div className="linked-provider-form">
+                    {!isLinked ? (
+                      <>
+                        <input
+                          className="auth-input workspace-static-input"
+                          placeholder={`${label} email`}
+                          value={form.providerEmail}
+                          onChange={(event) =>
+                            setLinkedForms((current) => ({
+                              ...current,
+                              [key]: { ...current[key], providerEmail: event.target.value },
+                            }))
+                          }
+                        />
+                        <input
+                          className="auth-input workspace-static-input"
+                          placeholder={`${label} profile name`}
+                          value={form.providerDisplayName}
+                          onChange={(event) =>
+                            setLinkedForms((current) => ({
+                              ...current,
+                              [key]: { ...current[key], providerDisplayName: event.target.value },
+                            }))
+                          }
+                        />
+                        <input
+                          className="auth-input workspace-static-input"
+                          placeholder={`${label} account identifier`}
+                          value={form.providerIdentifier}
+                          onChange={(event) =>
+                            setLinkedForms((current) => ({
+                              ...current,
+                              [key]: { ...current[key], providerIdentifier: event.target.value },
+                            }))
+                          }
+                        />
+                      </>
+                    ) : null}
+                    <input
+                      className="auth-input workspace-static-input"
+                      type="password"
+                      placeholder={isLinked ? "Enter current password to unlink" : "Enter current password to validate link"}
+                      value={form.currentPassword}
+                      onChange={(event) =>
+                        setLinkedForms((current) => ({
+                          ...current,
+                          [key]: { ...current[key], currentPassword: event.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }

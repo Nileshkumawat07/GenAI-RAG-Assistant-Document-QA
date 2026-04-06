@@ -9,12 +9,14 @@ from app.api.routes.documents import build_document_router
 from app.api.routes.frontend import build_frontend_router, mount_frontend
 from app.api.routes.health import build_health_router
 from app.api.routes.image_generation import build_image_generation_router
+from app.api.routes.linked_providers import build_linked_provider_router
 from app.api.routes.object_detection import build_object_detection_router
 from app.core.config import FRONTEND_ORIGIN
 from app.core.database import Base, engine
 import app.models  # Ensure ORM models are registered before create_all().
 from app.services.auth_service import AuthService
 from app.services.contact_request_service import ContactRequestService
+from app.services.linked_provider_service import LinkedProviderService
 from app.services.otp_service import OTPService
 from app.services.rag_service import RAGService
 
@@ -26,6 +28,7 @@ def create_app() -> FastAPI:
     otp_service = OTPService()
     auth_service = AuthService()
     contact_request_service = ContactRequestService()
+    linked_provider_service = LinkedProviderService(auth_service)
     base_dir = Path(__file__).resolve().parent
     frontend_build_dir = base_dir.parent / "frontend" / "build"
 
@@ -41,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router(rag_service))
     app.include_router(build_auth_router(otp_service, auth_service))
     app.include_router(build_contact_request_router(contact_request_service, auth_service))
+    app.include_router(build_linked_provider_router(linked_provider_service, auth_service))
     app.include_router(build_document_router(rag_service))
     app.include_router(build_object_detection_router())
     app.include_router(build_image_generation_router())

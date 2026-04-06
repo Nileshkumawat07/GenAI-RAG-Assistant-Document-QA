@@ -1,10 +1,14 @@
 import { initializeApp } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
+  FacebookAuthProvider,
+  GoogleAuthProvider,
   getAuth,
+  OAuthProvider,
   RecaptchaVerifier,
   reload,
   sendEmailVerification,
+  signInWithPopup,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signOut,
@@ -121,6 +125,49 @@ export async function resetFirebaseRecaptcha(containerId) {
     if (container) {
       container.innerHTML = "";
     }
+  }
+}
+
+function buildProvider(providerKey) {
+  if (providerKey === "google") {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    return provider;
+  }
+
+  if (providerKey === "facebook") {
+    const provider = new FacebookAuthProvider();
+    provider.addScope("email");
+    return provider;
+  }
+
+  if (providerKey === "apple") {
+    const provider = new OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+    return provider;
+  }
+
+  throw new Error("Unsupported provider.");
+}
+
+export async function signInWithFirebaseProvider(providerKey) {
+  const provider = buildProvider(providerKey);
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const providerData =
+      result.user.providerData.find((item) => item.providerId === provider.providerId) ||
+      result.user.providerData[0] ||
+      null;
+
+    return {
+      providerId: provider.providerId,
+      email: providerData?.email || result.user.email || "",
+      displayName: providerData?.displayName || result.user.displayName || "",
+      linkedAt: new Date().toISOString(),
+    };
+  } finally {
+    await signOut(auth).catch(() => {});
   }
 }
 

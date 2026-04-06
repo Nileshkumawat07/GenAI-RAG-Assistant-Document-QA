@@ -23,7 +23,7 @@ def build_frontend_router(frontend_build_dir: Path) -> APIRouter:
     @router.get("/{full_path:path}")
     def serve_frontend_routes(full_path: str):
         if full_path.startswith(
-            ("health", "documents", "query", "object-detection", "contact-requests", "openapi.json", "docs", "redoc")
+            ("health", "documents", "query", "object-detection", "contact-requests", "linked-providers", "openapi.json", "docs", "redoc")
         ):
             raise HTTPException(status_code=404, detail="Not found.")
 
