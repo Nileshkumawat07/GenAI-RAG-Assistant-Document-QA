@@ -906,9 +906,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
       if (activeInfoTab === "requests") {
         const requestSections = getAdminRequestSections();
-        const selectedRequestSection =
-          requestSections.find((section) => section.id === activeAdminRequestSection) ||
-          requestSections[0];
 
         return (
           <>
@@ -934,7 +931,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                         <button
                           key={section.id}
                           type="button"
-                          className={`contact-request-category-button ${selectedRequestSection?.id === section.id ? "active" : ""}`}
+                          className={`contact-request-category-button ${activeAdminRequestSection === section.id ? "active" : ""}`}
                           onClick={() => setActiveAdminRequestSection(section.id)}
                         >
                           <span>{section.title}</span>
@@ -943,21 +940,21 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                       ))}
                     </div>
 
-                    {selectedRequestSection ? (
-                      <section className="admin-request-section">
+                    {requestSections.map((section) => (
+                      <section key={section.id} className="admin-request-section">
                         <div className="admin-request-section-header">
                           <div>
-                            <h4>{selectedRequestSection.title}</h4>
-                            <p>{selectedRequestSection.items.length} request{selectedRequestSection.items.length === 1 ? "" : "s"}</p>
+                            <h4>{section.title}</h4>
+                            <p>{section.items.length} request{section.items.length === 1 ? "" : "s"}</p>
                           </div>
                         </div>
-                        {selectedRequestSection.items.length === 0 ? (
+                        {section.items.length === 0 ? (
                           <div className="workspace-mini-card">
                             <p>No requests in this section.</p>
                           </div>
                         ) : (
                           <div className="admin-request-grid">
-                            {selectedRequestSection.items.map((requestItem) => (
+                            {section.items.map((requestItem) => (
                               <article key={requestItem.id} className="admin-request-card">
                                 <div className="admin-request-card-header">
                                   <div>
@@ -1042,7 +1039,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                           </div>
                         )}
                       </section>
-                    ) : null}
+                    ))}
                   </div>
                 )}
               </article>
