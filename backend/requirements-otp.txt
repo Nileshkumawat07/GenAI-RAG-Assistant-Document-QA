@@ -3,3 +3,4 @@ pypdf
 SQLAlchemy
 pymysql
 cryptography
+razorpay

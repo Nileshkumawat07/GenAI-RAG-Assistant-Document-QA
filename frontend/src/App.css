@@ -2638,6 +2638,154 @@ body.workspace-body-mode .workspace-copy-action {
   margin-top: 12px;
 }
 
+body.workspace-body-mode .pricing-page-shell {
+  display: grid;
+  gap: 16px;
+}
+
+body.workspace-body-mode .pricing-page-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(42, 75, 140, 0.12);
+  background: linear-gradient(135deg, rgba(237, 244, 255, 0.96), rgba(255, 255, 255, 0.96));
+}
+
+body.workspace-body-mode .pricing-page-kicker {
+  display: inline-flex;
+  margin-bottom: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(18, 61, 122, 0.08);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.workspace-body-mode .pricing-page-hero h4 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .pricing-page-hero p {
+  margin: 0;
+  max-width: 620px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .pricing-page-summary {
+  min-width: 180px;
+  padding: 16px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #123d7a, #2d6bc0);
+  color: #ffffff;
+  display: grid;
+  gap: 4px;
+}
+
+body.workspace-body-mode .pricing-page-summary strong {
+  font-size: 26px;
+  line-height: 1;
+}
+
+body.workspace-body-mode .pricing-page-summary span {
+  font-size: 12px;
+  opacity: 0.92;
+}
+
+body.workspace-body-mode .pricing-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body.workspace-body-mode .pricing-plan-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.95));
+}
+
+body.workspace-body-mode .pricing-plan-card.popular {
+  border-color: rgba(45, 107, 192, 0.24);
+  box-shadow: 0 14px 30px rgba(45, 107, 192, 0.12);
+}
+
+body.workspace-body-mode .pricing-plan-card.premium {
+  border-color: rgba(179, 133, 38, 0.25);
+  box-shadow: 0 14px 30px rgba(179, 133, 38, 0.12);
+}
+
+body.workspace-body-mode .pricing-plan-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.workspace-body-mode .pricing-plan-badge {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(18, 61, 122, 0.08);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body.workspace-body-mode .pricing-plan-price {
+  text-align: right;
+  display: grid;
+  gap: 3px;
+}
+
+body.workspace-body-mode .pricing-plan-price strong {
+  font-size: 30px;
+  line-height: 1;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .pricing-plan-price span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .pricing-plan-feature-list {
+  display: grid;
+  gap: 8px;
+}
+
+body.workspace-body-mode .pricing-plan-feature-item {
+  padding: 10px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(42, 75, 140, 0.12);
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  color: var(--text);
+}
+
+body.workspace-body-mode .pricing-plan-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .pricing-plan-button {
+  width: 100%;
+}
+
 body.workspace-body-mode .workspace-captcha-row,
 body.workspace-body-mode .workspace-inline-action {
   display: flex;
@@ -3398,6 +3546,19 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 @media (max-width: 1180px) {
+  body.workspace-body-mode .pricing-page-hero {
+    flex-direction: column;
+  }
+
+  body.workspace-body-mode .pricing-page-summary {
+    min-width: 0;
+    width: 100%;
+  }
+
+  body.workspace-body-mode .pricing-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
   body.workspace-body-mode .admin-request-topbar {
     flex-direction: column;
   }

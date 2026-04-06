@@ -16,6 +16,96 @@ import {
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 
+const PRICING_PLAN_DETAILS = [
+  {
+    id: "individual-starter",
+    category: "individual",
+    title: "Individual Starter",
+    priceLabel: "₹699",
+    cadence: "/ month",
+    tagline: "Best for solo research and personal AI workflows.",
+    features: ["1 workspace owner", "Smart document answers", "5 GB secure storage", "Priority email help"],
+    note: "Ideal for regular individual usage.",
+    accent: "standard",
+  },
+  {
+    id: "business-growth",
+    category: "business",
+    title: "Business Growth",
+    priceLabel: "₹1499",
+    cadence: "/ month",
+    tagline: "Built for growing teams that need speed and shared context.",
+    features: ["5 team seats", "Shared workspace activity", "Usage monitoring", "Business support queue"],
+    note: "Great fit for startups and small teams.",
+    accent: "popular",
+  },
+  {
+    id: "enterprise-scale",
+    category: "enterprise",
+    title: "Enterprise Scale",
+    priceLabel: "₹2999",
+    cadence: "/ month",
+    tagline: "Premium control, support, and security for larger rollouts.",
+    features: ["15 managed users", "Priority onboarding", "Advanced governance", "Dedicated support window"],
+    note: "Highest-value tier for managed deployments.",
+    accent: "premium",
+  },
+  {
+    id: "developer-pro",
+    category: "developer",
+    title: "Developer Pro",
+    priceLabel: "₹999",
+    cadence: "/ month",
+    tagline: "Developer-ready access for APIs, testing, and fast iteration.",
+    features: ["API-ready workflows", "Webhook-friendly setup", "Faster turnaround", "Sandbox-to-prod guidance"],
+    note: "Strong choice for builders and technical teams.",
+    accent: "standard",
+  },
+  {
+    id: "education-lite",
+    category: "education",
+    title: "Education Lite",
+    priceLabel: "₹399",
+    cadence: "/ month",
+    tagline: "Low-cost access for students, projects, and classroom use.",
+    features: ["2 active devices", "Study-friendly workspace", "Fast upload and search", "Student email support"],
+    note: "Affordable entry plan for learning.",
+    accent: "standard",
+  },
+];
+
+let razorpayScriptPromise;
+
+function loadRazorpayCheckout() {
+  if (typeof window === "undefined") {
+    return Promise.resolve(false);
+  }
+
+  if (window.Razorpay) {
+    return Promise.resolve(true);
+  }
+
+  if (!razorpayScriptPromise) {
+    razorpayScriptPromise = new Promise((resolve) => {
+      const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existingScript) {
+        existingScript.addEventListener("load", () => resolve(true), { once: true });
+        existingScript.addEventListener("error", () => resolve(false), { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  }
+
+  return razorpayScriptPromise;
+}
+
 const INFO_PAGE_CONFIG = {
   about: {
     title: "About Us",
@@ -232,51 +322,39 @@ const INFO_PAGE_CONFIG = {
   pricing: {
     title: "Pricing",
     description: "Choose a plan category",
-    message: "All pricing plans are billed in USD. Cancel anytime. Features and access may vary depending on your region and compliance requirements.",
+    message: "All pricing plans are billed in INR. Choose a plan, pay securely with Razorpay, and start instantly after checkout.",
     statusTitle: "Need Help?",
-    statusItems: ["support@yourcompany.com", "+91 98765 43210"],
+    statusItems: ["support@yourcompany.com", "+91 98765 43210", "Secure Razorpay checkout"],
     tabs: [
       {
         id: "individual",
         label: "Individual",
         heading: "Individual Plans",
-        cards: [
-          { title: "Free Plan", text: "$0 / month\nFor basic personal use with limited features.\n1 user account, Basic tools only, Community forum access, 1GB storage\nNote: Does not include customer support or export tools." },
-          { title: "Pro Plan", text: "$9 / month\nIdeal for individuals with moderate needs.\nUp to 3 devices, 10GB cloud backup, Email support, Data export options\nNote: Includes 7-day free trial. Cancel anytime." },
-        ],
+        description: "Simple monthly pricing for independent work and personal productivity.",
       },
       {
         id: "business",
         label: "Business",
         heading: "Business Plans",
-        cards: [
-          { title: "Startup", text: "$29 / month\nBest for small teams and collaborative work.\nUp to 5 users, Collaboration dashboard, Team analytics, Chat & email support\nNote: Free onboarding included." },
-          { title: "Growth", text: "$59 / month\nAdvanced tools for expanding businesses.\nUnlimited team members, Custom reporting tools, 24/7 support, Third-party integrations\nNote: Save 15% with annual plan." },
-        ],
+        description: "Collaboration-focused plans for teams scaling their AI workflows.",
       },
       {
         id: "enterprise",
         label: "Enterprise",
         heading: "Enterprise Plans",
-        cards: [
-          { title: "Enterprise", text: "Custom Pricing\nTailored for large organizations with advanced needs.\nCustom SLA, Dedicated account manager, Role-based access control, On-premise options\nNote: Contact sales for a custom quote." },
-        ],
+        description: "Higher-capacity plans for managed deployments and priority support.",
       },
       {
         id: "developer",
         label: "Developer",
         heading: "Developer Plans",
-        cards: [
-          { title: "Developer Access", text: "$19 / month\nTools and APIs for developer integration.\nAPI sandbox, Unlimited calls, Webhook support, Private dev Slack\nNote: Great for testing and prototyping." },
-        ],
+        description: "Flexible pricing for builders working on integrations and automations.",
       },
       {
         id: "education",
         label: "Education",
         heading: "Education Plans",
-        cards: [
-          { title: "Student Plan", text: "Free\nAccess to Pro tools for students.\nAll Pro features, 2 devices allowed, Extended trial\nNote: Valid .edu or school email required." },
-        ],
+        description: "Affordable plans for student learning, assignments, and classroom work.",
       },
     ],
   },
@@ -365,6 +443,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [activeAdminDatabaseRequestCategory, setActiveAdminDatabaseRequestCategory] = useState("All");
   const [focusedContactRequestId, setFocusedContactRequestId] = useState("");
   const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState({});
+  const [activePlanPurchaseId, setActivePlanPurchaseId] = useState("");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -392,6 +472,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       })
     : "Not available";
   const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
+  const activePricingPlans = PRICING_PLAN_DETAILS.filter((plan) => plan.category === activeInfoTab);
   const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
   const isAdmin = !!currentUser?.isAdmin;
   const formatRequestStatusClass = (status) =>
@@ -939,6 +1020,118 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         <p className="status-item status-info">Write a prompt and generate with SDXL Lightning. The first run may take longer while models load.</p>
       </>
     );
+
+  const setPlanStatus = (planId, nextStatus) => {
+    setPaymentStatus((current) => ({
+      ...current,
+      [planId]: nextStatus,
+    }));
+  };
+
+  const handlePlanPurchase = async (plan) => {
+    setActivePlanPurchaseId(plan.id);
+    setPlanStatus(plan.id, { type: "", text: "" });
+
+    try {
+      const checkoutReady = await loadRazorpayCheckout();
+      if (!checkoutReady || !window.Razorpay) {
+        throw new Error("Unable to load Razorpay checkout right now.");
+      }
+
+      const order = await requestJson(
+        "/payments/razorpay/order",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ planId: plan.id }),
+        },
+        "Unable to create the payment order."
+      );
+
+      let checkoutResolved = false;
+      const razorpay = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: order.companyName,
+        description: order.description,
+        order_id: order.orderId,
+        prefill: {
+          name: profileName,
+          email: profileEmail,
+          contact: currentUser?.mobile || "",
+        },
+        notes: {
+          planId: plan.id,
+          planName: plan.title,
+        },
+        theme: {
+          color: "#123d7a",
+        },
+        modal: {
+          ondismiss: () => {
+            if (checkoutResolved) {
+              return;
+            }
+            setActivePlanPurchaseId("");
+            setPlanStatus(plan.id, { type: "error", text: "Checkout closed before payment completion." });
+          },
+        },
+        handler: async (response) => {
+          checkoutResolved = true;
+          try {
+            const verification = await requestJson(
+              "/payments/razorpay/verify",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  planId: plan.id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              },
+              "Unable to verify the payment."
+            );
+
+            setPlanStatus(plan.id, {
+              type: "success",
+              text: `${verification.message} ${plan.title} is ready for activation.`,
+            });
+          } catch (paymentError) {
+            setPlanStatus(plan.id, {
+              type: "error",
+              text: paymentError.message || "Payment completed, but verification failed.",
+            });
+          } finally {
+            setActivePlanPurchaseId("");
+          }
+        },
+      });
+
+      razorpay.on("payment.failed", (response) => {
+        checkoutResolved = true;
+        setActivePlanPurchaseId("");
+        setPlanStatus(plan.id, {
+          type: "error",
+          text: response?.error?.description || "Payment failed. Please try again.",
+        });
+      });
+
+      razorpay.open();
+    } catch (purchaseError) {
+      setPlanStatus(plan.id, {
+        type: "error",
+        text: purchaseError.message || "Unable to start payment.",
+      });
+      setActivePlanPurchaseId("");
+    }
+  };
 
   const renderInfoContent = () => {
     if (!activeInfoContent) return null;
@@ -1588,6 +1781,85 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
               <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} />
+            </article>
+          </div>
+        </>
+      );
+    }
+
+    if (selectedInfoPage === "pricing") {
+      return (
+        <>
+          <div className="insight-section">
+            <div className="insight-card">
+              <h3 className="tool-title">{activeInfoContent.heading}</h3>
+              <p className="tool-copy">{infoConfig.message}</p>
+            </div>
+          </div>
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="pricing-page-shell">
+                <div className="pricing-page-hero">
+                  <div>
+                    <span className="pricing-page-kicker">Secure INR Billing</span>
+                    <h4>{activeInfoContent.heading}</h4>
+                    <p>{activeInfoContent.description}</p>
+                  </div>
+                  <div className="pricing-page-summary">
+                    <strong>₹399 to ₹2999</strong>
+                    <span>Instant Razorpay checkout</span>
+                  </div>
+                </div>
+
+                <div className="pricing-plan-grid">
+                  {activePricingPlans.map((plan) => {
+                    const planState = paymentStatus[plan.id];
+                    const isProcessing = activePlanPurchaseId === plan.id;
+
+                    return (
+                      <div key={plan.id} className={`workspace-mini-card pricing-plan-card ${plan.accent}`}>
+                        <div className="pricing-plan-card-top">
+                          <div>
+                            <span className="pricing-plan-badge">
+                              {plan.accent === "popular" ? "Most Popular" : plan.accent === "premium" ? "Premium" : "Active Plan"}
+                            </span>
+                            <h4>{plan.title}</h4>
+                            <p>{plan.tagline}</p>
+                          </div>
+                          <div className="pricing-plan-price">
+                            <strong>{plan.priceLabel}</strong>
+                            <span>{plan.cadence}</span>
+                          </div>
+                        </div>
+
+                        <div className="pricing-plan-feature-list">
+                          {plan.features.map((feature) => (
+                            <div key={feature} className="pricing-plan-feature-item">
+                              {feature}
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="pricing-plan-note">{plan.note}</p>
+                        {planState?.text ? (
+                        <p className={planState.type === "success" ? "success-text" : "error-text"}>
+                            {planState.type === "success" ? `Verified: ${planState.text}` : planState.text}
+                          </p>
+                        ) : null}
+
+                        <button
+                          className="primary-button pricing-plan-button"
+                          type="button"
+                          onClick={() => handlePlanPurchase(plan)}
+                          disabled={!!activePlanPurchaseId}
+                        >
+                          {isProcessing ? "Opening Razorpay..." : "Buy Plan"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </article>
           </div>
         </>

@@ -84,3 +84,7 @@ LINKEDIN_OAUTH_ENABLED = os.getenv("LINKEDIN_OAUTH_ENABLED", "false").strip().lo
     "yes",
     "on",
 }
+
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
+RAZORPAY_COMPANY_NAME = os.getenv("RAZORPAY_COMPANY_NAME", "Unified AI Workspace").strip()
