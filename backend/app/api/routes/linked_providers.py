@@ -20,6 +20,7 @@ def build_linked_provider_router(
     social_oauth_service: SocialOAuthService,
 ) -> APIRouter:
     router = APIRouter(prefix="/linked-providers", tags=["linked-providers"])
+    auth_callback_router = APIRouter(prefix="/auth", tags=["auth"])
 
     def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.startswith("Bearer "):
@@ -42,69 +43,18 @@ def build_linked_provider_router(
             email=item.email,
         )
 
-    @router.get("", response_model=list[LinkedProviderResponse])
-    def list_linked_providers(
-        db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
-    ):
-        try:
-            items = linked_provider_service.list_providers(db, user_id=authenticated_user_id)
-            return [serialize_item(item) for item in items]
-        except LinkedProviderServiceError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    def build_callback_url(request: Request, provider_key: str) -> str:
+        return f"{str(request.base_url).rstrip('/')}/auth/{provider_key}/callback"
 
-    @router.post("/{provider_key}/authorize-url", response_model=LinkedProviderAuthorizeResponse)
-    def get_provider_authorize_url(
-        provider_key: str,
-        payload: LinkedProviderAuthorizeRequest,
-        request: Request,
-        db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
-    ):
-        try:
-            callback_url = str(request.url_for("provider_oauth_callback", provider_key=provider_key))
-            authorize_url = social_oauth_service.create_authorize_url(
-                db,
-                provider_key=provider_key,
-                user_id=authenticated_user_id,
-                frontend_origin=payload.frontendOrigin or "",
-                callback_url=callback_url,
-            )
-            return LinkedProviderAuthorizeResponse(authorizeUrl=authorize_url)
-        except SocialOAuthServiceError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @router.get("/{provider_key}/connect")
-    def redirect_to_provider(
+    def handle_provider_oauth_callback(
         provider_key: str,
         request: Request,
-        frontend_origin: str | None = Query(default=None, alias="frontendOrigin"),
-        db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
-    ):
-        try:
-            callback_url = str(request.url_for("provider_oauth_callback", provider_key=provider_key))
-            authorize_url = social_oauth_service.create_authorize_url(
-                db,
-                provider_key=provider_key,
-                user_id=authenticated_user_id,
-                frontend_origin=frontend_origin or "",
-                callback_url=callback_url,
-            )
-            return RedirectResponse(url=authorize_url, status_code=307)
-        except SocialOAuthServiceError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @router.get("/oauth/{provider_key}/callback", response_class=HTMLResponse, name="provider_oauth_callback")
-    def provider_oauth_callback(
-        provider_key: str,
-        request: Request,
-        code: str | None = Query(default=None),
-        state: str | None = Query(default=None),
-        error: str | None = Query(default=None),
-        error_description: str | None = Query(default=None),
-        db: Session = Depends(get_db),
-    ):
+        code: str | None,
+        state: str | None,
+        error: str | None,
+        error_description: str | None,
+        db: Session,
+    ) -> HTMLResponse:
         if error:
             message = error_description or error or "Provider sign-in was cancelled."
             return HTMLResponse(
@@ -128,7 +78,7 @@ def build_linked_provider_router(
             )
 
         try:
-            callback_url = str(request.url_for("provider_oauth_callback", provider_key=provider_key))
+            callback_url = build_callback_url(request, provider_key)
             profile = social_oauth_service.complete_callback(
                 db,
                 provider_key=provider_key,
@@ -166,6 +116,99 @@ def build_linked_provider_router(
                 )
             )
 
+    @router.get("", response_model=list[LinkedProviderResponse])
+    def list_linked_providers(
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            items = linked_provider_service.list_providers(db, user_id=authenticated_user_id)
+            return [serialize_item(item) for item in items]
+        except LinkedProviderServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/{provider_key}/authorize-url", response_model=LinkedProviderAuthorizeResponse)
+    def get_provider_authorize_url(
+        provider_key: str,
+        payload: LinkedProviderAuthorizeRequest,
+        request: Request,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            callback_url = build_callback_url(request, provider_key)
+            authorize_url = social_oauth_service.create_authorize_url(
+                db,
+                provider_key=provider_key,
+                user_id=authenticated_user_id,
+                frontend_origin=payload.frontendOrigin or "",
+                callback_url=callback_url,
+            )
+            return LinkedProviderAuthorizeResponse(authorizeUrl=authorize_url)
+        except SocialOAuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/{provider_key}/connect")
+    def redirect_to_provider(
+        provider_key: str,
+        request: Request,
+        frontend_origin: str | None = Query(default=None, alias="frontendOrigin"),
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            callback_url = build_callback_url(request, provider_key)
+            authorize_url = social_oauth_service.create_authorize_url(
+                db,
+                provider_key=provider_key,
+                user_id=authenticated_user_id,
+                frontend_origin=frontend_origin or "",
+                callback_url=callback_url,
+            )
+            return RedirectResponse(url=authorize_url, status_code=307)
+        except SocialOAuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/oauth/{provider_key}/callback", response_class=HTMLResponse, name="provider_oauth_callback")
+    def provider_oauth_callback(
+        provider_key: str,
+        request: Request,
+        code: str | None = Query(default=None),
+        state: str | None = Query(default=None),
+        error: str | None = Query(default=None),
+        error_description: str | None = Query(default=None),
+        db: Session = Depends(get_db),
+    ):
+        return handle_provider_oauth_callback(
+            provider_key=provider_key,
+            request=request,
+            code=code,
+            state=state,
+            error=error,
+            error_description=error_description,
+            db=db,
+        )
+
+    @auth_callback_router.get("/{provider_key}/callback", response_class=HTMLResponse)
+    def provider_oauth_callback_auth_alias(
+        provider_key: str,
+        request: Request,
+        code: str | None = Query(default=None),
+        state: str | None = Query(default=None),
+        error: str | None = Query(default=None),
+        error_description: str | None = Query(default=None),
+        db: Session = Depends(get_db),
+    ):
+        return handle_provider_oauth_callback(
+            provider_key=provider_key,
+            request=request,
+            code=code,
+            state=state,
+            error=error,
+            error_description=error_description,
+            db=db,
+        )
+
     @router.delete("/{provider_key}")
     def unlink_provider(
         provider_key: str,
@@ -182,4 +225,5 @@ def build_linked_provider_router(
         except LinkedProviderServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    router.include_router(auth_callback_router)
     return router
