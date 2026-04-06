@@ -50,8 +50,24 @@ def ensure_contact_request_schema() -> None:
     with engine.begin() as connection:
         if "admin_message" not in existing_columns:
             connection.execute(text("ALTER TABLE contact_requests ADD COLUMN admin_message TEXT NULL"))
-        if "request_code" in existing_columns:
-            connection.execute(text("ALTER TABLE contact_requests MODIFY COLUMN request_code VARCHAR(6) NULL"))
+
+
+def ensure_contact_request_code_schema() -> None:
+    inspector = inspect(engine)
+    if "contact_requests" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"]: column for column in inspector.get_columns("contact_requests")}
+    request_code_column = existing_columns.get("request_code")
+    if not request_code_column:
+        return
+
+    current_length = getattr(request_code_column["type"], "length", None)
+    if current_length == 6:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE contact_requests MODIFY COLUMN request_code VARCHAR(6) NULL"))
 
 
 def ensure_user_subscription_schema() -> None:
@@ -188,6 +204,7 @@ def create_app() -> FastAPI:
     ensure_user_subscription_schema()
     ensure_subscription_transaction_schema()
     ensure_public_codes()
+    ensure_contact_request_code_schema()
     rag_service = RAGService()
     otp_service = OTPService()
     auth_service = AuthService()
