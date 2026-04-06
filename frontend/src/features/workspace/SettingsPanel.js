@@ -273,6 +273,10 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingActionLoading, setBillingActionLoading] = useState("");
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
+  const [showInvoicesPanel, setShowInvoicesPanel] = useState(false);
+  const [showCancelSubscriptionPanel, setShowCancelSubscriptionPanel] = useState(false);
+  const [cancelSubscriptionText, setCancelSubscriptionText] = useState("");
+  const [cancelSubscriptionReadConfirmed, setCancelSubscriptionReadConfirmed] = useState(false);
   const [privacyActionLoading, setPrivacyActionLoading] = useState("");
   const [privacyExportPassword, setPrivacyExportPassword] = useState("");
   const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
@@ -601,6 +605,21 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   };
 
   const handleCancelSubscription = async () => {
+    if (subscriptionStatus !== "premium") {
+      setFeedback({ type: "error", text: "Only active premium subscriptions can be canceled." });
+      return;
+    }
+
+    if (!cancelSubscriptionReadConfirmed) {
+      setFeedback({ type: "error", text: "Read and confirm the cancellation notes before continuing." });
+      return;
+    }
+
+    if (cancelSubscriptionText.trim().toUpperCase() !== "CANCEL SUBSCRIPTION") {
+      setFeedback({ type: "error", text: 'Type "CANCEL SUBSCRIPTION" exactly to confirm cancellation.' });
+      return;
+    }
+
     try {
       setBillingActionLoading("cancel");
       const response = await cancelSubscription();
@@ -609,6 +628,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       }
       setFeedback({ type: "success", text: response.message || "Subscription canceled successfully." });
       pushActivity("Subscription canceled successfully.");
+      setShowCancelSubscriptionPanel(false);
+      setCancelSubscriptionText("");
+      setCancelSubscriptionReadConfirmed(false);
       const invoices = await listInvoices();
       setBillingInvoices(invoices || []);
     } catch (error) {
@@ -1976,26 +1998,43 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         <div className="workspace-mini-card"><h4>Membership Status</h4><p>Status: {subscriptionStatus === "premium" ? "Premium Active" : subscriptionStatus === "expired" ? "Expired" : subscriptionStatus === "canceled" ? "Canceled" : "Free Access"}{subscriptionActivatedAt ? ` | Activated: ${new Date(subscriptionActivatedAt).toLocaleDateString("en-GB")}` : ""}{subscriptionExpiresAt ? ` | Valid Till: ${new Date(subscriptionExpiresAt).toLocaleDateString("en-GB")}` : ""}</p></div>
 
         <div className="billing-action-row">
-          <button className="primary-button" type="button" onClick={() => setShowPaymentDetails((current) => !current)}>
+          <button
+            className={`primary-button ${showPaymentDetails ? "" : "secondary-tone"}`}
+            type="button"
+            onClick={() => {
+              setShowPaymentDetails((current) => !current);
+              setShowInvoicesPanel(false);
+              setShowCancelSubscriptionPanel(false);
+            }}
+          >
             {showPaymentDetails ? "Hide Payment Details" : "Manage Payment Method"}
           </button>
           <button
-            className="primary-button"
+            className={`primary-button ${showInvoicesPanel ? "" : "secondary-tone"}`}
             type="button"
             onClick={() => {
-              const target = document.getElementById("billing-invoices-section");
-              target?.scrollIntoView({ behavior: "smooth", block: "start" });
+              setShowInvoicesPanel((current) => !current);
+              setShowPaymentDetails(false);
+              setShowCancelSubscriptionPanel(false);
             }}
           >
-            View Invoices
+            {showInvoicesPanel ? "Hide Invoices" : "View Invoices"}
           </button>
           <button
-            className="primary-button secondary-tone"
+            className={`primary-button danger-tone ${showCancelSubscriptionPanel ? "" : "secondary-tone"}`}
             type="button"
-            onClick={handleCancelSubscription}
-            disabled={billingActionLoading === "cancel" || subscriptionStatus !== "premium"}
+            onClick={() => {
+              if (subscriptionStatus !== "premium") {
+                setFeedback({ type: "error", text: "Only active premium subscriptions can be canceled." });
+                return;
+              }
+              setShowCancelSubscriptionPanel((current) => !current);
+              setShowPaymentDetails(false);
+              setShowInvoicesPanel(false);
+            }}
+            disabled={subscriptionStatus !== "premium"}
           >
-            {billingActionLoading === "cancel" ? "Canceling..." : "Cancel Subscription"}
+            {showCancelSubscriptionPanel ? "Hide Cancel Panel" : "Cancel Subscription"}
           </button>
         </div>
 
@@ -2017,6 +2056,53 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           </div>
         ) : null}
 
+        {showCancelSubscriptionPanel ? (
+          <div className="workspace-mini-card privacy-delete-card billing-cancel-card">
+            <div className="billing-payment-card-head">
+              <div>
+                <h4>Cancel Subscription Confirmation</h4>
+                <p>Review these points carefully before canceling your premium plan.</p>
+              </div>
+              <span className="billing-status-pill danger-pill">Permanent billing change</span>
+            </div>
+            <div className="workspace-mini-card privacy-delete-points">
+              <h4>Read Before Canceling</h4>
+              <ul className="privacy-warning-list">
+                <li>Your premium plan will stop renewing after this cancellation is confirmed.</li>
+                <li>Invoice history remains saved, but premium access will no longer continue beyond the valid till date.</li>
+                <li>Some plan-specific benefits, support priority, and subscription status badges will be removed.</li>
+                <li>This action should only be used when you are sure you want to stop the current subscription lifecycle.</li>
+              </ul>
+              <label className="terms-check privacy-read-confirm">
+                <input
+                  type="checkbox"
+                  checked={cancelSubscriptionReadConfirmed}
+                  onChange={(event) => setCancelSubscriptionReadConfirmed(event.target.checked)}
+                />
+                <span>I have read and understood the subscription cancellation warnings.</span>
+              </label>
+            </div>
+            <div className="workspace-form-stack privacy-inline-stack">
+              <input
+                className="auth-input workspace-static-input"
+                type="text"
+                placeholder='Type CANCEL SUBSCRIPTION to confirm'
+                value={cancelSubscriptionText}
+                onChange={(event) => setCancelSubscriptionText(event.target.value)}
+              />
+              <button
+                className="primary-button danger-tone"
+                type="button"
+                onClick={handleCancelSubscription}
+                disabled={billingActionLoading === "cancel" || !cancelSubscriptionReadConfirmed}
+              >
+                {billingActionLoading === "cancel" ? "Canceling..." : "Confirm Cancel Subscription"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {showInvoicesPanel ? (
         <div id="billing-invoices-section" className="workspace-mini-card billing-invoice-shell">
           <div className="billing-payment-card-head">
             <div>
@@ -2077,6 +2163,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           ) : null}
         </div>
+        ) : null}
       </div>
     );
   }
