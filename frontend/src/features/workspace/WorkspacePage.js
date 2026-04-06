@@ -444,7 +444,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [activeAdminDatabaseRequestCategory, setActiveAdminDatabaseRequestCategory] = useState("All");
   const [focusedContactRequestId, setFocusedContactRequestId] = useState("");
   const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
-
   const [paymentStatus, setPaymentStatus] = useState({});
   const [activePlanPurchaseId, setActivePlanPurchaseId] = useState("");
 

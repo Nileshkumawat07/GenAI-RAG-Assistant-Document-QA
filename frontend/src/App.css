@@ -2215,19 +2215,16 @@ body.workspace-body-mode #root {
 
 .workspace-app-body {
   min-height: 0;
-  overflow: auto;
 }
 
 body.workspace-body-mode .workspace-page {
   width: 100%;
   height: 100%;
-  min-height: calc(100% / var(--workspace-font-scale));
-  zoom: var(--workspace-font-scale);
 }
 
 body.workspace-body-mode .workspace-shell {
-  width: calc(100% / var(--workspace-font-scale));
-  height: calc(100% / var(--workspace-font-scale));
+  width: 100%;
+  height: 100%;
   margin: 0 auto;
   background: rgba(255, 255, 255, 0.9);
   display: flex;
@@ -2247,27 +2244,9 @@ body.workspace-body-mode .workspace-sidebar {
 
 body.workspace-body-mode .sidebar-title {
   margin: 0 0 12px;
-  font-size: calc(28px * var(--workspace-font-scale));
+  font-size: 28px;
   font-family: "Space Grotesk", "Manrope", sans-serif;
   color: var(--primary-deep);
-}
-
-body.workspace-body-mode .sidebar-description,
-body.workspace-body-mode .sidebar-tab,
-body.workspace-body-mode .workspace-panel h3,
-body.workspace-body-mode .workspace-panel > p,
-body.workspace-body-mode .workspace-mini-card h4,
-body.workspace-body-mode .workspace-mini-card p,
-body.workspace-body-mode .workspace-mini-card li,
-body.workspace-body-mode .auth-label,
-body.workspace-body-mode .auth-input,
-body.workspace-body-mode .workspace-static-input,
-body.workspace-body-mode .tool-copy,
-body.workspace-body-mode .primary-button,
-body.workspace-body-mode .billing-status-pill,
-body.workspace-body-mode .workspace-info-card p,
-body.workspace-body-mode .workspace-info-card li {
-  font-size: calc(1em * var(--workspace-font-scale));
 }
 
 body.workspace-body-mode .sidebar-description {

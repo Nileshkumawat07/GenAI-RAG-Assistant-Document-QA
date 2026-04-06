@@ -11,26 +11,6 @@ import {
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
 
-function getWorkspaceSettings(userId) {
-  if (!userId) {
-    return null;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(`genai_workspace_settings_${userId}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function applyWorkspacePreferences(user) {
-  const settings = getWorkspaceSettings(user?.id);
-  const fontSize = settings?.preferences?.fontSize || "Medium";
-  const fontScale = fontSize === "Small" ? "0.9" : fontSize === "Large" ? "1.2" : "1";
-  document.documentElement.style.setProperty("--workspace-font-scale", fontScale);
-}
-
 function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
   const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
@@ -214,25 +194,6 @@ function App() {
       navigateTo("home", null, "replace");
     }
   }, [screen, currentUser]);
-
-  useEffect(() => {
-    applyWorkspacePreferences(currentUser);
-  }, [currentUser]);
-
-  useEffect(() => {
-    const handlePreferenceChange = (event) => {
-      const changedUserId = event.detail?.userId;
-      if (!currentUser?.id || changedUserId !== currentUser.id) {
-        return;
-      }
-      applyWorkspacePreferences(currentUser);
-    };
-
-    window.addEventListener("workspace-settings-changed", handlePreferenceChange);
-    return () => {
-      window.removeEventListener("workspace-settings-changed", handlePreferenceChange);
-    };
-  }, [currentUser]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {

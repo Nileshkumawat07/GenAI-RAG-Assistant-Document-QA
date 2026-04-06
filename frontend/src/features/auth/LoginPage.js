@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "", t = (key, fallback) => fallback || key }) {
+function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "" }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -47,16 +47,16 @@ function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "", t = (key
   return (
     <section className="auth-page">
       <div className="auth-showcase">
-        <p className="hero-kicker">{t("welcome_back", "Welcome Back")}</p>
+        <p className="hero-kicker">Welcome Back</p>
         <h1>Return to your AI command center.</h1>
         <p>
           Log in with the account you created from the shared backend and continue into the
           workspace with your saved profile.
         </p>
         <div className="auth-showcase-points">
-          <span>{t("fast_access", "Fast access")}</span>
-          <span>{t("clean_validation", "Clean validation")}</span>
-          <span>{t("mysql_backed_auth", "MySQL-backed auth")}</span>
+          <span>Fast access</span>
+          <span>Clean validation</span>
+          <span>MySQL-backed auth</span>
         </div>
       </div>
 
@@ -66,7 +66,7 @@ function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "", t = (key
         </div>
 
         <label className="auth-label" htmlFor="login-identifier">
-          {t("email_or_username", "Email or Username")}
+          Email or Username
         </label>
         <input
           id="login-identifier"
@@ -78,7 +78,7 @@ function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "", t = (key
         />
 
         <label className="auth-label" htmlFor="login-password">
-          {t("password", "Password")}
+          Password
         </label>
         <div className="password-shell">
           <input
@@ -94,14 +94,14 @@ function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "", t = (key
             type="button"
             onClick={() => setShowPassword((current) => !current)}
           >
-            {showPassword ? t("hide", "Hide") : t("show", "Show")}
+            {showPassword ? "Hide" : "Show"}
           </button>
         </div>
 
         {formError ? <p className="form-error-banner">{formError}</p> : null}
 
         <button className="auth-primary-button" type="submit" disabled={submitting}>
-          {submitting ? t("logging_in", "Logging in...") : t("login", "Login")}
+          {submitting ? "Logging in..." : "Login"}
         </button>
 
         <div className="auth-login-fill">
@@ -116,19 +116,19 @@ function LoginPage({ onSubmit, onBack, onShowSignup, initialError = "", t = (key
 
           <div className="auth-login-fill-grid auth-login-support-grid">
             <div className="auth-login-mini-card">
-              <strong>{t("document_qa", "Document Q&A")}</strong>
+              <strong>Document Q&amp;A</strong>
               <span>Upload files, ask focused questions, and get fast answer-ready output.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>{t("object_detection", "Object Detection")}</strong>
+              <strong>Object Detection</strong>
               <span>Inspect uploaded images and review detected objects in one clean workspace.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>{t("image_generation", "Image Generation")}</strong>
+              <strong>Image Generation</strong>
               <span>Turn prompts into visuals without leaving the same product flow.</span>
             </div>
             <div className="auth-login-mini-card">
-              <strong>{t("account_sync", "Account Sync")}</strong>
+              <strong>Account Sync</strong>
               <span>Open the same saved account details and workspace entry from any supported session.</span>
             </div>
           </div>
