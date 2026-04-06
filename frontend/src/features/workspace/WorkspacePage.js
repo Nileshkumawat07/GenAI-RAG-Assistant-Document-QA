@@ -593,6 +593,22 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     window.location.hash = "#/workspace/contact";
   };
 
+  const clearFocusedContactRequest = (requestId) => {
+    const pendingFocus = window.sessionStorage.getItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
+    if (pendingFocus) {
+      try {
+        const parsedFocus = JSON.parse(pendingFocus);
+        if (!requestId || parsedFocus?.requestId === requestId) {
+          window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
+        }
+      } catch {
+        window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
+      }
+    }
+
+    setFocusedContactRequestId((current) => (current === requestId || !requestId ? "" : current));
+  };
+
   useEffect(() => {
     if (selectedInfoPage === "contact" && currentUser?.id) {
       loadContactRequests();
@@ -632,7 +648,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     const targetCard = document.getElementById(`contact-request-${focusedContactRequestId}`);
     if (targetCard) {
       targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
-      window.sessionStorage.removeItem(CONTACT_REQUEST_FOCUS_STORAGE_KEY);
     }
   }, [selectedInfoPage, focusedContactRequestId, contactRequests, activeSubmittedCategory]);
 
@@ -807,6 +822,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         ...current,
         [requestId]: updatedRequest.adminMessage || "",
       }));
+      clearFocusedContactRequest(requestId);
     } catch (updateError) {
       setAdminError(updateError.message || "Failed to update admin request.");
     } finally {
@@ -820,6 +836,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       setAdminError("");
       await adminDeleteContactRequest(requestId);
       setAdminRequests((current) => current.filter((item) => item.id !== requestId));
+      clearFocusedContactRequest(requestId);
     } catch (deleteError) {
       setAdminError(deleteError.message || "Failed to delete admin request.");
     } finally {
