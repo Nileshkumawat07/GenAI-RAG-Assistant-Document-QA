@@ -66,3 +66,21 @@ DATABASE_URL = os.getenv(
 ).strip()
 SOCIAL_OAUTH_STATE_SECRET = os.getenv("SOCIAL_OAUTH_STATE_SECRET", "").strip()
 SOCIAL_OAUTH_STATE_TTL_SECONDS = int(os.getenv("SOCIAL_OAUTH_STATE_TTL_SECONDS", "600"))
+
+FACEBOOK_OAUTH_CLIENT_ID = os.getenv("FACEBOOK_OAUTH_CLIENT_ID", "").strip()
+FACEBOOK_OAUTH_CLIENT_SECRET = os.getenv("FACEBOOK_OAUTH_CLIENT_SECRET", "").strip()
+FACEBOOK_OAUTH_ENABLED = os.getenv("FACEBOOK_OAUTH_ENABLED", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+LINKEDIN_OAUTH_CLIENT_ID = os.getenv("LINKEDIN_OAUTH_CLIENT_ID", "").strip()
+LINKEDIN_OAUTH_CLIENT_SECRET = os.getenv("LINKEDIN_OAUTH_CLIENT_SECRET", "").strip()
+LINKEDIN_OAUTH_ENABLED = os.getenv("LINKEDIN_OAUTH_ENABLED", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}

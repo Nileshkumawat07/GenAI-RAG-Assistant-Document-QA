@@ -13,7 +13,15 @@ import requests
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import FRONTEND_ORIGIN
+from app.core.config import (
+    FACEBOOK_OAUTH_CLIENT_ID,
+    FACEBOOK_OAUTH_CLIENT_SECRET,
+    FACEBOOK_OAUTH_ENABLED,
+    FRONTEND_ORIGIN,
+    LINKEDIN_OAUTH_CLIENT_ID,
+    LINKEDIN_OAUTH_CLIENT_SECRET,
+    LINKEDIN_OAUTH_ENABLED,
+)
 from app.models.social_oauth_config import SocialOAuthConfig
 
 
@@ -48,6 +56,9 @@ class SocialOAuthService:
                 "token_url": "https://graph.facebook.com/v19.0/oauth/access_token",
                 "profile_url": "https://graph.facebook.com/me",
                 "scope": "email,public_profile",
+                "env_client_id": FACEBOOK_OAUTH_CLIENT_ID,
+                "env_client_secret": FACEBOOK_OAUTH_CLIENT_SECRET,
+                "env_enabled": FACEBOOK_OAUTH_ENABLED,
             },
             "linkedin": {
                 "provider_id": "linkedin.com",
@@ -55,6 +66,9 @@ class SocialOAuthService:
                 "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
                 "profile_url": "https://api.linkedin.com/v2/userinfo",
                 "scope": "openid profile email",
+                "env_client_id": LINKEDIN_OAUTH_CLIENT_ID,
+                "env_client_secret": LINKEDIN_OAUTH_CLIENT_SECRET,
+                "env_enabled": LINKEDIN_OAUTH_ENABLED,
             },
         }
 
@@ -129,18 +143,24 @@ class SocialOAuthService:
         )
 
     def ensure_provider_rows(self, db: Session) -> None:
-        for provider_key in self._provider_defaults:
+        for provider_key, defaults in self._provider_defaults.items():
             existing = db.execute(
                 select(SocialOAuthConfig).where(SocialOAuthConfig.provider_key == provider_key)
             ).scalar_one_or_none()
             if existing:
+                if not existing.client_id.strip() and defaults["env_client_id"]:
+                    existing.client_id = defaults["env_client_id"]
+                if not existing.client_secret.strip() and defaults["env_client_secret"]:
+                    existing.client_secret = defaults["env_client_secret"]
+                if defaults["env_enabled"] and not existing.is_enabled:
+                    existing.is_enabled = True
                 continue
             db.add(
                 SocialOAuthConfig(
                     provider_key=provider_key,
-                    client_id="",
-                    client_secret="",
-                    is_enabled=False,
+                    client_id=defaults["env_client_id"],
+                    client_secret=defaults["env_client_secret"],
+                    is_enabled=defaults["env_enabled"],
                 )
             )
         db.commit()
@@ -279,15 +299,36 @@ class SocialOAuthService:
         config = db.execute(
             select(SocialOAuthConfig).where(SocialOAuthConfig.provider_key == provider_key)
         ).scalar_one_or_none()
-        if not config or not config.is_enabled:
-            raise SocialOAuthServiceError(f"{provider_key.title()} linking is not configured in MySQL yet.")
-        if not config.client_id.strip() or not config.client_secret.strip():
-            raise SocialOAuthServiceError(f"{provider_key.title()} OAuth credentials are missing in MySQL.")
+
+        client_id = ""
+        client_secret = ""
+        is_enabled = False
+
+        if config:
+            client_id = config.client_id.strip()
+            client_secret = config.client_secret.strip()
+            is_enabled = config.is_enabled
+
+        if not client_id:
+            client_id = provider_defaults["env_client_id"]
+        if not client_secret:
+            client_secret = provider_defaults["env_client_secret"]
+        if not is_enabled:
+            is_enabled = provider_defaults["env_enabled"]
+
+        if not is_enabled:
+            raise SocialOAuthServiceError(
+                f"{provider_key.title()} linking is disabled. Enable it in MySQL or backend environment variables."
+            )
+        if not client_id or not client_secret:
+            raise SocialOAuthServiceError(
+                f"{provider_key.title()} OAuth credentials are missing. Set them in MySQL or backend environment variables."
+            )
 
         return {
             **provider_defaults,
-            "client_id": config.client_id.strip(),
-            "client_secret": config.client_secret.strip(),
+            "client_id": client_id,
+            "client_secret": client_secret,
         }
 
     def _sign_state(self, payload: dict) -> str:
