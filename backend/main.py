@@ -38,6 +38,19 @@ def ensure_user_social_link_schema() -> None:
     Base.metadata.create_all(bind=engine)
 
 
+def ensure_contact_request_schema() -> None:
+    inspector = inspect(engine)
+    if "contact_requests" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("contact_requests")}
+    if "admin_message" in existing_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE contact_requests ADD COLUMN admin_message TEXT NULL"))
+
+
 def ensure_social_oauth_config_seed(social_oauth_service: SocialOAuthService) -> None:
     with Session(engine) as db:
         social_oauth_service.ensure_provider_rows(db)
@@ -47,6 +60,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
     Base.metadata.create_all(bind=engine)
     ensure_user_social_link_schema()
+    ensure_contact_request_schema()
     rag_service = RAGService()
     otp_service = OTPService()
     auth_service = AuthService()

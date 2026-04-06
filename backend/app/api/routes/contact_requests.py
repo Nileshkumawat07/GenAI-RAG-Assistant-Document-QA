@@ -36,6 +36,7 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
             title=item.title,
             requestCode=item.request_code,
             status=item.status,
+            adminMessage=item.admin_message,
             values=item.values,
             createdAt=item.created_at,
             userFullName=item.user_full_name,
@@ -98,7 +99,7 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
-            if payload.userId != authenticated_user_id:
+            if payload.userId and payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own contact requests.")
             item = contact_request_service.update_status(
                 db,
@@ -124,6 +125,7 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
                 db,
                 request_id=request_id,
                 status=payload.status,
+                admin_message=payload.adminMessage,
             )
             return serialize_contact_request(item)
         except ContactRequestServiceError as exc:

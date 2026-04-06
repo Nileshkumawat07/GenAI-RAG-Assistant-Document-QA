@@ -15,6 +15,7 @@ class ContactRequest(Base):
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     request_code: Mapped[str | None] = mapped_column(String(40), nullable=True, unique=True, index=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="Submitted")
+    admin_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

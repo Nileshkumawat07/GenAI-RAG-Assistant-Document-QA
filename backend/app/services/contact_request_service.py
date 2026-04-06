@@ -23,6 +23,7 @@ class ContactRequestPayload:
     title: str
     request_code: str | None
     status: str
+    admin_message: str | None
     values: dict[str, str]
     created_at: str
     user_full_name: str | None = None
@@ -121,7 +122,14 @@ class ContactRequestService:
         db.refresh(request)
         return self._serialize(request)
 
-    def admin_update_status(self, db: Session, *, request_id: str, status: str) -> ContactRequestPayload:
+    def admin_update_status(
+        self,
+        db: Session,
+        *,
+        request_id: str,
+        status: str,
+        admin_message: str | None = None,
+    ) -> ContactRequestPayload:
         normalized_status = self._normalize_status(status)
         if not normalized_status:
             raise ContactRequestServiceError("Invalid request status.")
@@ -133,6 +141,7 @@ class ContactRequestService:
             raise ContactRequestServiceError("Contact request was not found.")
 
         request.status = normalized_status
+        request.admin_message = (admin_message or "").strip() or None
         db.commit()
         db.refresh(request)
         user = db.execute(select(User).where(User.id == request.user_id)).scalar_one_or_none()
@@ -179,6 +188,7 @@ class ContactRequestService:
             title=request.title,
             request_code=request.request_code,
             status=self._normalize_status(request.status) or request.status,
+            admin_message=request.admin_message,
             values=json.loads(request.payload_json),
             created_at=request.created_at.isoformat(),
             user_full_name=user.full_name if user else None,

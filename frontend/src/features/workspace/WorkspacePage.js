@@ -357,6 +357,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState("");
   const [adminActionRequestId, setAdminActionRequestId] = useState("");
+  const [adminReplyDrafts, setAdminReplyDrafts] = useState({});
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -386,6 +387,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
   const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
   const isAdmin = !!currentUser?.isAdmin;
+  const formatRequestStatusClass = (status) =>
+    (status || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
 
   const hasQuestion = question.trim().length > 0;
 
@@ -429,6 +435,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
       setAdminTables(mysqlOverview.tables || []);
       setAdminStatusOptions(mysqlOverview.statusOptions || []);
       setAdminRequests(allRequests || []);
+      setAdminReplyDrafts(
+        Object.fromEntries(
+          (allRequests || []).map((item) => [item.id, item.adminMessage || ""])
+        )
+      );
     } catch (loadError) {
       setAdminError(loadError.message || "Failed to load administration data.");
     } finally {
@@ -602,10 +613,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     try {
       setAdminActionRequestId(requestId);
       setAdminError("");
-      const updatedRequest = await adminUpdateContactRequestStatus(requestId, { status });
+      const updatedRequest = await adminUpdateContactRequestStatus(requestId, {
+        status,
+        adminMessage: adminReplyDrafts[requestId] || "",
+      });
       setAdminRequests((current) =>
         current.map((item) => (item.id === requestId ? updatedRequest : item))
       );
+      setAdminReplyDrafts((current) => ({
+        ...current,
+        [requestId]: updatedRequest.adminMessage || "",
+      }));
     } catch (updateError) {
       setAdminError(updateError.message || "Failed to update admin request.");
     } finally {
@@ -797,6 +815,16 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                         <p>
                           {requestItem.category || "general"} | {new Date(requestItem.createdAt).toLocaleString("en-GB")}
                         </p>
+                        <div className="admin-request-topbar">
+                          <span className={`contact-request-status-chip status-${formatRequestStatusClass(requestItem.status)}`}>
+                            {requestItem.status || statusChoices[0]}
+                          </span>
+                          <div className="admin-request-user-meta">
+                            <strong>{requestItem.userFullName || "User"}</strong>
+                            <span>{requestItem.userEmail || "No email"}</span>
+                            <span>{requestItem.userMobile || "No mobile"}</span>
+                          </div>
+                        </div>
                         <div className="workspace-info-grid">
                           {Object.entries(requestItem.values || {}).map(([key, value]) => (
                             <div key={key} className="workspace-mini-card">
@@ -805,7 +833,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                             </div>
                           ))}
                         </div>
-                        <div className="workspace-form-stack">
+                        <div className="workspace-form-stack admin-request-actions">
+                          <textarea
+                            className="question-input workspace-static-textarea"
+                            rows={4}
+                            placeholder="Write the message that the user should see with this status update."
+                            value={adminReplyDrafts[requestItem.id] || ""}
+                            onChange={(event) =>
+                              setAdminReplyDrafts((current) => ({
+                                ...current,
+                                [requestItem.id]: event.target.value,
+                              }))
+                            }
+                            disabled={adminActionRequestId === requestItem.id}
+                          />
                           <select
                             className="auth-input workspace-static-input"
                             value={requestItem.status || statusChoices[0]}
@@ -857,26 +898,39 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
               ) : (
                 <div className="workspace-form-stack">
                   {adminTables.map((table) => (
-                    <div key={table.tableName} className="workspace-mini-card">
-                      <h4>{table.tableName}</h4>
-                      <p>{table.rowCount || 0} rows</p>
-                      <div className="workspace-copy-list">
-                        {table.columns?.map((column) => (
-                          <p key={column.name} className="tool-copy workspace-copy-paragraph">
-                            {column.name} ({column.type})
-                          </p>
-                        ))}
-                      </div>
-                      {(table.rows || []).slice(0, 5).map((row, index) => (
-                        <div key={`${table.tableName}-${index}`} className="workspace-mini-card">
-                          {Object.entries(row).map(([key, value]) => (
-                            <p key={key} className="tool-copy workspace-copy-paragraph">
-                              <strong>{key}:</strong> {String(value ?? "null")}
-                            </p>
-                          ))}
+                    <section key={table.tableName} className="admin-table-section">
+                      <div className="admin-table-header">
+                        <div>
+                          <h4>{table.tableName}</h4>
+                          <p>{table.rowCount || 0} rows</p>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                      <div className="admin-table-scroll">
+                        <table className="admin-data-table">
+                          <thead>
+                            <tr>
+                              {table.columns?.map((column) => (
+                                <th key={column.name}>
+                                  <span>{column.name}</span>
+                                  <small>{column.type}</small>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(table.rows || []).slice(0, 12).map((row, index) => (
+                              <tr key={`${table.tableName}-${index}`}>
+                                {table.columns?.map((column) => (
+                                  <td key={`${table.tableName}-${index}-${column.name}`}>
+                                    {String(row[column.name] ?? "null")}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
                   ))}
                 </div>
               )}
@@ -1029,11 +1083,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                 <div key={requestItem.id} className="contact-request-card">
                                   <div className="contact-request-card-head">
                                     <div>
+                                      <p className="contact-request-type">{requestItem.title || selectedSubmittedGroup.label}</p>
                                       <div className="contact-request-id-badge">
                                         {requestItem.requestCode || "Feedback Request"}
                                       </div>
                                     </div>
-                                    <span className="contact-request-status-chip">In Process</span>
+                                    <span className={`contact-request-status-chip status-${formatRequestStatusClass(requestItem.status)}`}>
+                                      {requestItem.status || "In Progress"}
+                                    </span>
                                   </div>
 
                                   <div className="contact-request-meta">
@@ -1051,9 +1108,16 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                     </div>
                                     <div className="contact-request-meta-item">
                                       <span>Process</span>
-                                      <strong>In Process</strong>
+                                      <strong>{requestItem.status || "In Progress"}</strong>
                                     </div>
                                   </div>
+
+                                  {requestItem.adminMessage ? (
+                                    <div className="contact-request-message-box">
+                                      <span>Admin Message</span>
+                                      <strong>{requestItem.adminMessage}</strong>
+                                    </div>
+                                  ) : null}
 
                                   <div className="contact-request-details">
                                     {Object.entries(requestItem.values).map(([key, value]) => (
