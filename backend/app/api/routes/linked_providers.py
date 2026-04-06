@@ -85,7 +85,7 @@ def build_linked_provider_router(
         except SocialOAuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @router.get("/oauth/{provider_key}/callback", response_class=HTMLResponse)
+    @router.get("/oauth/{provider_key}/callback", response_class=HTMLResponse, name="provider_oauth_callback")
     def provider_oauth_callback(
         provider_key: str,
         request: Request,
@@ -121,12 +121,13 @@ def build_linked_provider_router(
             )
 
         try:
+            callback_url = str(request.url_for("provider_oauth_callback", provider_key=provider_key))
             profile = social_oauth_service.complete_callback(
                 db,
                 provider_key=provider_key,
                 code=code,
                 state=state,
-                callback_url=str(request.url),
+                callback_url=callback_url,
             )
             return HTMLResponse(
                 social_oauth_service.build_popup_response_html(

@@ -25,6 +25,16 @@ export async function linkProvider(providerKey, payload) {
 }
 
 export async function authorizeLinkedProvider(providerKey, frontendOrigin) {
+  const popup = window.open(
+    "about:blank",
+    `link-${providerKey}`,
+    "width=620,height=760,menubar=no,toolbar=no,status=no"
+  );
+
+  if (!popup) {
+    throw new Error("Popup was blocked. Allow popups for this site and try again.");
+  }
+
   const data = await requestJson(
     `/linked-providers/${encodeURIComponent(providerKey)}/authorize-url`,
     {
@@ -37,14 +47,11 @@ export async function authorizeLinkedProvider(providerKey, frontendOrigin) {
     `Failed to start ${providerKey} sign-in.`
   );
 
-  const popup = window.open(
-    data.authorizeUrl,
-    `link-${providerKey}`,
-    "width=620,height=760,menubar=no,toolbar=no,status=no"
-  );
-
-  if (!popup) {
-    throw new Error("Popup was blocked. Allow popups for this site and try again.");
+  try {
+    popup.location.replace(data.authorizeUrl);
+  } catch {
+    popup.close();
+    throw new Error(`Failed to open ${providerKey} sign-in window.`);
   }
 
   return new Promise((resolve, reject) => {
@@ -76,6 +83,9 @@ export async function authorizeLinkedProvider(providerKey, frontendOrigin) {
 
       cleanup();
       if (!payload.success) {
+        try {
+          popup.close();
+        } catch {}
         reject(new Error(payload.message || `Failed to validate ${providerKey}.`));
         return;
       }
