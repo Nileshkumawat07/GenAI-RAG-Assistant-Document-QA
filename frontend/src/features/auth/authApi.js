@@ -169,7 +169,9 @@ export async function downloadAccountDataPdf(password) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.URL.revokeObjectURL(url);
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+  }, 1500);
 }
 
 export async function deleteAccount(payload) {

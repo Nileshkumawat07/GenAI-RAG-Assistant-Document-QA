@@ -277,6 +277,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [privacyExportPassword, setPrivacyExportPassword] = useState("");
   const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [showDeletePanel, setShowDeletePanel] = useState(false);
+  const [deleteReadConfirmed, setDeleteReadConfirmed] = useState(false);
 
   const usernameRecaptchaId = useRef(`settings-username-mobile-${Math.random().toString(36).slice(2, 10)}`);
   const emailRecaptchaId = useRef(`settings-email-mobile-${Math.random().toString(36).slice(2, 10)}`);
@@ -624,6 +627,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       return;
     }
 
+    if (privacyExportPassword.trim().length < 8) {
+      setFeedback({ type: "error", text: "Enter your full current password to continue with the data export." });
+      return;
+    }
+
     try {
       setPrivacyActionLoading("download");
       await downloadAccountDataPdf(privacyExportPassword.trim());
@@ -642,8 +650,18 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       return;
     }
 
+    if (deleteAccountPassword.trim().length < 8) {
+      setFeedback({ type: "error", text: "Enter your full current password before account deletion." });
+      return;
+    }
+
     if ((deleteConfirmationText || "").trim().toUpperCase() !== "DELETE") {
       setFeedback({ type: "error", text: "Type DELETE to confirm account deletion." });
+      return;
+    }
+
+    if (!deleteReadConfirmed) {
+      setFeedback({ type: "error", text: "Confirm that you have read the deletion warnings before continuing." });
       return;
     }
 
@@ -1467,72 +1485,113 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       <div className="workspace-form-stack">
         <p className="tool-copy workspace-copy-paragraph">Manage your data preferences below:</p>
         <div className="billing-action-row privacy-action-row">
-          <button className="primary-button" type="button" onClick={downloadMyData} disabled={privacyActionLoading === "download"}>
-            {privacyActionLoading === "download" ? "Downloading..." : "Download My Data"}
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => {
+              setShowExportPanel((current) => !current);
+              setShowDeletePanel(false);
+            }}
+          >
+            {showExportPanel ? "Hide Download Panel" : "Download My Data"}
           </button>
           <button
             className="primary-button danger-tone"
             type="button"
-            onClick={handleDeleteAccount}
-            disabled={privacyActionLoading === "delete"}
+            onClick={() => {
+              setShowDeletePanel((current) => !current);
+              setShowExportPanel(false);
+            }}
           >
-            {privacyActionLoading === "delete" ? "Deleting..." : "Delete My Account"}
+            {showDeletePanel ? "Hide Delete Panel" : "Delete My Account"}
           </button>
           <button className="primary-button" type="button" onClick={savePrivacy}>
             Save Privacy Settings
           </button>
         </div>
-        <div className="workspace-mini-card privacy-export-card">
-          <div className="billing-payment-card-head">
-            <div>
-              <h4>Portable Data Export</h4>
-              <p>Enter your current password to download a polished PDF with account details, subscription data, payment history, linked providers, and support records.</p>
+        {showExportPanel ? (
+          <div className="workspace-mini-card privacy-export-card">
+            <div className="billing-payment-card-head">
+              <div>
+                <h4>Portable Data Export</h4>
+                <p>Enter your current password to download a polished PDF with account details, subscription data, payment history, linked providers, and support records.</p>
+              </div>
+              <span className="billing-status-pill">Download only</span>
             </div>
-            <span className="billing-status-pill">Download only</span>
-          </div>
-          <div className="workspace-form-stack privacy-inline-stack">
-            <input
-              className="auth-input workspace-static-input"
-              type="password"
-              placeholder="Enter current password for PDF download"
-              value={privacyExportPassword}
-              onChange={(event) => setPrivacyExportPassword(event.target.value)}
-            />
-          </div>
-        </div>
-        <div className="workspace-mini-card privacy-delete-card">
-          <div className="billing-payment-card-head">
-            <div>
-              <h4>Delete Account Confirmation</h4>
-              <p>Review these details carefully before permanent deletion. This removes your profile, linked providers, support requests, invoices, and subscription history.</p>
+            <div className="workspace-form-stack privacy-inline-stack">
+              <input
+                className="auth-input workspace-static-input"
+                type="password"
+                placeholder="Enter current password for PDF download"
+                value={privacyExportPassword}
+                onChange={(event) => setPrivacyExportPassword(event.target.value)}
+              />
+              <button className="primary-button" type="button" onClick={downloadMyData} disabled={privacyActionLoading === "download"}>
+                {privacyActionLoading === "download" ? "Downloading..." : "Confirm PDF Download"}
+              </button>
             </div>
-            <span className="billing-status-pill danger-pill">Permanent</span>
           </div>
-          <div className="workspace-info-grid privacy-capability-grid">
-            <div className="workspace-mini-card"><h4>Full Name</h4><p>{profileName}</p></div>
-            <div className="workspace-mini-card"><h4>Member ID</h4><p>{currentUser?.publicUserCode || "Not available"}</p></div>
-            <div className="workspace-mini-card"><h4>Username</h4><p>{profileUsername}</p></div>
-            <div className="workspace-mini-card"><h4>Email</h4><p>{profileEmail}</p></div>
-            <div className="workspace-mini-card"><h4>Mobile</h4><p>{profileMobile}</p></div>
-            <div className="workspace-mini-card"><h4>Current Plan</h4><p>{subscriptionPlanName}</p></div>
+        ) : null}
+        {showDeletePanel ? (
+          <div className="workspace-mini-card privacy-delete-card">
+            <div className="billing-payment-card-head">
+              <div>
+                <h4>Delete Account Confirmation</h4>
+                <p>Review these details carefully before permanent deletion. This removes your profile, linked providers, support requests, invoices, and subscription history.</p>
+              </div>
+              <span className="billing-status-pill danger-pill">Permanent</span>
+            </div>
+            <div className="workspace-info-grid privacy-capability-grid">
+              <div className="workspace-mini-card"><h4>Full Name</h4><p>{profileName}</p></div>
+              <div className="workspace-mini-card"><h4>Member ID</h4><p>{currentUser?.publicUserCode || "Not available"}</p></div>
+              <div className="workspace-mini-card"><h4>Username</h4><p>{profileUsername}</p></div>
+              <div className="workspace-mini-card"><h4>Email</h4><p>{profileEmail}</p></div>
+              <div className="workspace-mini-card"><h4>Mobile</h4><p>{profileMobile}</p></div>
+              <div className="workspace-mini-card"><h4>Current Plan</h4><p>{subscriptionPlanName}</p></div>
+            </div>
+            <div className="workspace-mini-card privacy-delete-points">
+              <h4>Read Before Deleting</h4>
+              <ul className="privacy-warning-list">
+                <li>Your profile, linked providers, billing history, and support records will be permanently removed.</li>
+                <li>Downloaded invoices and exported PDFs already saved on your device will not be affected.</li>
+                <li>Premium access, subscription status, and payment references will no longer be available in this account.</li>
+                <li>This action cannot be undone after you confirm with your password and the word DELETE.</li>
+              </ul>
+              <label className="terms-check privacy-read-confirm">
+                <input
+                  type="checkbox"
+                  checked={deleteReadConfirmed}
+                  onChange={(event) => setDeleteReadConfirmed(event.target.checked)}
+                />
+                <span>I have read and understood the permanent account deletion warnings.</span>
+              </label>
+            </div>
+            <div className="workspace-form-stack privacy-inline-stack">
+              <input
+                className="auth-input workspace-static-input"
+                type="password"
+                placeholder="Enter current password to delete account"
+                value={deleteAccountPassword}
+                onChange={(event) => setDeleteAccountPassword(event.target.value)}
+              />
+              <input
+                className="auth-input workspace-static-input"
+                type="text"
+                placeholder='Type DELETE to confirm permanent removal'
+                value={deleteConfirmationText}
+                onChange={(event) => setDeleteConfirmationText(event.target.value)}
+              />
+              <button
+                className="primary-button danger-tone"
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={privacyActionLoading === "delete" || !deleteReadConfirmed}
+              >
+                {privacyActionLoading === "delete" ? "Deleting..." : "Confirm Delete Account"}
+              </button>
+            </div>
           </div>
-          <div className="workspace-form-stack privacy-inline-stack">
-            <input
-              className="auth-input workspace-static-input"
-              type="password"
-              placeholder="Enter current password to delete account"
-              value={deleteAccountPassword}
-              onChange={(event) => setDeleteAccountPassword(event.target.value)}
-            />
-            <input
-              className="auth-input workspace-static-input"
-              type="text"
-              placeholder='Type DELETE to confirm permanent removal'
-              value={deleteConfirmationText}
-              onChange={(event) => setDeleteConfirmationText(event.target.value)}
-            />
-          </div>
-        </div>
+        ) : null}
         <label className="terms-check">
           <input
             type="checkbox"

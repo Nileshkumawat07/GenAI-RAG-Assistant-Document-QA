@@ -2963,6 +2963,29 @@ body.workspace-body-mode .privacy-inline-stack {
   gap: 10px;
 }
 
+body.workspace-body-mode .privacy-delete-points {
+  gap: 12px;
+}
+
+body.workspace-body-mode .privacy-delete-points h4 {
+  margin: 0;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .privacy-warning-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+body.workspace-body-mode .privacy-read-confirm {
+  margin-top: 4px;
+}
+
 body.workspace-body-mode .privacy-capability-grid {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
