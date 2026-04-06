@@ -53,6 +53,31 @@ def ensure_contact_request_schema() -> None:
         connection.execute(text("ALTER TABLE contact_requests ADD COLUMN admin_message TEXT NULL"))
 
 
+def ensure_user_subscription_schema() -> None:
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    required_statements = {
+        "subscription_plan_id": "ALTER TABLE users ADD COLUMN subscription_plan_id VARCHAR(100) NULL",
+        "subscription_plan_name": "ALTER TABLE users ADD COLUMN subscription_plan_name VARCHAR(255) NULL",
+        "subscription_status": "ALTER TABLE users ADD COLUMN subscription_status VARCHAR(50) NOT NULL DEFAULT 'free'",
+        "subscription_amount": "ALTER TABLE users ADD COLUMN subscription_amount INTEGER NULL",
+        "subscription_currency": "ALTER TABLE users ADD COLUMN subscription_currency VARCHAR(10) NULL",
+        "subscription_billing_cycle": "ALTER TABLE users ADD COLUMN subscription_billing_cycle VARCHAR(50) NULL",
+        "subscription_activated_at": "ALTER TABLE users ADD COLUMN subscription_activated_at DATETIME NULL",
+        "subscription_payment_id": "ALTER TABLE users ADD COLUMN subscription_payment_id VARCHAR(255) NULL",
+        "subscription_order_id": "ALTER TABLE users ADD COLUMN subscription_order_id VARCHAR(255) NULL",
+    }
+
+    with engine.begin() as connection:
+        for column_name, statement in required_statements.items():
+            if column_name in existing_columns:
+                continue
+            connection.execute(text(statement))
+
+
 def ensure_social_oauth_config_seed(social_oauth_service: SocialOAuthService) -> None:
     with Session(engine) as db:
         social_oauth_service.ensure_provider_rows(db)
@@ -63,6 +88,7 @@ def create_app() -> FastAPI:
     Base.metadata.create_all(bind=engine)
     ensure_user_social_link_schema()
     ensure_contact_request_schema()
+    ensure_user_subscription_schema()
     rag_service = RAGService()
     otp_service = OTPService()
     auth_service = AuthService()

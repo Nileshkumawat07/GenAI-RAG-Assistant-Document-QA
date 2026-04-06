@@ -1,9 +1,12 @@
 import hmac
+from datetime import datetime, timezone
 from hashlib import sha256
 
 import razorpay
+from sqlalchemy.orm import Session
 
 from app.core.config import RAZORPAY_COMPANY_NAME, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+from app.models.user import User
 
 
 class PaymentServiceError(Exception):
@@ -104,6 +107,34 @@ class PaymentService:
             "companyName": self.company_name,
             "description": plan["description"],
         }
+
+    def activate_plan_for_user(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        plan_id: str,
+        razorpay_order_id: str,
+        razorpay_payment_id: str,
+    ) -> User:
+        plan = self.get_plan(plan_id)
+        user = db.get(User, user_id)
+        if not user:
+            raise PaymentServiceError("User account was not found.")
+
+        user.subscription_plan_id = plan["plan_id"]
+        user.subscription_plan_name = plan["plan_name"]
+        user.subscription_status = "premium"
+        user.subscription_amount = plan["amount"]
+        user.subscription_currency = plan["currency"]
+        user.subscription_billing_cycle = "monthly"
+        user.subscription_activated_at = datetime.now(timezone.utc)
+        user.subscription_payment_id = razorpay_payment_id
+        user.subscription_order_id = razorpay_order_id
+
+        db.commit()
+        db.refresh(user)
+        return user
 
     def verify_payment(
         self,

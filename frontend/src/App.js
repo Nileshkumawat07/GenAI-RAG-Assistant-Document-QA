@@ -152,6 +152,9 @@ function App() {
   ];
   const isAdmin = !!currentUser?.isAdmin;
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
+  const userPlanName = currentUser?.subscriptionPlanName || "Free Member";
+  const userPlanStatus = currentUser?.subscriptionStatus === "premium" ? "Premium Active" : isAdmin ? "Admin Access" : "Active";
+  const isPremiumMember = currentUser?.subscriptionStatus === "premium";
 
   useEffect(() => {
     document.body.classList.toggle("workspace-body-mode", isWorkspace);
@@ -272,6 +275,7 @@ function App() {
                     >
                       <span className="profile-button-avatar">{profileInitial}</span>
                       <span className="profile-button-text">{currentUser.name}</span>
+                      {isPremiumMember ? <span className="profile-plan-badge">Premium</span> : null}
                     </button>
                     {showProfileMenu ? (
                       <div className="profile-dropdown-menu">
@@ -280,6 +284,7 @@ function App() {
                           <div className="profile-dropdown-meta">
                             <strong>{currentUser.name}</strong>
                             <span>{currentUser.email}</span>
+                            {isPremiumMember ? <span className="profile-dropdown-badge">Premium Member</span> : null}
                           </div>
                         </div>
                         <button
@@ -306,8 +311,8 @@ function App() {
                           </button>
                         ) : null}
                         <div className="profile-dropdown-summary">
-                          <span>Plan: Pro Member</span>
-                          <span>Status: {isAdmin ? "Admin Access" : "Active"}</span>
+                          <span>Plan: {userPlanName}</span>
+                          <span>Status: {userPlanStatus}</span>
                         </div>
                         <button className="header-dropdown-item" type="button" onClick={handleLogout}>
                           Logout

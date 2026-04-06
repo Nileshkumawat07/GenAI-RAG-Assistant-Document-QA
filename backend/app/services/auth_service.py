@@ -36,6 +36,13 @@ class UserPayload:
     referral_code: str | None
     email_verified: bool
     mobile_verified: bool
+    subscription_plan_id: str | None
+    subscription_plan_name: str | None
+    subscription_status: str
+    subscription_amount: int | None
+    subscription_currency: str | None
+    subscription_billing_cycle: str | None
+    subscription_activated_at: str | None
     created_at: str
     is_admin: bool
 
@@ -252,6 +259,13 @@ class AuthService:
             referral_code=user.referral_code,
             email_verified=user.email_verified,
             mobile_verified=user.mobile_verified,
+            subscription_plan_id=user.subscription_plan_id,
+            subscription_plan_name=user.subscription_plan_name,
+            subscription_status=user.subscription_status or "free",
+            subscription_amount=user.subscription_amount,
+            subscription_currency=user.subscription_currency,
+            subscription_billing_cycle=user.subscription_billing_cycle,
+            subscription_activated_at=user.subscription_activated_at.isoformat() if user.subscription_activated_at else None,
             created_at=user.created_at.isoformat(),
             is_admin=self.is_admin_email(user.email),
         )

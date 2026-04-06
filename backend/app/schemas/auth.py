@@ -67,6 +67,13 @@ class AuthUserResponse(BaseModel):
     referralCode: str | None = None
     emailVerified: bool
     mobileVerified: bool
+    subscriptionPlanId: str | None = None
+    subscriptionPlanName: str | None = None
+    subscriptionStatus: str
+    subscriptionAmount: int | None = None
+    subscriptionCurrency: str | None = None
+    subscriptionBillingCycle: str | None = None
+    subscriptionActivatedAt: str | None = None
     createdAt: str
     isAdmin: bool
     mode: str

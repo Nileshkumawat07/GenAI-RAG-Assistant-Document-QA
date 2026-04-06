@@ -15,6 +15,34 @@ from app.services.payment_service import PaymentService, PaymentServiceError
 def build_payment_router(payment_service: PaymentService, auth_service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/payments", tags=["payments"])
 
+    def serialize_user(user):
+        return {
+            "id": user.id,
+            "fullName": user.full_name,
+            "username": user.username,
+            "dateOfBirth": user.date_of_birth,
+            "gender": user.gender,
+            "email": user.email,
+            "alternateEmail": user.alternate_email,
+            "mobile": user.mobile,
+            "securityQuestion": user.security_question,
+            "securityAnswer": user.security_answer,
+            "referralCode": user.referral_code,
+            "emailVerified": user.email_verified,
+            "mobileVerified": user.mobile_verified,
+            "subscriptionPlanId": user.subscription_plan_id,
+            "subscriptionPlanName": user.subscription_plan_name,
+            "subscriptionStatus": user.subscription_status,
+            "subscriptionAmount": user.subscription_amount,
+            "subscriptionCurrency": user.subscription_currency,
+            "subscriptionBillingCycle": user.subscription_billing_cycle,
+            "subscriptionActivatedAt": user.subscription_activated_at.isoformat() if user.subscription_activated_at else None,
+            "createdAt": user.created_at.isoformat(),
+            "isAdmin": auth_service.is_admin_email(user.email),
+            "mode": "admin" if auth_service.is_admin_email(user.email) else "member",
+            "authToken": auth_service.create_access_token(user_id=user.id),
+        }
+
     def require_authenticated_user_id(
         authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
@@ -46,16 +74,27 @@ def build_payment_router(payment_service: PaymentService, auth_service: AuthServ
     @router.post("/razorpay/verify")
     def verify_razorpay_payment(
         payload: VerifyRazorpayPaymentRequest,
+        db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
-            del authenticated_user_id
-            return payment_service.verify_payment(
+            verification = payment_service.verify_payment(
                 plan_id=payload.planId,
                 razorpay_order_id=payload.razorpayOrderId,
                 razorpay_payment_id=payload.razorpayPaymentId,
                 razorpay_signature=payload.razorpaySignature,
             )
+            updated_user = payment_service.activate_plan_for_user(
+                db,
+                user_id=authenticated_user_id,
+                plan_id=payload.planId,
+                razorpay_order_id=payload.razorpayOrderId,
+                razorpay_payment_id=payload.razorpayPaymentId,
+            )
+            return {
+                **verification,
+                "user": serialize_user(updated_user),
+            }
         except PaymentServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

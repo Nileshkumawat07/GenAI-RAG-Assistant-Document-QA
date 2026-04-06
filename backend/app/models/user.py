@@ -23,6 +23,15 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     mobile_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    subscription_plan_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    subscription_plan_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    subscription_status: Mapped[str] = mapped_column(String(50), nullable=False, default="free")
+    subscription_amount: Mapped[int | None] = mapped_column(nullable=True)
+    subscription_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    subscription_billing_cycle: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subscription_activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    subscription_payment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    subscription_order_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

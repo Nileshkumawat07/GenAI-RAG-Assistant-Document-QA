@@ -4,7 +4,7 @@ import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import SettingsPanel from "./SettingsPanel";
-import { getAdminMysqlOverview } from "../auth/authApi";
+import { getAdminMysqlOverview, normalizeAuthUser } from "../auth/authApi";
 import {
   adminDeleteContactRequest,
   adminUpdateContactRequestStatus,
@@ -464,6 +464,12 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const profileSecurityQuestion = currentUser?.securityQuestion || "Not provided";
   const profileSecurityAnswer = currentUser?.securityAnswer || "Not provided";
   const profileReferralCode = currentUser?.referralCode || "Not provided";
+  const subscriptionPlanName = currentUser?.subscriptionPlanName || "Free Member";
+  const subscriptionStatus = currentUser?.subscriptionStatus || "free";
+  const subscriptionAmount = currentUser?.subscriptionAmount;
+  const subscriptionCurrency = currentUser?.subscriptionCurrency || "INR";
+  const subscriptionBillingCycle = currentUser?.subscriptionBillingCycle || "monthly";
+  const subscriptionActivatedAt = currentUser?.subscriptionActivatedAt;
   const profileJoined = currentUser?.createdAt
     ? new Date(currentUser.createdAt).toLocaleDateString("en-GB", {
         day: "2-digit",
@@ -471,6 +477,28 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         year: "numeric",
       })
     : "Not available";
+  const formatMoney = (amountInSmallestUnit, currency = "INR") => {
+    if (amountInSmallestUnit == null) {
+      return currency === "INR" ? "Free" : "N/A";
+    }
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amountInSmallestUnit / 100);
+  };
+  const subscriptionPriceLabel =
+    subscriptionAmount != null ? `${formatMoney(subscriptionAmount, subscriptionCurrency)} / ${subscriptionBillingCycle}` : "Free access";
+  const subscriptionStatusLabel = subscriptionStatus === "premium" ? "Premium Active" : "Free Access";
+  const subscriptionActivationLabel = subscriptionActivatedAt
+    ? new Date(subscriptionActivatedAt).toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Not activated yet";
   const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
   const activePricingPlans = PRICING_PLAN_DETAILS.filter((plan) => plan.category === activeInfoTab);
   const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
@@ -1103,6 +1131,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
               type: "success",
               text: `${verification.message} ${plan.title} is ready for activation.`,
             });
+            if (verification.user) {
+              onUserUpdate(normalizeAuthUser(verification.user));
+            }
           } catch (paymentError) {
             setPlanStatus(plan.id, {
               type: "error",
@@ -1702,9 +1733,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
           ? [
               { title: "Full Name", text: profileName },
               { title: "Account Email", text: profileEmail },
-              { title: "Plan", text: "Pro Member" },
+              { title: "Plan", text: subscriptionPlanName },
               { title: "Workspace Role", text: "Account Owner" },
-              { title: "Status", text: "Active" },
+              { title: "Status", text: subscriptionStatusLabel },
               { title: "Joined", text: profileJoined },
             ]
           : activeInfoTab === "account"
@@ -1718,10 +1749,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
               ]
           : activeInfoTab === "subscription"
               ? [
-                  { title: "Current Plan", text: "Pro - Rs999/month" },
-                  { title: "Billing Cycle", text: "Monthly" },
-                  { title: "Next Renewal", text: "04 May 2026" },
-                  { title: "Payment Method", text: "Visa ending in 4242" },
+                  { title: "Current Plan", text: subscriptionPlanName },
+                  { title: "Billing Price", text: subscriptionPriceLabel },
+                  { title: "Billing Cycle", text: subscriptionBillingCycle },
+                  { title: "Activated On", text: subscriptionActivationLabel },
+                  { title: "Payment Method", text: subscriptionStatus === "premium" ? "Razorpay secure checkout" : "Not added" },
                 ]
               : activeInfoTab === "usage"
                 ? [
@@ -1823,10 +1855,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                             <p>{plan.tagline}</p>
                           </div>
                           <div className="pricing-plan-visual">
-                            <div className="pricing-plan-visual-top">
-                              <span>Secure Plan</span>
-                              <span>Razorpay</span>
-                            </div>
                             <div className="pricing-plan-visual-price">{plan.priceLabel}</div>
                             <div className="pricing-plan-visual-bottom">
                               <strong>{plan.title}</strong>

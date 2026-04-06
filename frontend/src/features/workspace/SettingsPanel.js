@@ -288,6 +288,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   const profileSecurityQuestion = currentUser?.securityQuestion || "Not provided";
   const profileSecurityAnswer = currentUser?.securityAnswer || "Not provided";
   const profileReferralCode = currentUser?.referralCode || "Not provided";
+  const subscriptionPlanName = currentUser?.subscriptionPlanName || "Free Member";
+  const subscriptionStatus = currentUser?.subscriptionStatus || "free";
+  const subscriptionAmount = currentUser?.subscriptionAmount;
+  const subscriptionCurrency = currentUser?.subscriptionCurrency || "INR";
+  const subscriptionBillingCycle = currentUser?.subscriptionBillingCycle || "monthly";
+  const subscriptionActivatedAt = currentUser?.subscriptionActivatedAt;
+  const subscriptionPriceLabel =
+    subscriptionAmount != null
+      ? `${new Intl.NumberFormat("en-IN", { style: "currency", currency: subscriptionCurrency, maximumFractionDigits: 0 }).format(subscriptionAmount / 100)} / ${subscriptionBillingCycle}`
+      : "Free access";
   const activityEntries = storedSettings.activity || [];
 
   useEffect(() => {
@@ -1631,7 +1641,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   if (activeTab === "billing") {
     return (
       <div className="workspace-form-stack">
-        <div className="workspace-mini-card"><h4>Subscription & Billing</h4><p>Plan: Pro - Rs999/month</p></div>
+        <div className="workspace-mini-card"><h4>Subscription & Billing</h4><p>Plan: {subscriptionPlanName} | {subscriptionPriceLabel}</p></div>
+        <div className="workspace-mini-card"><h4>Membership Status</h4><p>Status: {subscriptionStatus === "premium" ? "Premium Active" : "Free Access"}{subscriptionActivatedAt ? ` | Activated: ${new Date(subscriptionActivatedAt).toLocaleDateString("en-GB")}` : ""}</p></div>
         <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Payment method management is not enabled in this build." })}>Manage Payment Method</button>
         <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Invoices are not enabled in this build." })}>View Invoices</button>
         <button className="primary-button secondary-tone" type="button" onClick={() => setFeedback({ type: "info", text: "Subscription cancellation is not enabled in this build." })}>Cancel Subscription</button>
