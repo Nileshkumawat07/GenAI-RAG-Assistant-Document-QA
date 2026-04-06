@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.core.config import APP_BASE_URL
 from app.core.database import get_db
 from app.schemas.linked_provider import (
     LinkedProviderAuthorizeRequest,
@@ -44,7 +45,8 @@ def build_linked_provider_router(
         )
 
     def build_callback_url(request: Request, provider_key: str) -> str:
-        return f"{str(request.base_url).rstrip('/')}/auth/{provider_key}/callback"
+        public_base_url = APP_BASE_URL or str(request.base_url).rstrip("/")
+        return f"{public_base_url.rstrip('/')}/auth/{provider_key}/callback"
 
     def handle_provider_oauth_callback(
         provider_key: str,
