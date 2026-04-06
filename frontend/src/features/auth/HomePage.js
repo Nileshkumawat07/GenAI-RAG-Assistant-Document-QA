@@ -1,11 +1,11 @@
 import React from "react";
 
-function HomePage({ onLogin, onSignup }) {
+function HomePage({ onLogin, onSignup, t = (key, fallback) => fallback || key }) {
   return (
     <section className="landing-page">
       <div className="landing-hero">
         <div className="landing-copy">
-          <p className="hero-kicker">Professional AI Platform</p>
+          <p className="hero-kicker">{t("professional_ai_platform", "Professional AI Platform")}</p>
           <h1>One intelligent dashboard for documents, images, and real-time visual understanding.</h1>
           <p className="hero-text">
             Launch your assistant from a modern home page, onboard with polished login and signup
@@ -14,10 +14,10 @@ function HomePage({ onLogin, onSignup }) {
 
           <div className="hero-actions">
             <button className="hero-button hero-button-primary" type="button" onClick={onSignup}>
-              Create account
+              {t("create_account", "Create account")}
             </button>
             <button className="hero-button hero-button-secondary" type="button" onClick={onLogin}>
-              Login
+              {t("login", "Login")}
             </button>
           </div>
 
@@ -30,7 +30,7 @@ function HomePage({ onLogin, onSignup }) {
 
         <div className="landing-visual">
           <div className="visual-card visual-card-primary">
-            <span className="visual-label">Trusted Platform</span>
+            <span className="visual-label">{t("trusted_platform", "Trusted Platform")}</span>
             <strong>AI Platform Home</strong>
             <p>Upload files, index them fast, and ask targeted questions with answer-ready output.</p>
           </div>

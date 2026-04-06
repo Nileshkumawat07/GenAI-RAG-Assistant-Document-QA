@@ -60,7 +60,7 @@ function formatFirebaseMessage(message, type) {
   return message || "Verification failed.";
 }
 
-function SignupPage({ onSubmit, onBack, onShowLogin }) {
+function SignupPage({ onSubmit, onBack, onShowLogin, t = (key, fallback) => fallback || key }) {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
@@ -379,13 +379,13 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
   return (
     <section className="auth-page signup-page">
       <div className="auth-showcase signup-showcase">
-        <h1>Start with a signup flow that feels production-ready.</h1>
+        <h1>{t("create_account", "Create Account")}</h1>
         <p>
           This keeps the multi-section feel from your shared signup page, but matches the UI of
           this AI project and adds proper front-end validation throughout.
         </p>
         <div className="auth-helper-card">
-          <strong>Verification helper</strong>
+          <strong>{t("clean_validation", "Clean validation")}</strong>
           <div className="verification-helper-lines">
             {helperLines.map((line) => (
               <p key={line}>{line}</p>
@@ -401,7 +401,7 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
 
         <div className="signup-grid">
           <div className="signup-section">
-            <h3>Personal Info</h3>
+            <h3>{t("account", "Account")} Info</h3>
 
             <label className="auth-label" htmlFor="signup-full-name">Full Name</label>
             <input
@@ -447,7 +447,7 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
           </div>
 
           <div className="signup-section">
-            <h3>Account Info</h3>
+            <h3>{t("settings", "Settings")} Info</h3>
 
             <label className="auth-label" htmlFor="signup-email">Email</label>
             <div className="inline-action-field">
@@ -469,7 +469,7 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
               </button>
             </div>
 
-            <label className="auth-label" htmlFor="signup-password">Password</label>
+            <label className="auth-label" htmlFor="signup-password">{t("password", "Password")}</label>
             <div className="password-shell">
               <input
                 id="signup-password"
@@ -484,7 +484,7 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
                 type="button"
                 onClick={() => setShowPassword((current) => !current)}
               >
-                {showPassword ? "Hide" : "Show"}
+                {showPassword ? t("hide", "Hide") : t("show", "Show")}
               </button>
             </div>
 
@@ -510,7 +510,7 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
           </div>
 
           <div className="signup-section">
-            <h3>Contact Info</h3>
+            <h3>{t("contact_us", "Contact Us")} Info</h3>
 
             <label className="auth-label" htmlFor="signup-mobile">Mobile Number</label>
             <div className="inline-action-field">
@@ -568,7 +568,7 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
           </div>
 
           <div className="signup-section">
-            <h3>Verification</h3>
+            <h3>{t("clean_validation", "Verification")}</h3>
 
             <label className="auth-label" htmlFor="signup-mobile-otp">Mobile OTP</label>
             <div className="inline-action-field verification-row">
@@ -650,7 +650,7 @@ function SignupPage({ onSubmit, onBack, onShowLogin }) {
 
           <div className="signup-actions">
             <button className="auth-primary-button" type="submit" disabled={submitting}>
-              {submitting ? "Creating Account..." : "Create Account"}
+              {submitting ? "Creating Account..." : t("create_account", "Create Account")}
             </button>
           </div>
 

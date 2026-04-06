@@ -410,7 +410,7 @@ const INFO_PAGE_CONFIG = {
   },
 };
 
-function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onAccountDeleted }) {
+function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onAccountDeleted, t = (key, fallback) => fallback || key }) {
   const [activeSection, setActiveSection] = useState("document-retrieval");
   const [sessionId] = useState(() => getSessionId());
   const [selectedFile, setSelectedFile] = useState(null);
@@ -444,6 +444,32 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [activeAdminDatabaseRequestCategory, setActiveAdminDatabaseRequestCategory] = useState("All");
   const [focusedContactRequestId, setFocusedContactRequestId] = useState("");
   const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
+
+  const translateTabLabel = (tab) => {
+    const labelKeyMap = {
+      account: "account",
+      security: "security",
+      preferences: "preferences",
+      privacy: "privacy",
+      platform: "platform",
+      activity: "activity",
+      linked: "linked",
+      notifications: "notifications",
+      billing: "billing",
+      region: "region",
+      support: "support",
+      terms: "terms",
+      reset: "reset",
+      about: "about_us",
+      careers: "careers",
+      contact: "contact_us",
+      faqs: "faqs",
+      pricing: "pricing",
+      profile: "profile",
+      administration: "administration",
+    };
+    return t(labelKeyMap[tab.id], tab.label);
+  };
   const [paymentStatus, setPaymentStatus] = useState({});
   const [activePlanPurchaseId, setActivePlanPurchaseId] = useState("");
 
@@ -1846,7 +1872,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           </div>
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
-              <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} onAccountDeleted={onAccountDeleted} />
+              <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} onAccountDeleted={onAccountDeleted} t={t} />
             </article>
           </div>
         </>
@@ -2318,9 +2344,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     <section id="workspace" className="workspace-page">
       <div className="workspace-shell">
         <aside className="workspace-sidebar">
-          <h1 className="sidebar-title">{infoConfig ? infoConfig.title : "Assistant"}</h1>
+          <h1 className="sidebar-title">{infoConfig ? (selectedInfoPage === "settings" ? t("settings", infoConfig.title) : infoConfig.title) : t("assistant", "Assistant")}</h1>
           <p className="sidebar-description">
-            {infoConfig ? infoConfig.description : "Separate tools for retrieval, detection, and generation"}
+            {infoConfig ? (selectedInfoPage === "settings" ? t("select_category_to_update", infoConfig.description) : infoConfig.description) : "Separate tools for retrieval, detection, and generation"}
           </p>
 
           <div className="sidebar-tabs">
@@ -2337,7 +2363,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     }
                     type="button"
                   >
-                    {tab.label}
+                    {selectedInfoPage ? translateTabLabel(tab) : tab.label}
                   </button>
                 ))
               : (

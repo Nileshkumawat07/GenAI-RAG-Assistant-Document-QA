@@ -192,7 +192,7 @@ function createActivityEntry(text) {
   };
 }
 
-function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted }) {
+function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted, t = (key, fallback) => fallback || key }) {
   const [accountTab, setAccountTab] = useState("personalInfo");
   const [securityTab, setSecurityTab] = useState("password");
   const [preferencesTab, setPreferencesTab] = useState("theme");
@@ -342,13 +342,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
     }
   }, [storageKey, storedSettings]);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty("--workspace-font-scale", String(preferenceFontScale));
-    return () => {
-      document.documentElement.style.setProperty("--workspace-font-scale", "1");
-    };
-  }, [preferenceFontScale]);
 
   useEffect(() => {
     if (!currentUser?.id) {
@@ -581,6 +574,21 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   };
 
   const savePreferences = () => {
+    if (storageKey) {
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
+      } catch {
+        // Keep local state even if storage is temporarily unavailable.
+      }
+    }
+    window.dispatchEvent(
+      new CustomEvent("workspace-settings-changed", {
+        detail: {
+          userId: currentUser?.id || "",
+          settings: storedSettings,
+        },
+      })
+    );
     setFeedback({ type: "success", text: "Preference settings saved successfully." });
     pushActivity("Preference settings were updated.");
   };
@@ -1430,7 +1438,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
               type="button"
               onClick={() => setPreferencesTab(sub)}
             >
-              {sub === "fontSize" ? "Change Font Size" : `Change ${sub.charAt(0).toUpperCase() + sub.slice(1)}`}
+              {sub === "theme"
+                ? t("change_theme", "Change Theme")
+                : sub === "language"
+                  ? t("change_language", "Change Language")
+                  : t("change_font_size", "Change Font Size")}
             </button>
           ))}
         </div>
@@ -1442,10 +1454,10 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             <div className="workspace-mini-card preference-panel-card">
               <div className="billing-payment-card-head">
                 <div>
-                  <h4>Theme Selection</h4>
+                  <h4>{t("theme_selection", "Theme Selection")}</h4>
                   <p>Keep the same workspace behavior and switch the preferred theme profile.</p>
                 </div>
-                <span className="billing-status-pill">{storedSettings.preferences.theme}</span>
+                <span className="billing-status-pill">{t(storedSettings.preferences.theme.toLowerCase(), storedSettings.preferences.theme)}</span>
               </div>
               <select
                 className="auth-input workspace-static-input"
@@ -1466,7 +1478,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             <div className="workspace-mini-card preference-panel-card">
               <div className="billing-payment-card-head">
                 <div>
-                  <h4>Language Selection</h4>
+                  <h4>{t("language_selection", "Language Selection")}</h4>
                   <p>Choose from a broader set of saved language preferences for your workspace.</p>
                 </div>
                 <span className="billing-status-pill">{storedSettings.preferences.language}</span>
@@ -1491,7 +1503,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             <div className="workspace-mini-card preference-panel-card">
               <div className="billing-payment-card-head">
                 <div>
-                  <h4>Whole Workspace Font Size</h4>
+                  <h4>{t("whole_workspace_font_size", "Whole Workspace Font Size")}</h4>
                   <p>Increase or decrease the reading size across the project instead of changing the font family.</p>
                 </div>
                 <span className="billing-status-pill">{preferenceFontSizeLabel}</span>
@@ -1509,7 +1521,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                       }))
                     }
                   >
-                    {size}
+                    {t(size.toLowerCase(), size)}
                   </button>
                 ))}
               </div>
@@ -1518,7 +1530,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           <div className="workspace-mini-card preference-preview-shell" style={{ fontSize: `${preferenceFontScale}em` }}>
             <div className="billing-payment-card-head">
               <div>
-                <h4>Scrollable Live Preview</h4>
+                <h4>{t("scrollable_live_preview", "Scrollable Live Preview")}</h4>
                 <p>Scroll through this panel to see the language and font size preference before saving.</p>
               </div>
               <span className="billing-status-pill">{preferenceFontSizeLabel}</span>
@@ -1532,7 +1544,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
               ))}
             </div>
           </div>
-          <button className="primary-button" type="button" onClick={savePreferences}>Save Preference</button>
+          <button className="primary-button" type="button" onClick={savePreferences}>{t("save_preference", "Save Preference")}</button>
         </div>
       </>
     );
