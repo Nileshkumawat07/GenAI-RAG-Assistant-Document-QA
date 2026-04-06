@@ -149,12 +149,23 @@ export async function downloadAccountDataPdf(password) {
   });
 
   if (!response.ok) {
-    let errorMessage = "Failed to download account data PDF.";
+    let errorMessage = response.status === 400 || response.status === 401
+      ? "Wrong password. Please enter your current password."
+      : "Failed to download account data PDF.";
     try {
-      const data = await response.json();
-      errorMessage = data.detail || errorMessage;
+      const responseText = await response.text();
+      if (responseText) {
+        try {
+          const data = JSON.parse(responseText);
+          errorMessage = data.detail || errorMessage;
+        } catch {
+          if (/incorrect|invalid|wrong password/i.test(responseText)) {
+            errorMessage = "Wrong password. Please enter your current password.";
+          }
+        }
+      }
     } catch {
-      // Keep fallback message for non-JSON responses.
+      // Keep the most helpful fallback available.
     }
     throw new Error(errorMessage);
   }

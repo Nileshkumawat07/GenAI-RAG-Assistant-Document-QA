@@ -326,196 +326,199 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
-        auth_service.verify_account_password(db, user_id=authenticated_user_id, password=payload.password)
-        user = auth_service._get_user_model_by_id(db, authenticated_user_id)
-        exported_at = auth_service._serialize_user(user)
-        linked_providers = db.execute(
-            select(UserSocialLink).where(UserSocialLink.user_id == authenticated_user_id)
-        ).scalars().all()
-        contact_requests = db.execute(
-            select(ContactRequest)
-            .where(ContactRequest.user_id == authenticated_user_id)
-            .order_by(ContactRequest.created_at.desc())
-        ).scalars().all()
-        transactions = db.execute(
-            select(SubscriptionTransaction)
-            .where(SubscriptionTransaction.user_id == authenticated_user_id)
-            .order_by(SubscriptionTransaction.created_at.desc())
-        ).scalars().all()
+        try:
+            auth_service.verify_account_password(db, user_id=authenticated_user_id, password=payload.password)
+            user = auth_service._get_user_model_by_id(db, authenticated_user_id)
+            exported_at = auth_service._serialize_user(user)
+            linked_providers = db.execute(
+                select(UserSocialLink).where(UserSocialLink.user_id == authenticated_user_id)
+            ).scalars().all()
+            contact_requests = db.execute(
+                select(ContactRequest)
+                .where(ContactRequest.user_id == authenticated_user_id)
+                .order_by(ContactRequest.created_at.desc())
+            ).scalars().all()
+            transactions = db.execute(
+                select(SubscriptionTransaction)
+                .where(SubscriptionTransaction.user_id == authenticated_user_id)
+                .order_by(SubscriptionTransaction.created_at.desc())
+            ).scalars().all()
 
-        buffer = BytesIO()
-        pdf = canvas.Canvas(buffer, pagesize=A4)
-        width, height = A4
+            buffer = BytesIO()
+            pdf = canvas.Canvas(buffer, pagesize=A4)
+            width, height = A4
 
-        pdf.setFillColor(colors.HexColor("#0f2f63"))
-        pdf.rect(0, height - 58 * mm, width, 58 * mm, fill=1, stroke=0)
-        pdf.setFillColor(colors.white)
-        pdf.setFont("Helvetica-Bold", 23)
-        pdf.drawString(18 * mm, height - 20 * mm, "Account Data Export")
-        pdf.setFont("Helvetica", 11)
-        pdf.drawString(18 * mm, height - 28 * mm, "Unified AI Workspace")
-        pdf.drawString(18 * mm, height - 35 * mm, f"Member #{user.public_user_code or 'Not available'}")
-        pdf.drawString(18 * mm, height - 42 * mm, f"Exported on {datetime.utcnow().strftime('%d %b %Y %H:%M UTC')}")
-        pdf.drawString(18 * mm, height - 49 * mm, f"Profile created {exported_at.created_at[:10]}")
+            pdf.setFillColor(colors.HexColor("#0f2f63"))
+            pdf.rect(0, height - 58 * mm, width, 58 * mm, fill=1, stroke=0)
+            pdf.setFillColor(colors.white)
+            pdf.setFont("Helvetica-Bold", 23)
+            pdf.drawString(18 * mm, height - 20 * mm, "Account Data Export")
+            pdf.setFont("Helvetica", 11)
+            pdf.drawString(18 * mm, height - 28 * mm, "Unified AI Workspace")
+            pdf.drawString(18 * mm, height - 35 * mm, f"Member #{user.public_user_code or 'Not available'}")
+            pdf.drawString(18 * mm, height - 42 * mm, f"Exported on {datetime.utcnow().strftime('%d %b %Y %H:%M UTC')}")
+            pdf.drawString(18 * mm, height - 49 * mm, f"Profile created {exported_at.created_at[:10]}")
 
-        y_mm = 228
-        pdf.setFillColor(colors.HexColor("#123d7a"))
-        pdf.setFont("Helvetica-Bold", 13)
-        pdf.drawString(18 * mm, y_mm * mm, "Profile Overview")
-        y_mm -= 8
-        draw_pdf_line(pdf, 18, y_mm, "Full Name", user.full_name)
-        y_mm -= 7
-        draw_pdf_line(pdf, 18, y_mm, "Username", user.username)
-        y_mm -= 7
-        draw_pdf_line(pdf, 18, y_mm, "Email", user.email)
-        y_mm -= 7
-        draw_pdf_line(pdf, 18, y_mm, "Mobile", user.mobile)
-        y_mm -= 7
-        draw_pdf_line(pdf, 18, y_mm, "Alternate Email", user.alternate_email or "Not provided")
-        y_mm -= 7
-        draw_pdf_line(pdf, 18, y_mm, "Referral Code", user.referral_code or "Not provided")
-        y_mm -= 7
-        draw_pdf_line(pdf, 18, y_mm, "Security Question", user.security_question or "Not provided")
-
-        y_mm -= 14
-        pdf.setFillColor(colors.HexColor("#123d7a"))
-        pdf.setFont("Helvetica-Bold", 13)
-        pdf.drawString(18 * mm, y_mm * mm, "Subscription Snapshot")
-        y_mm -= 8
-        draw_pdf_line(pdf, 18, y_mm, "Plan", user.subscription_plan_name or "Free Member")
-        y_mm -= 7
-        draw_pdf_line(pdf, 18, y_mm, "Status", (user.subscription_status or "free").title())
-        y_mm -= 7
-        draw_pdf_line(
-            pdf,
-            18,
-            y_mm,
-            "Billing",
-            f"{user.subscription_currency or 'INR'} {(user.subscription_amount or 0) / 100:.0f} / {user.subscription_billing_cycle or 'monthly'}"
-            if user.subscription_amount
-            else "Free access",
-        )
-        y_mm -= 7
-        draw_pdf_line(
-            pdf,
-            18,
-            y_mm,
-            "Validity",
-            (
-                f"{user.subscription_activated_at.strftime('%d %b %Y')} to {user.subscription_expires_at.strftime('%d %b %Y')}"
-                if user.subscription_activated_at and user.subscription_expires_at
-                else "No active subscription"
-            ),
-        )
-
-        y_mm -= 14
-        pdf.setFillColor(colors.HexColor("#123d7a"))
-        pdf.setFont("Helvetica-Bold", 13)
-        pdf.drawString(18 * mm, y_mm * mm, "Linked Providers")
-        y_mm -= 8
-        if linked_providers:
-            for provider in linked_providers[:5]:
-                draw_pdf_line(
-                    pdf,
-                    18,
-                    y_mm,
-                    provider.provider.title(),
-                    f"{provider.email} | {provider.provider_id}",
-                )
-                y_mm -= 7
-        else:
-            draw_pdf_line(pdf, 18, y_mm, "Status", "No linked social providers")
+            y_mm = 228
+            pdf.setFillColor(colors.HexColor("#123d7a"))
+            pdf.setFont("Helvetica-Bold", 13)
+            pdf.drawString(18 * mm, y_mm * mm, "Profile Overview")
+            y_mm -= 8
+            draw_pdf_line(pdf, 18, y_mm, "Full Name", user.full_name)
             y_mm -= 7
+            draw_pdf_line(pdf, 18, y_mm, "Username", user.username)
+            y_mm -= 7
+            draw_pdf_line(pdf, 18, y_mm, "Email", user.email)
+            y_mm -= 7
+            draw_pdf_line(pdf, 18, y_mm, "Mobile", user.mobile)
+            y_mm -= 7
+            draw_pdf_line(pdf, 18, y_mm, "Alternate Email", user.alternate_email or "Not provided")
+            y_mm -= 7
+            draw_pdf_line(pdf, 18, y_mm, "Referral Code", user.referral_code or "Not provided")
+            y_mm -= 7
+            draw_pdf_line(pdf, 18, y_mm, "Security Question", user.security_question or "Not provided")
 
-        pdf.showPage()
-        width, height = A4
-        pdf.setFillColor(colors.HexColor("#f2f7ff"))
-        pdf.rect(0, 0, width, height, fill=1, stroke=0)
-        pdf.setFillColor(colors.HexColor("#16396f"))
-        pdf.setFont("Helvetica-Bold", 16)
-        pdf.drawString(18 * mm, height - 18 * mm, "Payment Lifecycle And Saved Billing Data")
+            y_mm -= 14
+            pdf.setFillColor(colors.HexColor("#123d7a"))
+            pdf.setFont("Helvetica-Bold", 13)
+            pdf.drawString(18 * mm, y_mm * mm, "Subscription Snapshot")
+            y_mm -= 8
+            draw_pdf_line(pdf, 18, y_mm, "Plan", user.subscription_plan_name or "Free Member")
+            y_mm -= 7
+            draw_pdf_line(pdf, 18, y_mm, "Status", (user.subscription_status or "free").title())
+            y_mm -= 7
+            draw_pdf_line(
+                pdf,
+                18,
+                y_mm,
+                "Billing",
+                f"{user.subscription_currency or 'INR'} {(user.subscription_amount or 0) / 100:.0f} / {user.subscription_billing_cycle or 'monthly'}"
+                if user.subscription_amount
+                else "Free access",
+            )
+            y_mm -= 7
+            draw_pdf_line(
+                pdf,
+                18,
+                y_mm,
+                "Validity",
+                (
+                    f"{user.subscription_activated_at.strftime('%d %b %Y')} to {user.subscription_expires_at.strftime('%d %b %Y')}"
+                    if user.subscription_activated_at and user.subscription_expires_at
+                    else "No active subscription"
+                ),
+            )
 
-        y_mm = 268
-        if transactions:
-            for transaction in transactions[:8]:
-                pdf.setFillColor(colors.white)
-                pdf.roundRect(16 * mm, (y_mm - 27) * mm, 178 * mm, 24 * mm, 3 * mm, fill=1, stroke=0)
-                pdf.setStrokeColor(colors.HexColor("#c9d8f5"))
-                pdf.roundRect(16 * mm, (y_mm - 27) * mm, 178 * mm, 24 * mm, 3 * mm, fill=0, stroke=1)
-                pdf.setFillColor(colors.HexColor("#123d7a"))
-                pdf.setFont("Helvetica-Bold", 11)
-                pdf.drawString(20 * mm, (y_mm - 8) * mm, f"Invoice #{transaction.invoice_number} | {transaction.plan_name}")
-                pdf.setFont("Helvetica", 9)
-                pdf.setFillColor(colors.HexColor("#162033"))
-                pdf.drawString(
-                    20 * mm,
-                    (y_mm - 15) * mm,
-                    f"Txn {transaction.transaction_code} | Payment {transaction.razorpay_payment_id} | Order {transaction.razorpay_order_id}",
-                )
-                status_copy = transaction.status.title()
-                validity_copy = f"{transaction.activated_at.strftime('%d %b %Y')} to {transaction.expires_at.strftime('%d %b %Y')}"
-                amount_copy = f"{transaction.currency} {transaction.amount / 100:.0f} / {transaction.billing_cycle}"
-                pdf.drawString(20 * mm, (y_mm - 21) * mm, f"{status_copy} | {amount_copy} | {validity_copy}")
-                y_mm -= 31
-                if y_mm < 40:
-                    pdf.showPage()
-                    pdf.setFillColor(colors.HexColor("#f2f7ff"))
-                    pdf.rect(0, 0, width, height, fill=1, stroke=0)
-                    pdf.setFillColor(colors.HexColor("#16396f"))
-                    pdf.setFont("Helvetica-Bold", 16)
-                    pdf.drawString(18 * mm, height - 18 * mm, "Payment Lifecycle And Saved Billing Data")
-                    y_mm = 268
-        else:
-            pdf.setFillColor(colors.HexColor("#162033"))
-            pdf.setFont("Helvetica", 11)
-            pdf.drawString(18 * mm, height - 30 * mm, "No verified payment records are available yet.")
+            y_mm -= 14
+            pdf.setFillColor(colors.HexColor("#123d7a"))
+            pdf.setFont("Helvetica-Bold", 13)
+            pdf.drawString(18 * mm, y_mm * mm, "Linked Providers")
+            y_mm -= 8
+            if linked_providers:
+                for provider in linked_providers[:5]:
+                    draw_pdf_line(
+                        pdf,
+                        18,
+                        y_mm,
+                        provider.provider.title(),
+                        f"{provider.email} | {provider.provider_id}",
+                    )
+                    y_mm -= 7
+            else:
+                draw_pdf_line(pdf, 18, y_mm, "Status", "No linked social providers")
+                y_mm -= 7
 
-        pdf.showPage()
-        width, height = A4
-        pdf.setFillColor(colors.white)
-        pdf.rect(0, 0, width, height, fill=1, stroke=0)
-        pdf.setFillColor(colors.HexColor("#16396f"))
-        pdf.setFont("Helvetica-Bold", 16)
-        pdf.drawString(18 * mm, height - 18 * mm, "Support And Request History")
-        y_mm = 268
-        if contact_requests:
-            for item in contact_requests[:12]:
-                pdf.setFillColor(colors.HexColor("#123d7a"))
-                pdf.setFont("Helvetica-Bold", 11)
-                pdf.drawString(18 * mm, y_mm * mm, f"{item.title} ({item.category.title()})")
-                pdf.setFont("Helvetica", 9)
-                pdf.setFillColor(colors.HexColor("#162033"))
-                pdf.drawString(
-                    18 * mm,
-                    (y_mm - 6) * mm,
-                    f"Code {item.request_code or 'Not available'} | Status {item.status} | {item.created_at.strftime('%d %b %Y %H:%M')}",
-                )
-                if item.admin_message:
-                    pdf.drawString(18 * mm, (y_mm - 12) * mm, f"Admin note: {item.admin_message[:96]}")
-                    y_mm -= 22
-                else:
-                    y_mm -= 16
-                if y_mm < 28:
-                    pdf.showPage()
+            pdf.showPage()
+            width, height = A4
+            pdf.setFillColor(colors.HexColor("#f2f7ff"))
+            pdf.rect(0, 0, width, height, fill=1, stroke=0)
+            pdf.setFillColor(colors.HexColor("#16396f"))
+            pdf.setFont("Helvetica-Bold", 16)
+            pdf.drawString(18 * mm, height - 18 * mm, "Payment Lifecycle And Saved Billing Data")
+
+            y_mm = 268
+            if transactions:
+                for transaction in transactions[:8]:
                     pdf.setFillColor(colors.white)
-                    pdf.rect(0, 0, width, height, fill=1, stroke=0)
-                    pdf.setFillColor(colors.HexColor("#16396f"))
-                    pdf.setFont("Helvetica-Bold", 16)
-                    pdf.drawString(18 * mm, height - 18 * mm, "Support And Request History")
-                    y_mm = 268
-        else:
-            pdf.setFillColor(colors.HexColor("#162033"))
-            pdf.setFont("Helvetica", 11)
-            pdf.drawString(18 * mm, height - 30 * mm, "No support or submitted request history is available yet.")
+                    pdf.roundRect(16 * mm, (y_mm - 27) * mm, 178 * mm, 24 * mm, 3 * mm, fill=1, stroke=0)
+                    pdf.setStrokeColor(colors.HexColor("#c9d8f5"))
+                    pdf.roundRect(16 * mm, (y_mm - 27) * mm, 178 * mm, 24 * mm, 3 * mm, fill=0, stroke=1)
+                    pdf.setFillColor(colors.HexColor("#123d7a"))
+                    pdf.setFont("Helvetica-Bold", 11)
+                    pdf.drawString(20 * mm, (y_mm - 8) * mm, f"Invoice #{transaction.invoice_number} | {transaction.plan_name}")
+                    pdf.setFont("Helvetica", 9)
+                    pdf.setFillColor(colors.HexColor("#162033"))
+                    pdf.drawString(
+                        20 * mm,
+                        (y_mm - 15) * mm,
+                        f"Txn {transaction.transaction_code} | Payment {transaction.razorpay_payment_id} | Order {transaction.razorpay_order_id}",
+                    )
+                    status_copy = transaction.status.title()
+                    validity_copy = f"{transaction.activated_at.strftime('%d %b %Y')} to {transaction.expires_at.strftime('%d %b %Y')}"
+                    amount_copy = f"{transaction.currency} {transaction.amount / 100:.0f} / {transaction.billing_cycle}"
+                    pdf.drawString(20 * mm, (y_mm - 21) * mm, f"{status_copy} | {amount_copy} | {validity_copy}")
+                    y_mm -= 31
+                    if y_mm < 40:
+                        pdf.showPage()
+                        pdf.setFillColor(colors.HexColor("#f2f7ff"))
+                        pdf.rect(0, 0, width, height, fill=1, stroke=0)
+                        pdf.setFillColor(colors.HexColor("#16396f"))
+                        pdf.setFont("Helvetica-Bold", 16)
+                        pdf.drawString(18 * mm, height - 18 * mm, "Payment Lifecycle And Saved Billing Data")
+                        y_mm = 268
+            else:
+                pdf.setFillColor(colors.HexColor("#162033"))
+                pdf.setFont("Helvetica", 11)
+                pdf.drawString(18 * mm, height - 30 * mm, "No verified payment records are available yet.")
 
-        pdf.save()
-        buffer.seek(0)
-        filename = f"account-data-{user.public_user_code or user.username}.pdf"
-        return StreamingResponse(
-            buffer,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+            pdf.showPage()
+            width, height = A4
+            pdf.setFillColor(colors.white)
+            pdf.rect(0, 0, width, height, fill=1, stroke=0)
+            pdf.setFillColor(colors.HexColor("#16396f"))
+            pdf.setFont("Helvetica-Bold", 16)
+            pdf.drawString(18 * mm, height - 18 * mm, "Support And Request History")
+            y_mm = 268
+            if contact_requests:
+                for item in contact_requests[:12]:
+                    pdf.setFillColor(colors.HexColor("#123d7a"))
+                    pdf.setFont("Helvetica-Bold", 11)
+                    pdf.drawString(18 * mm, y_mm * mm, f"{item.title} ({item.category.title()})")
+                    pdf.setFont("Helvetica", 9)
+                    pdf.setFillColor(colors.HexColor("#162033"))
+                    pdf.drawString(
+                        18 * mm,
+                        (y_mm - 6) * mm,
+                        f"Code {item.request_code or 'Not available'} | Status {item.status} | {item.created_at.strftime('%d %b %Y %H:%M')}",
+                    )
+                    if item.admin_message:
+                        pdf.drawString(18 * mm, (y_mm - 12) * mm, f"Admin note: {item.admin_message[:96]}")
+                        y_mm -= 22
+                    else:
+                        y_mm -= 16
+                    if y_mm < 28:
+                        pdf.showPage()
+                        pdf.setFillColor(colors.white)
+                        pdf.rect(0, 0, width, height, fill=1, stroke=0)
+                        pdf.setFillColor(colors.HexColor("#16396f"))
+                        pdf.setFont("Helvetica-Bold", 16)
+                        pdf.drawString(18 * mm, height - 18 * mm, "Support And Request History")
+                        y_mm = 268
+            else:
+                pdf.setFillColor(colors.HexColor("#162033"))
+                pdf.setFont("Helvetica", 11)
+                pdf.drawString(18 * mm, height - 30 * mm, "No support or submitted request history is available yet.")
+
+            pdf.save()
+            buffer.seek(0)
+            filename = f"account-data-{user.public_user_code or user.username}.pdf"
+            return StreamingResponse(
+                buffer,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/settings/delete-account")
     def delete_account(
