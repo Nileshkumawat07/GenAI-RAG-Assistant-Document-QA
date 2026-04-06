@@ -4,9 +4,13 @@ import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import SettingsPanel from "./SettingsPanel";
+import { getAdminMysqlOverview } from "../auth/authApi";
 import {
+  adminDeleteContactRequest,
+  adminUpdateContactRequestStatus,
   createContactRequest,
   deleteContactRequest,
+  listAllContactRequests,
   listContactRequests,
 } from "../info/contactApi";
 import { requestJson } from "../../shared/api/http";
@@ -312,6 +316,18 @@ const INFO_PAGE_CONFIG = {
       { id: "reset", label: "Reset", heading: "Reset" },
     ],
   },
+  administration: {
+    title: "Administration",
+    description: "Monitor requests, statuses, and database tables",
+    message: "Review admin-only workspace data, including submitted requests and live MySQL table snapshots.",
+    statusTitle: "Admin Controls",
+    statusItems: ["Admin session active", "Request moderation enabled", "Database overview ready"],
+    tabs: [
+      { id: "overview", label: "Overview", heading: "Administration Overview" },
+      { id: "requests", label: "Contact Requests", heading: "Contact Request Queue" },
+      { id: "database", label: "Database", heading: "MySQL Table Overview" },
+    ],
+  },
 };
 
 function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
@@ -335,6 +351,12 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const [contactRequests, setContactRequests] = useState([]);
   const [contactRequestsLoading, setContactRequestsLoading] = useState(false);
   const [activeSubmittedCategory, setActiveSubmittedCategory] = useState("general");
+  const [adminTables, setAdminTables] = useState([]);
+  const [adminRequests, setAdminRequests] = useState([]);
+  const [adminStatusOptions, setAdminStatusOptions] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState("");
+  const [adminActionRequestId, setAdminActionRequestId] = useState("");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -363,6 +385,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     : "Not available";
   const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
   const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
+  const isAdmin = !!currentUser?.isAdmin;
 
   const hasQuestion = question.trim().length > 0;
 
@@ -391,11 +414,39 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     }
   };
 
+  const loadAdministrationData = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    try {
+      setAdminLoading(true);
+      setAdminError("");
+      const [mysqlOverview, allRequests] = await Promise.all([
+        getAdminMysqlOverview(),
+        listAllContactRequests(),
+      ]);
+      setAdminTables(mysqlOverview.tables || []);
+      setAdminStatusOptions(mysqlOverview.statusOptions || []);
+      setAdminRequests(allRequests || []);
+    } catch (loadError) {
+      setAdminError(loadError.message || "Failed to load administration data.");
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedInfoPage === "contact" && currentUser?.id) {
       loadContactRequests();
     }
   }, [selectedInfoPage, currentUser?.id]);
+
+  useEffect(() => {
+    if (selectedInfoPage === "administration" && isAdmin) {
+      loadAdministrationData();
+    }
+  }, [selectedInfoPage, isAdmin]);
 
   const getContactFieldKey = (tabId, field) => {
     const keyMap = {
@@ -547,6 +598,34 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
     }
   };
 
+  const handleAdminStatusChange = async (requestId, status) => {
+    try {
+      setAdminActionRequestId(requestId);
+      setAdminError("");
+      const updatedRequest = await adminUpdateContactRequestStatus(requestId, { status });
+      setAdminRequests((current) =>
+        current.map((item) => (item.id === requestId ? updatedRequest : item))
+      );
+    } catch (updateError) {
+      setAdminError(updateError.message || "Failed to update admin request.");
+    } finally {
+      setAdminActionRequestId("");
+    }
+  };
+
+  const handleAdminDelete = async (requestId) => {
+    try {
+      setAdminActionRequestId(requestId);
+      setAdminError("");
+      await adminDeleteContactRequest(requestId);
+      setAdminRequests((current) => current.filter((item) => item.id !== requestId));
+    } catch (deleteError) {
+      setAdminError(deleteError.message || "Failed to delete admin request.");
+    } finally {
+      setAdminActionRequestId("");
+    }
+  };
+
   const uploadDocument = async () => {
     if (!selectedFile) return;
     setIsUploading(true);
@@ -636,6 +715,176 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
 
   const renderInfoContent = () => {
     if (!activeInfoContent) return null;
+
+    if (selectedInfoPage === "administration") {
+      const totalRows = adminTables.reduce((sum, table) => sum + (table.rowCount || 0), 0);
+      const userTable = adminTables.find((table) => table.tableName === "users");
+      const requestTable = adminTables.find((table) => table.tableName === "contact_requests");
+      const statusChoices = adminStatusOptions.length > 0
+        ? adminStatusOptions
+        : ["In Progress", "In Review", "Completed"];
+
+      if (!isAdmin) {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-mini-card">
+                <h4>Admin access required</h4>
+                <p>This page is only available for accounts with administration privileges.</p>
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (activeInfoTab === "overview") {
+        const overviewCards = [
+          { title: "Visible Tables", text: String(adminTables.length) },
+          { title: "Rows Indexed", text: String(totalRows) },
+          { title: "Users", text: String(userTable?.rowCount || 0) },
+          { title: "Contact Requests", text: String(adminRequests.length || requestTable?.rowCount || 0) },
+        ];
+
+        return (
+          <>
+            <div className="insight-section">
+              <div className="insight-card">
+                <h3 className="tool-title">{activeInfoContent.heading}</h3>
+                <p className="tool-copy">{infoConfig.message}</p>
+              </div>
+            </div>
+            <div className="content-grid single-column">
+              <article className="tool-card workspace-copy-card">
+                {adminLoading ? <p className="tool-copy">Loading administration data...</p> : null}
+                {adminError ? <p className="error-text">{adminError}</p> : null}
+                <div className="workspace-info-grid">
+                  {overviewCards.map((card) => (
+                    <div key={card.title} className="workspace-mini-card">
+                      <h4>{card.title}</h4>
+                      <p>{card.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+          </>
+        );
+      }
+
+      if (activeInfoTab === "requests") {
+        return (
+          <>
+            <div className="insight-section">
+              <div className="insight-card">
+                <h3 className="tool-title">{activeInfoContent.heading}</h3>
+                <p className="tool-copy">Update request status, review request details, or remove invalid submissions.</p>
+              </div>
+            </div>
+            <div className="content-grid single-column">
+              <article className="tool-card workspace-copy-card">
+                {adminLoading ? <p className="tool-copy">Loading all contact requests...</p> : null}
+                {adminError ? <p className="error-text">{adminError}</p> : null}
+                {!adminLoading && adminRequests.length === 0 ? (
+                  <div className="workspace-mini-card">
+                    <h4>No contact requests found</h4>
+                    <p>New requests will appear here once users submit them from the contact pages.</p>
+                  </div>
+                ) : (
+                  <div className="workspace-form-stack">
+                    {adminRequests.map((requestItem) => (
+                      <div key={requestItem.id} className="workspace-mini-card">
+                        <h4>{requestItem.requestCode || requestItem.title || "Contact Request"}</h4>
+                        <p>
+                          {requestItem.category || "general"} | {new Date(requestItem.createdAt).toLocaleString("en-GB")}
+                        </p>
+                        <div className="workspace-info-grid">
+                          {Object.entries(requestItem.values || {}).map(([key, value]) => (
+                            <div key={key} className="workspace-mini-card">
+                              <h4>{key}</h4>
+                              <p>{value || "Not provided"}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="workspace-form-stack">
+                          <select
+                            className="auth-input workspace-static-input"
+                            value={requestItem.status || statusChoices[0]}
+                            onChange={(event) => handleAdminStatusChange(requestItem.id, event.target.value)}
+                            disabled={adminActionRequestId === requestItem.id}
+                          >
+                            {statusChoices.map((statusOption) => (
+                              <option key={statusOption} value={statusOption}>
+                                {statusOption}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="primary-button"
+                            type="button"
+                            onClick={() => handleAdminDelete(requestItem.id)}
+                            disabled={adminActionRequestId === requestItem.id}
+                          >
+                            {adminActionRequestId === requestItem.id ? "Working..." : "Delete Request"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            </div>
+          </>
+        );
+      }
+
+      return (
+        <>
+          <div className="insight-section">
+            <div className="insight-card">
+              <h3 className="tool-title">{activeInfoContent.heading}</h3>
+              <p className="tool-copy">Live table snapshots are pulled from the backend admin overview route.</p>
+            </div>
+          </div>
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              {adminLoading ? <p className="tool-copy">Loading database tables...</p> : null}
+              {adminError ? <p className="error-text">{adminError}</p> : null}
+              {!adminLoading && adminTables.length === 0 ? (
+                <div className="workspace-mini-card">
+                  <h4>No tables available</h4>
+                  <p>The admin overview did not return any tables for this environment.</p>
+                </div>
+              ) : (
+                <div className="workspace-form-stack">
+                  {adminTables.map((table) => (
+                    <div key={table.tableName} className="workspace-mini-card">
+                      <h4>{table.tableName}</h4>
+                      <p>{table.rowCount || 0} rows</p>
+                      <div className="workspace-copy-list">
+                        {table.columns?.map((column) => (
+                          <p key={column.name} className="tool-copy workspace-copy-paragraph">
+                            {column.name} ({column.type})
+                          </p>
+                        ))}
+                      </div>
+                      {(table.rows || []).slice(0, 5).map((row, index) => (
+                        <div key={`${table.tableName}-${index}`} className="workspace-mini-card">
+                          {Object.entries(row).map(([key, value]) => (
+                            <p key={key} className="tool-copy workspace-copy-paragraph">
+                              <strong>{key}:</strong> {String(value ?? "null")}
+                            </p>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          </div>
+        </>
+      );
+    }
 
     if (selectedInfoPage === "profile") {
       const profileCards =
