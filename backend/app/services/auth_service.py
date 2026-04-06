@@ -7,11 +7,12 @@ import os
 import secrets
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.models.subscription_transaction import SubscriptionTransaction
 from app.models.user import User
 
 ADMIN_EMAILS = {"knilesh769@gmail.com"}
@@ -34,6 +35,7 @@ class UserPayload:
     security_question: str
     security_answer: str
     referral_code: str | None
+    public_user_code: str | None
     email_verified: bool
     mobile_verified: bool
     subscription_plan_id: str | None
@@ -43,6 +45,7 @@ class UserPayload:
     subscription_currency: str | None
     subscription_billing_cycle: str | None
     subscription_activated_at: str | None
+    subscription_expires_at: str | None
     created_at: str
     is_admin: bool
 
@@ -56,6 +59,7 @@ class AuthService:
         if not user:
             raise AuthServiceError("User account was not found.")
 
+        self.sync_user_subscription(db, user)
         return self._serialize_user(user)
 
     def create_access_token(self, *, user_id: str) -> str:
@@ -134,6 +138,7 @@ class AuthService:
             security_question=security_question.strip(),
             security_answer=security_answer.strip(),
             referral_code=referral_code.strip() if referral_code and referral_code.strip() else None,
+            public_user_code=self._generate_public_user_code(db),
             password_hash=self._hash_password(password),
             email_verified=email_verified,
             mobile_verified=mobile_verified,
@@ -157,6 +162,7 @@ class AuthService:
         if not user or not self._verify_password(password, user.password_hash):
             raise AuthServiceError("Invalid email/username or password.")
 
+        self.sync_user_subscription(db, user)
         return self._serialize_user(user)
 
     def update_username(self, db: Session, *, user_id: str, new_username: str) -> UserPayload:
@@ -242,7 +248,50 @@ class AuthService:
         if not user:
             raise AuthServiceError("User account was not found.")
 
+        self.sync_user_subscription(db, user)
         return user
+
+    def sync_user_subscription(self, db: Session, user: User) -> User:
+        now = datetime.now(timezone.utc)
+        expires_at = user.subscription_expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if user.subscription_status == "premium" and expires_at and expires_at <= now:
+            user.subscription_status = "expired"
+            user.subscription_plan_id = None
+            user.subscription_plan_name = None
+            user.subscription_amount = None
+            user.subscription_currency = None
+            user.subscription_billing_cycle = None
+            user.subscription_activated_at = None
+            user.subscription_expires_at = None
+            user.subscription_payment_id = None
+            user.subscription_order_id = None
+            transactions = db.execute(
+                select(SubscriptionTransaction).where(
+                    SubscriptionTransaction.user_id == user.id,
+                    SubscriptionTransaction.status == "verified",
+                )
+            ).scalars().all()
+            for transaction in transactions:
+                transaction.status = "expired"
+            db.commit()
+            db.refresh(user)
+        return user
+
+    def sync_all_user_subscriptions(self, db: Session) -> None:
+        users = db.execute(select(User)).scalars().all()
+        for user in users:
+            self.sync_user_subscription(db, user)
+
+    def _generate_public_user_code(self, db: Session) -> str:
+        for _ in range(20):
+            code = f"{secrets.randbelow(1_000_000):06d}"
+            exists = db.execute(select(User.id).where(User.public_user_code == code)).scalar_one_or_none()
+            if not exists:
+                return code
+        raise AuthServiceError("Unable to generate a short user code.")
 
     def _serialize_user(self, user: User) -> UserPayload:
         return UserPayload(
@@ -257,6 +306,7 @@ class AuthService:
             security_question=user.security_question,
             security_answer=user.security_answer,
             referral_code=user.referral_code,
+            public_user_code=user.public_user_code,
             email_verified=user.email_verified,
             mobile_verified=user.mobile_verified,
             subscription_plan_id=user.subscription_plan_id,
@@ -266,6 +316,7 @@ class AuthService:
             subscription_currency=user.subscription_currency,
             subscription_billing_cycle=user.subscription_billing_cycle,
             subscription_activated_at=user.subscription_activated_at.isoformat() if user.subscription_activated_at else None,
+            subscription_expires_at=user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
             created_at=user.created_at.isoformat(),
             is_admin=self.is_admin_email(user.email),
         )

@@ -1,5 +1,5 @@
 import hmac
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 
 import razorpay
@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import RAZORPAY_COMPANY_NAME, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
 from app.models.user import User
+from app.services.subscription_transaction_service import SubscriptionTransactionService
 
 
 class PaymentServiceError(Exception):
@@ -61,6 +62,7 @@ class PaymentService:
         self.key_id = RAZORPAY_KEY_ID
         self.key_secret = RAZORPAY_KEY_SECRET
         self.company_name = RAZORPAY_COMPANY_NAME
+        self.transaction_service = SubscriptionTransactionService()
         self.client = (
             razorpay.Client(auth=(self.key_id, self.key_secret))
             if self.key_id and self.key_secret
@@ -78,8 +80,30 @@ class PaymentService:
             raise PaymentServiceError("Invalid pricing plan selected.")
         return plan
 
-    def create_razorpay_order(self, plan_id: str, user_id: str) -> dict:
+    def create_razorpay_order(self, db: Session, plan_id: str, user_id: str) -> dict:
         plan = self.get_plan(plan_id)
+        user = db.get(User, user_id)
+        if not user:
+            raise PaymentServiceError("User account was not found.")
+        if user.subscription_status == "premium" and user.subscription_expires_at:
+            expires_at = user.subscription_expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at <= datetime.now(timezone.utc):
+                user.subscription_status = "expired"
+                user.subscription_plan_id = None
+                user.subscription_plan_name = None
+                user.subscription_amount = None
+                user.subscription_currency = None
+                user.subscription_billing_cycle = None
+                user.subscription_activated_at = None
+                user.subscription_expires_at = None
+                user.subscription_payment_id = None
+                user.subscription_order_id = None
+                db.commit()
+                db.refresh(user)
+            else:
+                raise PaymentServiceError("An active subscription already exists for this account.")
         client = self._require_client()
         try:
             order = client.order.create(
@@ -122,17 +146,62 @@ class PaymentService:
         if not user:
             raise PaymentServiceError("User account was not found.")
 
+        activated_at = datetime.now(timezone.utc)
+        expires_at = activated_at + timedelta(days=30)
         user.subscription_plan_id = plan["plan_id"]
         user.subscription_plan_name = plan["plan_name"]
         user.subscription_status = "premium"
         user.subscription_amount = plan["amount"]
         user.subscription_currency = plan["currency"]
         user.subscription_billing_cycle = "monthly"
-        user.subscription_activated_at = datetime.now(timezone.utc)
+        user.subscription_activated_at = activated_at
+        user.subscription_expires_at = expires_at
         user.subscription_payment_id = razorpay_payment_id
         user.subscription_order_id = razorpay_order_id
 
         db.commit()
+        db.refresh(user)
+        self.transaction_service.create_verified_transaction(
+            db,
+            user_id=user_id,
+            customer_code=user.public_user_code,
+            customer_name=user.full_name,
+            customer_email=user.email,
+            customer_mobile=user.mobile,
+            company_name=self.company_name,
+            plan_id=plan["plan_id"],
+            plan_name=plan["plan_name"],
+            amount=plan["amount"],
+            currency=plan["currency"],
+            billing_cycle="monthly",
+            razorpay_order_id=razorpay_order_id,
+            razorpay_payment_id=razorpay_payment_id,
+            activated_at=activated_at,
+            expires_at=expires_at,
+        )
+        return user
+
+    def cancel_user_subscription(self, db: Session, *, user_id: str) -> User:
+        user = db.get(User, user_id)
+        if not user:
+            raise PaymentServiceError("User account was not found.")
+        if user.subscription_status != "premium":
+            raise PaymentServiceError("No active premium subscription found.")
+
+        canceled_at = datetime.now(timezone.utc)
+        user.subscription_status = "canceled"
+        user.subscription_plan_id = None
+        user.subscription_plan_name = None
+        user.subscription_amount = None
+        user.subscription_currency = None
+        user.subscription_billing_cycle = None
+        user.subscription_activated_at = None
+        user.subscription_expires_at = None
+        user.subscription_payment_id = None
+        user.subscription_order_id = None
+        db.commit()
+        db.refresh(user)
+        self.transaction_service.mark_latest_transaction_canceled(db, user_id=user_id, canceled_at=canceled_at)
         db.refresh(user)
         return user
 

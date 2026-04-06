@@ -2932,6 +2932,160 @@ body.workspace-body-mode .workspace-form-stack .primary-button {
   justify-self: start;
 }
 
+body.workspace-body-mode .billing-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+body.workspace-body-mode .billing-action-row .primary-button {
+  min-width: 190px;
+}
+
+body.workspace-body-mode .billing-payment-card,
+body.workspace-body-mode .billing-invoice-shell {
+  display: grid;
+  gap: 14px;
+}
+
+body.workspace-body-mode .billing-payment-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.workspace-body-mode .billing-payment-card-head h4 {
+  margin: 0 0 6px;
+}
+
+body.workspace-body-mode .billing-payment-card-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .billing-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(18, 61, 122, 0.08);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+body.workspace-body-mode .billing-invoice-scroll {
+  max-height: 540px;
+  overflow-y: auto;
+  display: grid;
+  gap: 14px;
+  padding-right: 6px;
+}
+
+body.workspace-body-mode .billing-invoice-card {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(42, 75, 140, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(76, 123, 209, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 255, 0.96));
+  box-shadow: 0 14px 28px rgba(15, 47, 99, 0.08);
+  display: grid;
+  gap: 16px;
+}
+
+body.workspace-body-mode .billing-invoice-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+body.workspace-body-mode .billing-invoice-kicker {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(18, 61, 122, 0.08);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body.workspace-body-mode .billing-invoice-hero h4 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .billing-invoice-hero p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .billing-invoice-total {
+  min-width: 180px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(11, 46, 99, 0.97), rgba(48, 107, 192, 0.95));
+  color: #ffffff;
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+body.workspace-body-mode .billing-invoice-total strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+body.workspace-body-mode .billing-invoice-total span {
+  font-size: 12px;
+  opacity: 0.92;
+}
+
+body.workspace-body-mode .billing-invoice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.workspace-body-mode .billing-invoice-detail {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 75, 140, 0.1);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+body.workspace-body-mode .billing-invoice-detail span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--primary-soft);
+}
+
+body.workspace-body-mode .billing-invoice-detail strong {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  word-break: break-word;
+}
+
+body.workspace-body-mode .billing-invoice-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 body.workspace-body-mode .sidebar-boost-card .primary-button {
   width: auto;
   min-width: 150px;

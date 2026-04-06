@@ -23,6 +23,7 @@ class SignupRequest(BaseModel):
     securityQuestion: str
     securityAnswer: str
     referralCode: str | None = None
+    publicUserCode: str | None = None
     emailVerified: bool
     mobileVerified: bool
 
@@ -74,6 +75,7 @@ class AuthUserResponse(BaseModel):
     subscriptionCurrency: str | None = None
     subscriptionBillingCycle: str | None = None
     subscriptionActivatedAt: str | None = None
+    subscriptionExpiresAt: str | None = None
     createdAt: str
     isAdmin: bool
     mode: str

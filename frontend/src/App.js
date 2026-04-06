@@ -153,7 +153,13 @@ function App() {
   const isAdmin = !!currentUser?.isAdmin;
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
   const userPlanName = currentUser?.subscriptionPlanName || "Free Member";
-  const userPlanStatus = currentUser?.subscriptionStatus === "premium" ? "Premium Active" : isAdmin ? "Admin Access" : "Active";
+  const userPlanStatus = currentUser?.subscriptionStatus === "premium"
+    ? "Premium Active"
+    : currentUser?.subscriptionStatus === "expired"
+      ? "Expired"
+      : isAdmin
+        ? "Admin Access"
+        : "Active";
   const isPremiumMember = currentUser?.subscriptionStatus === "premium";
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import uuid
 from dataclasses import dataclass
 
@@ -71,7 +72,7 @@ class ContactRequestService:
             user_id=user_id,
             category=normalized_category,
             title=title.strip(),
-            request_code=self._build_request_code(normalized_category),
+            request_code=self._generate_numeric_code(db),
             status="In Progress",
             payload_json=json.dumps(values),
         )
@@ -168,7 +169,20 @@ class ContactRequestService:
         if not prefix:
             return None
 
-        return f"{prefix}-{uuid.uuid4().hex[:8].upper()}"
+        del prefix
+        return self._generate_numeric_code(db=None)
+
+    def _generate_numeric_code(self, db: Session | None) -> str:
+        for _ in range(20):
+            code = f"{random.randint(0, 999999):06d}"
+            if db is None:
+                return code
+            exists = db.execute(
+                select(ContactRequest.id).where(ContactRequest.request_code == code)
+            ).scalar_one_or_none()
+            if not exists:
+                return code
+        raise ContactRequestServiceError("Unable to generate a short request code.")
 
     def _normalize_status(self, status: str) -> str | None:
         normalized = (status or "").strip()

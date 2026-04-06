@@ -13,7 +13,7 @@ class ContactRequest(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
-    request_code: Mapped[str | None] = mapped_column(String(40), nullable=True, unique=True, index=True)
+    request_code: Mapped[str | None] = mapped_column(String(6), nullable=True, unique=True, index=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="Submitted")
     admin_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)

@@ -470,6 +470,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const subscriptionCurrency = currentUser?.subscriptionCurrency || "INR";
   const subscriptionBillingCycle = currentUser?.subscriptionBillingCycle || "monthly";
   const subscriptionActivatedAt = currentUser?.subscriptionActivatedAt;
+  const subscriptionExpiresAt = currentUser?.subscriptionExpiresAt;
   const profileJoined = currentUser?.createdAt
     ? new Date(currentUser.createdAt).toLocaleDateString("en-GB", {
         day: "2-digit",
@@ -489,7 +490,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   };
   const subscriptionPriceLabel =
     subscriptionAmount != null ? `${formatMoney(subscriptionAmount, subscriptionCurrency)} / ${subscriptionBillingCycle}` : "Free access";
-  const subscriptionStatusLabel = subscriptionStatus === "premium" ? "Premium Active" : "Free Access";
+  const subscriptionStatusLabel = subscriptionStatus === "premium" ? "Premium Active" : subscriptionStatus === "expired" ? "Expired" : "Free Access";
   const subscriptionActivationLabel = subscriptionActivatedAt
     ? new Date(subscriptionActivatedAt).toLocaleString("en-GB", {
         day: "2-digit",
@@ -499,6 +500,16 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         minute: "2-digit",
       })
     : "Not activated yet";
+  const subscriptionExpiryLabel = subscriptionExpiresAt
+    ? new Date(subscriptionExpiresAt).toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Not available";
+  const hasActiveSubscription = subscriptionStatus === "premium" && !!subscriptionExpiresAt;
   const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
   const activePricingPlans = PRICING_PLAN_DETAILS.filter((plan) => plan.category === activeInfoTab);
   const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
@@ -520,13 +531,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         title: "Accounts",
         copy: "User account records with all stored non-secret fields.",
         tableNames: ["users"],
-        columns: null,
+        columns: ["public_user_code", "full_name", "username", "email", "mobile", "subscription_plan_name", "subscription_status", "subscription_expires_at", "created_at"],
       },
       {
         id: "providers",
         title: "Linked Providers",
         copy: "Connected Facebook, LinkedIn, and other provider records with all stored non-secret details.",
         tableNames: ["user_social_links"],
+        columns: null,
+      },
+      {
+        id: "subscriptions",
+        title: "Subscriptions",
+        copy: "Premium plan status and verified payment transactions.",
+        tableNames: ["users", "subscription_transactions"],
         columns: null,
       },
       {
@@ -666,6 +684,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
         title: "Joined Workspace",
         text: userRow.created_at || "Not available",
       },
+      ...(userRow.subscription_plan_name ? [{
+        title: "Subscription Active",
+        text: `${userRow.subscription_plan_name} | Valid till ${userRow.subscription_expires_at || "Unknown"}`,
+      }] : []),
       ...userRequests.slice(0, 6).map((requestRow) => ({
         title: `${prettifyKey(requestRow.category || "request")} request`,
         text: `${requestRow.status || "In Progress"} | ${requestRow.created_at || "Unknown date"}`,
@@ -1625,9 +1647,18 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                                 </div>
                               </>
                             ) : null}
-                            <div className="workspace-form-stack">
+                                <div className="workspace-form-stack">
                               {selectedDatabaseSection.tables.map((table) => {
-                                const visibleColumns = getVisibleColumnsForTable(table, selectedDatabaseSection.columns);
+                                const visibleColumns = getVisibleColumnsForTable(
+                                  table,
+                                  selectedDatabaseSection.id === "subscriptions" && table.tableName === "users"
+                                    ? ["public_user_code", "full_name", "email", "subscription_plan_name", "subscription_status", "subscription_expires_at"]
+                                    : selectedDatabaseSection.id === "subscriptions" && table.tableName === "subscription_transactions"
+                                      ? ["transaction_code", "linked_user_name", "plan_name", "amount", "currency", "billing_cycle", "status", "activated_at", "expires_at", "razorpay_payment_id"]
+                                      : selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
+                                        ? ["request_code", "linked_user_name", "category", "title", "status", "created_at"]
+                                        : selectedDatabaseSection.columns
+                                );
                                 const tableColumns =
                                   selectedDatabaseSection.id === "requests" && table.tableName === "contact_requests"
                                     ? [...visibleColumns, "__open_request__"]
@@ -1734,6 +1765,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
               { title: "Full Name", text: profileName },
               { title: "Account Email", text: profileEmail },
               { title: "Plan", text: subscriptionPlanName },
+              { title: "Member ID", text: currentUser?.publicUserCode || "Not assigned" },
               { title: "Workspace Role", text: "Account Owner" },
               { title: "Status", text: subscriptionStatusLabel },
               { title: "Joined", text: profileJoined },
@@ -1753,6 +1785,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                   { title: "Billing Price", text: subscriptionPriceLabel },
                   { title: "Billing Cycle", text: subscriptionBillingCycle },
                   { title: "Activated On", text: subscriptionActivationLabel },
+                  { title: "Valid Till", text: subscriptionExpiryLabel },
                   { title: "Payment Method", text: subscriptionStatus === "premium" ? "Razorpay secure checkout" : "Not added" },
                 ]
               : activeInfoTab === "usage"
@@ -1843,6 +1876,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                   {activePricingPlans.map((plan) => {
                     const planState = paymentStatus[plan.id];
                     const isProcessing = activePlanPurchaseId === plan.id;
+                    const isCurrentPlan = subscriptionPlanName === plan.title && hasActiveSubscription;
 
                     return (
                       <div key={plan.id} className={`workspace-mini-card pricing-plan-card ${plan.accent}`}>
@@ -1888,9 +1922,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                           className="primary-button pricing-plan-button"
                           type="button"
                           onClick={() => handlePlanPurchase(plan)}
-                          disabled={!!activePlanPurchaseId}
+                          disabled={!!activePlanPurchaseId || hasActiveSubscription}
                         >
-                          {isProcessing ? "Opening Razorpay..." : "Buy Plan"}
+                          {isCurrentPlan ? "Premium Active" : hasActiveSubscription ? "Subscription Active" : isProcessing ? "Opening Razorpay..." : "Buy Plan"}
                         </button>
                       </div>
                     );
@@ -2261,10 +2295,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
   const selectedAdminUserDetailCards = selectedAdminUserDetails
     ? [
         { title: "Full Name", text: selectedAdminUserDetails.userRow.full_name || "Not available" },
+        { title: "Member ID", text: selectedAdminUserDetails.userRow.public_user_code || "Not available" },
         { title: "Username", text: selectedAdminUserDetails.userRow.username || "Not available" },
         { title: "Email", text: selectedAdminUserDetails.userRow.email || "Not available" },
         { title: "Alternate Email", text: selectedAdminUserDetails.userRow.alternate_email || "Not available" },
         { title: "Mobile", text: selectedAdminUserDetails.userRow.mobile || "Not available" },
+        { title: "Subscription Plan", text: selectedAdminUserDetails.userRow.subscription_plan_name || "Free Member" },
+        { title: "Subscription Status", text: selectedAdminUserDetails.userRow.subscription_status || "free" },
+        { title: "Valid Till", text: selectedAdminUserDetails.userRow.subscription_expires_at || "Not available" },
         { title: "Joined", text: selectedAdminUserDetails.userRow.created_at || "Not available" },
         { title: "Gender", text: selectedAdminUserDetails.userRow.gender || "Not available" },
         { title: "Date Of Birth", text: selectedAdminUserDetails.userRow.date_of_birth || "Not available" },

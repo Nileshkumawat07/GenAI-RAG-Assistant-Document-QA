@@ -11,6 +11,7 @@ import {
   listLinkedProviders,
   unlinkProvider,
 } from "../auth/linkedProviderApi";
+import { cancelSubscription, downloadInvoicePdf, listInvoices } from "./billingApi";
 import {
   checkFirebaseEmailVerification,
   resetFirebaseEmailVerification,
@@ -266,6 +267,10 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   });
 
   const [resetPassword, setResetPassword] = useState("");
+  const [billingInvoices, setBillingInvoices] = useState([]);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingActionLoading, setBillingActionLoading] = useState("");
+  const [showPaymentDetails, setShowPaymentDetails] = useState(false);
 
   const usernameRecaptchaId = useRef(`settings-username-mobile-${Math.random().toString(36).slice(2, 10)}`);
   const emailRecaptchaId = useRef(`settings-email-mobile-${Math.random().toString(36).slice(2, 10)}`);
@@ -294,10 +299,12 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   const subscriptionCurrency = currentUser?.subscriptionCurrency || "INR";
   const subscriptionBillingCycle = currentUser?.subscriptionBillingCycle || "monthly";
   const subscriptionActivatedAt = currentUser?.subscriptionActivatedAt;
+  const subscriptionExpiresAt = currentUser?.subscriptionExpiresAt;
   const subscriptionPriceLabel =
     subscriptionAmount != null
       ? `${new Intl.NumberFormat("en-IN", { style: "currency", currency: subscriptionCurrency, maximumFractionDigits: 0 }).format(subscriptionAmount / 100)} / ${subscriptionBillingCycle}`
       : "Free access";
+  const latestInvoice = billingInvoices[0] || null;
   const activityEntries = storedSettings.activity || [];
 
   useEffect(() => {
@@ -419,6 +426,37 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
       resetFirebaseEmailVerification().catch(() => {});
     };
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "billing" || !currentUser?.id) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadInvoices = async () => {
+      try {
+        setBillingLoading(true);
+        const invoices = await listInvoices();
+        if (!ignore) {
+          setBillingInvoices(invoices || []);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setFeedback({ type: "error", text: error.message || "Failed to load invoices." });
+        }
+      } finally {
+        if (!ignore) {
+          setBillingLoading(false);
+        }
+      }
+    };
+
+    loadInvoices();
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, currentUser?.id]);
 
   const updateStoredSettings = (updater) => {
     setStoredSettings((current) => updater(current));
@@ -542,6 +580,36 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   const saveRegion = () => {
     setFeedback({ type: "success", text: "Region settings saved successfully." });
     pushActivity("Region settings were updated.");
+  };
+
+  const handleCancelSubscription = async () => {
+    try {
+      setBillingActionLoading("cancel");
+      const response = await cancelSubscription();
+      if (response.user) {
+        onUserUpdate(response.user);
+      }
+      setFeedback({ type: "success", text: response.message || "Subscription canceled successfully." });
+      pushActivity("Subscription canceled successfully.");
+      const invoices = await listInvoices();
+      setBillingInvoices(invoices || []);
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to cancel subscription." });
+    } finally {
+      setBillingActionLoading("");
+    }
+  };
+
+  const handleDownloadInvoice = async (invoiceNumber) => {
+    try {
+      setBillingActionLoading(`download-${invoiceNumber}`);
+      await downloadInvoicePdf(invoiceNumber);
+      setFeedback({ type: "success", text: `Invoice ${invoiceNumber} downloaded successfully.` });
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to download invoice." });
+    } finally {
+      setBillingActionLoading("");
+    }
   };
 
   const downloadMyData = () => {
@@ -1642,10 +1710,110 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
     return (
       <div className="workspace-form-stack">
         <div className="workspace-mini-card"><h4>Subscription & Billing</h4><p>Plan: {subscriptionPlanName} | {subscriptionPriceLabel}</p></div>
-        <div className="workspace-mini-card"><h4>Membership Status</h4><p>Status: {subscriptionStatus === "premium" ? "Premium Active" : "Free Access"}{subscriptionActivatedAt ? ` | Activated: ${new Date(subscriptionActivatedAt).toLocaleDateString("en-GB")}` : ""}</p></div>
-        <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Payment method management is not enabled in this build." })}>Manage Payment Method</button>
-        <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Invoices are not enabled in this build." })}>View Invoices</button>
-        <button className="primary-button secondary-tone" type="button" onClick={() => setFeedback({ type: "info", text: "Subscription cancellation is not enabled in this build." })}>Cancel Subscription</button>
+        <div className="workspace-mini-card"><h4>Membership Status</h4><p>Status: {subscriptionStatus === "premium" ? "Premium Active" : subscriptionStatus === "expired" ? "Expired" : subscriptionStatus === "canceled" ? "Canceled" : "Free Access"}{subscriptionActivatedAt ? ` | Activated: ${new Date(subscriptionActivatedAt).toLocaleDateString("en-GB")}` : ""}{subscriptionExpiresAt ? ` | Valid Till: ${new Date(subscriptionExpiresAt).toLocaleDateString("en-GB")}` : ""}</p></div>
+
+        <div className="billing-action-row">
+          <button className="primary-button" type="button" onClick={() => setShowPaymentDetails((current) => !current)}>
+            {showPaymentDetails ? "Hide Payment Details" : "Manage Payment Method"}
+          </button>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => {
+              const target = document.getElementById("billing-invoices-section");
+              target?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          >
+            View Invoices
+          </button>
+          <button
+            className="primary-button secondary-tone"
+            type="button"
+            onClick={handleCancelSubscription}
+            disabled={billingActionLoading === "cancel" || subscriptionStatus !== "premium"}
+          >
+            {billingActionLoading === "cancel" ? "Canceling..." : "Cancel Subscription"}
+          </button>
+        </div>
+
+        {showPaymentDetails ? (
+          <div className="workspace-mini-card billing-payment-card">
+            <div className="billing-payment-card-head">
+              <div>
+                <h4>Saved Payment Details</h4>
+                <p>Verified payment information from your latest successful invoice.</p>
+              </div>
+              <span className="billing-status-pill">{latestInvoice?.status || "No invoice"}</span>
+            </div>
+            <div className="workspace-info-grid">
+              <div className="workspace-mini-card"><h4>Payment Provider</h4><p>Razorpay Secure Checkout</p></div>
+              <div className="workspace-mini-card"><h4>Latest Invoice</h4><p>{latestInvoice?.invoiceNumber || "Not available"}</p></div>
+              <div className="workspace-mini-card"><h4>Payment ID</h4><p>{latestInvoice?.razorpayPaymentId || "Not available"}</p></div>
+              <div className="workspace-mini-card"><h4>Order ID</h4><p>{latestInvoice?.razorpayOrderId || "Not available"}</p></div>
+            </div>
+          </div>
+        ) : null}
+
+        <div id="billing-invoices-section" className="workspace-mini-card billing-invoice-shell">
+          <div className="billing-payment-card-head">
+            <div>
+              <h4>Invoices</h4>
+              <p>Scrollable invoice history with full payment details and PDF download.</p>
+            </div>
+            <span className="billing-status-pill">{billingInvoices.length} saved</span>
+          </div>
+
+          {billingLoading ? <p className="tool-copy">Loading invoices...</p> : null}
+          {!billingLoading && billingInvoices.length === 0 ? (
+            <div className="workspace-mini-card"><p>No invoices available yet.</p></div>
+          ) : null}
+
+          {!billingLoading && billingInvoices.length > 0 ? (
+            <div className="billing-invoice-scroll">
+              {billingInvoices.map((invoice) => (
+                <article key={invoice.invoiceNumber} className="billing-invoice-card">
+                  <div className="billing-invoice-hero">
+                    <div>
+                      <span className="billing-invoice-kicker">Invoice #{invoice.invoiceNumber}</span>
+                      <h4>{invoice.planName}</h4>
+                      <p>{invoice.companyName}</p>
+                    </div>
+                    <div className="billing-invoice-total">
+                      <strong>{new Intl.NumberFormat("en-IN", { style: "currency", currency: invoice.currency, maximumFractionDigits: 0 }).format(invoice.amount / 100)}</strong>
+                      <span>{invoice.billingCycle}</span>
+                    </div>
+                  </div>
+
+                  <div className="billing-invoice-grid">
+                    <div className="billing-invoice-detail"><span>Customer</span><strong>{invoice.customerName}</strong></div>
+                    <div className="billing-invoice-detail"><span>Member ID</span><strong>{invoice.customerCode || "Not available"}</strong></div>
+                    <div className="billing-invoice-detail"><span>Email</span><strong>{invoice.customerEmail}</strong></div>
+                    <div className="billing-invoice-detail"><span>Mobile</span><strong>{invoice.customerMobile}</strong></div>
+                    <div className="billing-invoice-detail"><span>Transaction ID</span><strong>{invoice.transactionCode}</strong></div>
+                    <div className="billing-invoice-detail"><span>Status</span><strong>{invoice.status}</strong></div>
+                    <div className="billing-invoice-detail"><span>Razorpay Payment ID</span><strong>{invoice.razorpayPaymentId}</strong></div>
+                    <div className="billing-invoice-detail"><span>Razorpay Order ID</span><strong>{invoice.razorpayOrderId}</strong></div>
+                    <div className="billing-invoice-detail"><span>Activated</span><strong>{new Date(invoice.activatedAt).toLocaleString("en-GB")}</strong></div>
+                    <div className="billing-invoice-detail"><span>Valid Till</span><strong>{new Date(invoice.expiresAt).toLocaleString("en-GB")}</strong></div>
+                    <div className="billing-invoice-detail"><span>Created</span><strong>{new Date(invoice.createdAt).toLocaleString("en-GB")}</strong></div>
+                    <div className="billing-invoice-detail"><span>Canceled At</span><strong>{invoice.canceledAt ? new Date(invoice.canceledAt).toLocaleString("en-GB") : "Not canceled"}</strong></div>
+                  </div>
+
+                  <div className="billing-invoice-actions">
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => handleDownloadInvoice(invoice.invoiceNumber)}
+                      disabled={billingActionLoading === `download-${invoice.invoiceNumber}`}
+                    >
+                      {billingActionLoading === `download-${invoice.invoiceNumber}` ? "Downloading..." : "Download PDF"}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   }

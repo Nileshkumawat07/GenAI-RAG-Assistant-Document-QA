@@ -20,6 +20,7 @@ class User(Base):
     security_question: Mapped[str] = mapped_column(String(255), nullable=False)
     security_answer: Mapped[str] = mapped_column(Text, nullable=False)
     referral_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    public_user_code: Mapped[str | None] = mapped_column(String(6), nullable=True, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     mobile_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -30,6 +31,7 @@ class User(Base):
     subscription_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     subscription_billing_cycle: Mapped[str | None] = mapped_column(String(50), nullable=True)
     subscription_activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     subscription_payment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     subscription_order_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -73,6 +73,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             securityQuestion=user.security_question,
             securityAnswer=user.security_answer,
             referralCode=user.referral_code,
+            publicUserCode=user.public_user_code,
             emailVerified=user.email_verified,
             mobileVerified=user.mobile_verified,
             subscriptionPlanId=user.subscription_plan_id,
@@ -82,6 +83,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             subscriptionCurrency=user.subscription_currency,
             subscriptionBillingCycle=user.subscription_billing_cycle,
             subscriptionActivatedAt=user.subscription_activated_at,
+            subscriptionExpiresAt=user.subscription_expires_at,
             createdAt=user.created_at,
             isAdmin=auth_service.is_admin_email(user.email),
             mode="admin" if auth_service.is_admin_email(user.email) else "member",
@@ -191,6 +193,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     ):
         if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
             raise HTTPException(status_code=403, detail="Admin access is required.")
+        auth_service.sync_all_user_subscriptions(db)
 
         inspector = inspect(engine)
         tables = []
@@ -233,7 +236,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     for row in raw_rows
                 ]
 
-                if table_name in {"contact_requests", "user_social_links"}:
+                if table_name in {"contact_requests", "user_social_links", "subscription_transactions"}:
                     append_virtual_columns(
                         columns,
                         [

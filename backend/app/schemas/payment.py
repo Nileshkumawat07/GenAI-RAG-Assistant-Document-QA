@@ -23,3 +23,24 @@ class VerifyRazorpayPaymentRequest(BaseModel):
     razorpayPaymentId: str
     razorpaySignature: str
 
+
+class InvoiceSummaryResponse(BaseModel):
+    invoiceNumber: str
+    transactionCode: str
+    customerCode: str | None = None
+    customerName: str | None = None
+    customerEmail: str | None = None
+    customerMobile: str | None = None
+    companyName: str | None = None
+    planId: str
+    planName: str
+    amount: int
+    currency: str
+    billingCycle: str
+    status: str
+    razorpayOrderId: str
+    razorpayPaymentId: str
+    activatedAt: str
+    expiresAt: str
+    canceledAt: str | None = None
+    createdAt: str
