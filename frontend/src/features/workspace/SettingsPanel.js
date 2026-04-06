@@ -1420,12 +1420,12 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
       {
         key: "facebook",
         label: "Facebook",
-        description: "Use the Facebook validation popup, then store the verified callback in MySQL.",
+        description: "Link your Facebook account to this signed-in account using the secure OAuth popup.",
       },
       {
         key: "linkedin",
         label: "LinkedIn",
-        description: "Use the LinkedIn validation popup, then store the verified callback in MySQL.",
+        description: "Link your LinkedIn account to this signed-in account using the secure OAuth popup.",
       },
     ];
     return (
