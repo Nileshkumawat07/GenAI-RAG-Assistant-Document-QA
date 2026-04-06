@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.api.routes.auth import build_auth_router
 from app.api.routes.contact_requests import build_contact_request_router
@@ -21,9 +22,37 @@ from app.services.otp_service import OTPService
 from app.services.rag_service import RAGService
 
 
+def ensure_linked_provider_schema() -> None:
+    inspector = inspect(engine)
+    if "linked_providers" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("linked_providers")}
+    statements: list[str] = []
+
+    if "callback_provider_id" not in existing_columns:
+        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_provider_id VARCHAR(100) NULL")
+    if "callback_email" not in existing_columns:
+        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_email VARCHAR(255) NULL")
+    if "callback_display_name" not in existing_columns:
+        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_display_name VARCHAR(255) NULL")
+    if "callback_user_id" not in existing_columns:
+        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_user_id VARCHAR(255) NULL")
+    if "callback_received_at" not in existing_columns:
+        statements.append("ALTER TABLE linked_providers ADD COLUMN callback_received_at DATETIME NULL")
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
     Base.metadata.create_all(bind=engine)
+    ensure_linked_provider_schema()
     rag_service = RAGService()
     otp_service = OTPService()
     auth_service = AuthService()

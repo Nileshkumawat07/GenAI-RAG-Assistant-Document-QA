@@ -3,6 +3,7 @@ openai
 pypdf
 python-dotenv
 python-multipart
+pymysql
 uvicorn
 
 # Use CPU-only PyTorch wheels for free-tier and non-GPU deployments.

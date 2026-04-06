@@ -34,6 +34,11 @@ def build_linked_provider_router(linked_provider_service: LinkedProviderService,
             providerEmail=item.provider_email,
             providerDisplayName=item.provider_display_name,
             providerIdentifier=item.provider_identifier,
+            callbackProviderId=item.callback_provider_id,
+            callbackEmail=item.callback_email,
+            callbackDisplayName=item.callback_display_name,
+            callbackUserId=item.callback_user_id,
+            callbackReceivedAt=item.callback_received_at,
             verified=item.verified,
             linkedAt=item.linked_at,
         )
@@ -57,6 +62,9 @@ def build_linked_provider_router(linked_provider_service: LinkedProviderService,
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            if payload.providerKey.strip().lower() != provider_key.strip().lower():
+                raise LinkedProviderServiceError("Provider details do not match the selected account.")
+
             item = linked_provider_service.link_provider(
                 db,
                 user_id=authenticated_user_id,
@@ -64,6 +72,10 @@ def build_linked_provider_router(linked_provider_service: LinkedProviderService,
                 provider_email=payload.providerEmail,
                 provider_display_name=payload.providerDisplayName,
                 provider_identifier=payload.providerIdentifier,
+                callback_provider_id=payload.callbackProviderId,
+                callback_email=payload.callbackEmail,
+                callback_display_name=payload.callbackDisplayName,
+                callback_user_id=payload.callbackUserId,
                 current_password=payload.currentPassword,
             )
             return serialize_item(item)

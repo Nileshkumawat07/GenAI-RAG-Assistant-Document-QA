@@ -141,10 +141,11 @@ function buildProvider(providerKey) {
     return provider;
   }
 
-  if (providerKey === "apple") {
-    const provider = new OAuthProvider("apple.com");
+  if (providerKey === "linkedin") {
+    const provider = new OAuthProvider("oidc.linkedin");
+    provider.addScope("openid");
+    provider.addScope("profile");
     provider.addScope("email");
-    provider.addScope("name");
     return provider;
   }
 
@@ -161,11 +162,23 @@ export async function signInWithFirebaseProvider(providerKey) {
       null;
 
     return {
-      providerId: provider.providerId,
+      providerId: providerData?.providerId || provider.providerId,
       email: providerData?.email || result.user.email || "",
       displayName: providerData?.displayName || result.user.displayName || "",
+      providerUserId: providerData?.uid || result.user.uid || "",
       linkedAt: new Date().toISOString(),
     };
+  } catch (error) {
+    if (error?.code === "auth/operation-not-allowed") {
+      throw new Error(`Enable ${providerKey} sign-in in Firebase Authentication before linking this account.`);
+    }
+    if (error?.code === "auth/unauthorized-domain") {
+      throw new Error("This domain is not allowed in Firebase Authentication for provider sign-in.");
+    }
+    if (error?.code === "auth/popup-closed-by-user") {
+      throw new Error("Provider sign-in was cancelled before validation completed.");
+    }
+    throw error;
   } finally {
     await signOut(auth).catch(() => {});
   }

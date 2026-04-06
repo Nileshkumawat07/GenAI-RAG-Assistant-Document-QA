@@ -6,6 +6,10 @@ class LinkedProviderCreateRequest(BaseModel):
     providerEmail: EmailStr
     providerDisplayName: str
     providerIdentifier: str
+    callbackProviderId: str
+    callbackEmail: EmailStr
+    callbackDisplayName: str
+    callbackUserId: str
     currentPassword: str
 
 
@@ -18,5 +22,10 @@ class LinkedProviderResponse(BaseModel):
     providerEmail: EmailStr
     providerDisplayName: str
     providerIdentifier: str
+    callbackProviderId: str | None = None
+    callbackEmail: EmailStr | None = None
+    callbackDisplayName: str | None = None
+    callbackUserId: str | None = None
+    callbackReceivedAt: str | None = None
     verified: bool
     linkedAt: str
