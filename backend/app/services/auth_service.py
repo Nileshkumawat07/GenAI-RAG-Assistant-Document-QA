@@ -12,6 +12,8 @@ from datetime import date, datetime, timezone
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.models.contact_request import ContactRequest
+from app.models.linked_provider import UserSocialLink
 from app.models.subscription_transaction import SubscriptionTransaction
 from app.models.user import User
 
@@ -241,6 +243,36 @@ class AuthService:
             raise AuthServiceError("Choose a new password that is different from the current one.")
 
         user.password_hash = self._hash_password(new_password)
+        db.commit()
+
+    def verify_account_password(self, db: Session, *, user_id: str, password: str) -> User:
+        user = self._get_user_model_by_id(db, user_id)
+        if not self._verify_password(password, user.password_hash):
+            raise AuthServiceError("Current password is incorrect.")
+        return user
+
+    def delete_user_account(self, db: Session, *, user_id: str, password: str, confirmation_text: str) -> None:
+        user = self.verify_account_password(db, user_id=user_id, password=password)
+        if (confirmation_text or "").strip().upper() != "DELETE":
+            raise AuthServiceError("Type DELETE to confirm account removal.")
+
+        social_links = db.execute(
+            select(UserSocialLink).where(UserSocialLink.user_id == user.id)
+        ).scalars().all()
+        contact_requests = db.execute(
+            select(ContactRequest).where(ContactRequest.user_id == user.id)
+        ).scalars().all()
+        subscription_transactions = db.execute(
+            select(SubscriptionTransaction).where(SubscriptionTransaction.user_id == user.id)
+        ).scalars().all()
+
+        for item in social_links:
+            db.delete(item)
+        for item in contact_requests:
+            db.delete(item)
+        for item in subscription_transactions:
+            db.delete(item)
+        db.delete(user)
         db.commit()
 
     def _get_user_model_by_id(self, db: Session, user_id: str) -> User:

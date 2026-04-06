@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   changePassword,
+  deleteAccount,
   downloadAccountDataPdf,
   updateEmail,
   updateMobile,
@@ -191,7 +192,7 @@ function createActivityEntry(text) {
   };
 }
 
-function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
+function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted }) {
   const [accountTab, setAccountTab] = useState("personalInfo");
   const [securityTab, setSecurityTab] = useState("password");
   const [preferencesTab, setPreferencesTab] = useState("theme");
@@ -273,6 +274,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   const [billingActionLoading, setBillingActionLoading] = useState("");
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [privacyActionLoading, setPrivacyActionLoading] = useState("");
+  const [privacyExportPassword, setPrivacyExportPassword] = useState("");
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
 
   const usernameRecaptchaId = useRef(`settings-username-mobile-${Math.random().toString(36).slice(2, 10)}`);
   const emailRecaptchaId = useRef(`settings-email-mobile-${Math.random().toString(36).slice(2, 10)}`);
@@ -615,13 +619,44 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
   };
 
   const downloadMyData = async () => {
+    if (!privacyExportPassword.trim()) {
+      setFeedback({ type: "error", text: "Enter your password before downloading your data." });
+      return;
+    }
+
     try {
       setPrivacyActionLoading("download");
-      await downloadAccountDataPdf();
+      await downloadAccountDataPdf(privacyExportPassword.trim());
       setFeedback({ type: "success", text: "Your account data PDF has been downloaded." });
       pushActivity("Downloaded account data PDF.");
     } catch (error) {
       setFeedback({ type: "error", text: error.message || "Failed to download account data PDF." });
+    } finally {
+      setPrivacyActionLoading("");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deleteAccountPassword.trim()) {
+      setFeedback({ type: "error", text: "Enter your password before deleting your account." });
+      return;
+    }
+
+    if ((deleteConfirmationText || "").trim().toUpperCase() !== "DELETE") {
+      setFeedback({ type: "error", text: "Type DELETE to confirm account deletion." });
+      return;
+    }
+
+    try {
+      setPrivacyActionLoading("delete");
+      await deleteAccount({
+        password: deleteAccountPassword.trim(),
+        confirmationText: deleteConfirmationText.trim(),
+      });
+      pushActivity("Account deleted permanently.");
+      onAccountDeleted?.();
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to delete account." });
     } finally {
       setPrivacyActionLoading("");
     }
@@ -1436,11 +1471,12 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
             {privacyActionLoading === "download" ? "Downloading..." : "Download My Data"}
           </button>
           <button
-            className="primary-button secondary-tone"
+            className="primary-button danger-tone"
             type="button"
-            onClick={() => setFeedback({ type: "info", text: "Delete account is not enabled in this build." })}
+            onClick={handleDeleteAccount}
+            disabled={privacyActionLoading === "delete"}
           >
-            Delete My Account
+            {privacyActionLoading === "delete" ? "Deleting..." : "Delete My Account"}
           </button>
           <button className="primary-button" type="button" onClick={savePrivacy}>
             Save Privacy Settings
@@ -1450,9 +1486,51 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
           <div className="billing-payment-card-head">
             <div>
               <h4>Portable Data Export</h4>
-              <p>Downloads directly as a polished PDF with account details, subscription data, payment history, linked providers, and support records.</p>
+              <p>Enter your current password to download a polished PDF with account details, subscription data, payment history, linked providers, and support records.</p>
             </div>
             <span className="billing-status-pill">Download only</span>
+          </div>
+          <div className="workspace-form-stack privacy-inline-stack">
+            <input
+              className="auth-input workspace-static-input"
+              type="password"
+              placeholder="Enter current password for PDF download"
+              value={privacyExportPassword}
+              onChange={(event) => setPrivacyExportPassword(event.target.value)}
+            />
+          </div>
+        </div>
+        <div className="workspace-mini-card privacy-delete-card">
+          <div className="billing-payment-card-head">
+            <div>
+              <h4>Delete Account Confirmation</h4>
+              <p>Review these details carefully before permanent deletion. This removes your profile, linked providers, support requests, invoices, and subscription history.</p>
+            </div>
+            <span className="billing-status-pill danger-pill">Permanent</span>
+          </div>
+          <div className="workspace-info-grid privacy-capability-grid">
+            <div className="workspace-mini-card"><h4>Full Name</h4><p>{profileName}</p></div>
+            <div className="workspace-mini-card"><h4>Member ID</h4><p>{currentUser?.publicUserCode || "Not available"}</p></div>
+            <div className="workspace-mini-card"><h4>Username</h4><p>{profileUsername}</p></div>
+            <div className="workspace-mini-card"><h4>Email</h4><p>{profileEmail}</p></div>
+            <div className="workspace-mini-card"><h4>Mobile</h4><p>{profileMobile}</p></div>
+            <div className="workspace-mini-card"><h4>Current Plan</h4><p>{subscriptionPlanName}</p></div>
+          </div>
+          <div className="workspace-form-stack privacy-inline-stack">
+            <input
+              className="auth-input workspace-static-input"
+              type="password"
+              placeholder="Enter current password to delete account"
+              value={deleteAccountPassword}
+              onChange={(event) => setDeleteAccountPassword(event.target.value)}
+            />
+            <input
+              className="auth-input workspace-static-input"
+              type="text"
+              placeholder='Type DELETE to confirm permanent removal'
+              value={deleteConfirmationText}
+              onChange={(event) => setDeleteConfirmationText(event.target.value)}
+            />
           </div>
         </div>
         <label className="terms-check">
@@ -1481,6 +1559,22 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate }) {
           />
           <span>Enable Cookie Tracking</span>
         </label>
+      </div>
+    );
+  }
+
+  if (activeTab === "platform") {
+    return (
+      <div className="workspace-form-stack">
+        <div className="workspace-mini-card privacy-export-card">
+          <div className="billing-payment-card-head">
+            <div>
+              <h4>Platform Readiness</h4>
+              <p>Everything added for deploy-ready billing operations, documentation flow, support visibility, analytics, and payment lifecycle handling.</p>
+            </div>
+            <span className="billing-status-pill">New category</span>
+          </div>
+        </div>
         <div className="workspace-info-grid privacy-capability-grid">
           <div className="workspace-mini-card">
             <h4>Production Hardening</h4>

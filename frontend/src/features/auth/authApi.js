@@ -1,4 +1,5 @@
-import { requestJson } from "../../shared/api/http";
+import { apiUrl, requestJson } from "../../shared/api/http";
+import { getAuthToken } from "./authStorage";
 
 export function normalizeAuthUser(user) {
   return {
@@ -136,11 +137,15 @@ export async function getAdminMysqlOverview() {
   );
 }
 
-export async function downloadAccountDataPdf() {
-  const authToken = window.sessionStorage.getItem("genai_assistant_auth_token");
-  const response = await fetch("/auth/settings/data-export/pdf", {
-    method: "GET",
-    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+export async function downloadAccountDataPdf(password) {
+  const authToken = getAuthToken();
+  const response = await fetch(apiUrl("/auth/settings/data-export/pdf"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: JSON.stringify({ password }),
   });
 
   if (!response.ok) {
@@ -165,4 +170,18 @@ export async function downloadAccountDataPdf() {
   link.click();
   link.remove();
   window.URL.revokeObjectURL(url);
+}
+
+export async function deleteAccount(payload) {
+  return requestJson(
+    "/auth/settings/delete-account",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to delete account."
+  );
 }

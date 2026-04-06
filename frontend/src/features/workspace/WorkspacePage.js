@@ -378,12 +378,13 @@ const INFO_PAGE_CONFIG = {
     description: "Select a category to update",
     message: "Manage the same settings content inside the current assistant workspace layout.",
     statusTitle: "Settings Categories",
-    statusItems: ["Account", "Security", "Preferences", "Privacy", "Activity", "Billing"],
+    statusItems: ["Account", "Security", "Preferences", "Privacy", "Platform", "Billing"],
     tabs: [
       { id: "account", label: "Account", heading: "Account" },
       { id: "security", label: "Security", heading: "Security" },
       { id: "preferences", label: "Preferences", heading: "Preferences" },
       { id: "privacy", label: "Privacy", heading: "Privacy" },
+      { id: "platform", label: "Platform", heading: "Platform" },
       { id: "activity", label: "Activity", heading: "Activity" },
       { id: "linked", label: "Linked", heading: "Linked" },
       { id: "notifications", label: "Notifications", heading: "Notifications" },
@@ -409,7 +410,7 @@ const INFO_PAGE_CONFIG = {
   },
 };
 
-function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
+function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onAccountDeleted }) {
   const [activeSection, setActiveSection] = useState("document-retrieval");
   const [sessionId] = useState(() => getSessionId());
   const [selectedFile, setSelectedFile] = useState(null);
@@ -1845,7 +1846,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
           </div>
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
-              <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} />
+              <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} onAccountDeleted={onAccountDeleted} />
             </article>
           </div>
         </>

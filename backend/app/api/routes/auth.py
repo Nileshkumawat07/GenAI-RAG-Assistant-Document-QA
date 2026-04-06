@@ -18,6 +18,8 @@ from app.schemas.auth import (
     AuthUserResponse,
     ChangePasswordRequest,
     CheckEmailVerificationRequest,
+    DeleteAccountRequest,
+    DownloadAccountDataRequest,
     LoginRequest,
     SendEmailVerificationRequest,
     SignupRequest,
@@ -318,11 +320,13 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 ),
             )
 
-    @router.get("/settings/data-export/pdf")
+    @router.post("/settings/data-export/pdf")
     def download_account_data_pdf(
+        payload: DownloadAccountDataRequest,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
+        auth_service.verify_account_password(db, user_id=authenticated_user_id, password=payload.password)
         user = auth_service._get_user_model_by_id(db, authenticated_user_id)
         exported_at = auth_service._serialize_user(user)
         linked_providers = db.execute(
@@ -512,5 +516,22 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    @router.post("/settings/delete-account")
+    def delete_account(
+        payload: DeleteAccountRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            auth_service.delete_user_account(
+                db,
+                user_id=authenticated_user_id,
+                password=payload.password,
+                confirmation_text=payload.confirmationText,
+            )
+            return {"message": "Account deleted successfully."}
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return router

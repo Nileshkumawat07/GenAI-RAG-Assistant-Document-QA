@@ -94,6 +94,12 @@ function App() {
     navigateTo("home", null);
   };
 
+  const handleAccountDeleted = () => {
+    clearCurrentUser();
+    setCurrentUserState(null);
+    navigateTo("home", null);
+  };
+
   const renderScreen = () => {
     if (screen === "login") {
       return (
@@ -130,6 +136,7 @@ function App() {
           currentUser={currentUser}
           selectedInfoPage={selectedInfoPage}
           onUserUpdate={handleUserUpdate}
+          onAccountDeleted={handleAccountDeleted}
         />
       );
     }

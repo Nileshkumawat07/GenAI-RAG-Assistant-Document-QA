@@ -54,6 +54,15 @@ class ChangePasswordRequest(BaseModel):
     newPassword: str
 
 
+class DownloadAccountDataRequest(BaseModel):
+    password: str
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+    confirmationText: str
+
+
 class AuthUserResponse(BaseModel):
     id: str
     fullName: str

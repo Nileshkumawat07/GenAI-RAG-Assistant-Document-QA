@@ -1,4 +1,4 @@
-import { requestJson } from "../../shared/api/http";
+import { apiUrl, requestJson } from "../../shared/api/http";
 import { getAuthToken } from "../auth/authStorage";
 import { normalizeAuthUser } from "../auth/authApi";
 
@@ -29,7 +29,7 @@ export async function cancelSubscription() {
 
 export async function downloadInvoicePdf(invoiceNumber) {
   const authToken = getAuthToken();
-  const response = await fetch(`/payments/invoices/${invoiceNumber}/pdf`, {
+  const response = await fetch(apiUrl(`/payments/invoices/${invoiceNumber}/pdf`), {
     method: "GET",
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
   });
