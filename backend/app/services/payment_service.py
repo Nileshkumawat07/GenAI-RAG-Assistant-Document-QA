@@ -78,18 +78,21 @@ class PaymentService:
     def create_razorpay_order(self, plan_id: str, user_id: str) -> dict:
         plan = self.get_plan(plan_id)
         client = self._require_client()
-        order = client.order.create(
-            {
-                "amount": plan["amount"],
-                "currency": plan["currency"],
-                "receipt": f"{user_id[:8]}-{plan_id[:20]}",
-                "notes": {
-                    "user_id": user_id,
-                    "plan_id": plan_id,
-                    "plan_name": plan["plan_name"],
-                },
-            }
-        )
+        try:
+            order = client.order.create(
+                {
+                    "amount": plan["amount"],
+                    "currency": plan["currency"],
+                    "receipt": f"{user_id[:8]}-{plan_id[:20]}",
+                    "notes": {
+                        "user_id": user_id,
+                        "plan_id": plan_id,
+                        "plan_name": plan["plan_name"],
+                    },
+                }
+            )
+        except Exception as exc:
+            raise PaymentServiceError(f"Razorpay order creation failed: {exc}") from exc
         return {
             "planId": plan["plan_id"],
             "planName": plan["plan_name"],
@@ -131,4 +134,3 @@ class PaymentService:
             "razorpayOrderId": razorpay_order_id,
             "razorpayPaymentId": razorpay_payment_id,
         }
-

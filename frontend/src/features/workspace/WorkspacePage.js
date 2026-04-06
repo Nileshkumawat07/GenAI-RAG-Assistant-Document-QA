@@ -1805,10 +1805,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     <h4>{activeInfoContent.heading}</h4>
                     <p>{activeInfoContent.description}</p>
                   </div>
-                  <div className="pricing-page-summary">
-                    <strong>₹399 to ₹2999</strong>
-                    <span>Instant Razorpay checkout</span>
-                  </div>
                 </div>
 
                 <div className="pricing-plan-grid">
