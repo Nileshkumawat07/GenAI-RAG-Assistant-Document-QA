@@ -40,12 +40,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY backend/requirements.txt ./
+COPY backend/requirements-otp.txt ./
 
 # Install python deps
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY backend/requirements-otp.txt ./
 RUN pip install --no-cache-dir -r requirements-otp.txt
 
 # Optional: pre-download embedding model

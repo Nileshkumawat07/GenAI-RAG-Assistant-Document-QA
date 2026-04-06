@@ -10,8 +10,11 @@ from dataclasses import dataclass
 from urllib.parse import urlencode
 
 import requests
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.core.config import APP_BASE_URL, FRONTEND_ORIGIN
+from app.core.config import FRONTEND_ORIGIN
+from app.models.social_oauth_config import SocialOAuthConfig
 
 
 class SocialOAuthServiceError(RuntimeError):
@@ -37,11 +40,9 @@ class SocialOAuthService:
             or "genai-workspace-social-oauth-secret"
         ).encode("utf-8")
         self._state_ttl_seconds = int(os.getenv("SOCIAL_OAUTH_STATE_TTL_SECONDS", "600"))
-        self._provider_configs = {
+        self._provider_defaults = {
             "facebook": {
                 "provider_id": "facebook.com",
-                "client_id": os.getenv("FACEBOOK_CLIENT_ID", "").strip(),
-                "client_secret": os.getenv("FACEBOOK_CLIENT_SECRET", "").strip(),
                 "authorize_url": "https://www.facebook.com/v19.0/dialog/oauth",
                 "token_url": "https://graph.facebook.com/v19.0/oauth/access_token",
                 "profile_url": "https://graph.facebook.com/me",
@@ -49,8 +50,6 @@ class SocialOAuthService:
             },
             "linkedin": {
                 "provider_id": "linkedin.com",
-                "client_id": os.getenv("LINKEDIN_CLIENT_ID", "").strip(),
-                "client_secret": os.getenv("LINKEDIN_CLIENT_SECRET", "").strip(),
                 "authorize_url": "https://www.linkedin.com/oauth/v2/authorization",
                 "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
                 "profile_url": "https://api.linkedin.com/v2/userinfo",
@@ -58,13 +57,19 @@ class SocialOAuthService:
             },
         }
 
-    def create_authorize_url(self, *, provider_key: str, user_id: str, frontend_origin: str) -> str:
+    def create_authorize_url(
+        self,
+        db: Session,
+        *,
+        provider_key: str,
+        user_id: str,
+        frontend_origin: str,
+        callback_url: str,
+    ) -> str:
         normalized_key = provider_key.strip().lower()
-        provider_config = self._provider_configs.get(normalized_key)
+        provider_config = self._get_provider_config(db, normalized_key)
         if not provider_config:
             raise SocialOAuthServiceError("Unsupported provider.")
-        if not provider_config["client_id"] or not provider_config["client_secret"]:
-            raise SocialOAuthServiceError(f"{normalized_key.title()} OAuth credentials are not configured on the server.")
 
         normalized_origin = (frontend_origin or FRONTEND_ORIGIN).strip().rstrip("/")
         if not normalized_origin.startswith("http://") and not normalized_origin.startswith("https://"):
@@ -80,27 +85,35 @@ class SocialOAuthService:
         )
         query = {
             "client_id": provider_config["client_id"],
-            "redirect_uri": self._callback_url(normalized_key),
+            "redirect_uri": callback_url,
             "response_type": "code",
             "state": state,
             "scope": provider_config["scope"],
         }
         return f"{provider_config['authorize_url']}?{urlencode(query)}"
 
-    def complete_callback(self, *, provider_key: str, code: str, state: str) -> SocialProviderProfile:
+    def complete_callback(
+        self,
+        db: Session,
+        *,
+        provider_key: str,
+        code: str,
+        state: str,
+        callback_url: str,
+    ) -> SocialProviderProfile:
         payload = self._verify_state(state)
         normalized_key = provider_key.strip().lower()
         if payload["p"] != normalized_key:
             raise SocialOAuthServiceError("OAuth callback provider does not match the request.")
 
-        provider_config = self._provider_configs.get(normalized_key)
+        provider_config = self._get_provider_config(db, normalized_key)
         if not provider_config:
             raise SocialOAuthServiceError("Unsupported provider.")
 
         access_token = self._exchange_code(
             provider_key=normalized_key,
             code=code,
-            redirect_uri=self._callback_url(normalized_key),
+            redirect_uri=callback_url,
             token_url=provider_config["token_url"],
             client_id=provider_config["client_id"],
             client_secret=provider_config["client_secret"],
@@ -112,6 +125,23 @@ class SocialOAuthService:
             frontend_origin=payload["o"],
             profile_url=provider_config["profile_url"],
         )
+
+    def ensure_provider_rows(self, db: Session) -> None:
+        for provider_key in self._provider_defaults:
+            existing = db.execute(
+                select(SocialOAuthConfig).where(SocialOAuthConfig.provider_key == provider_key)
+            ).scalar_one_or_none()
+            if existing:
+                continue
+            db.add(
+                SocialOAuthConfig(
+                    provider_key=provider_key,
+                    client_id="",
+                    client_secret="",
+                    is_enabled=False,
+                )
+            )
+        db.commit()
 
     def build_popup_response_html(self, *, provider_key: str, payload: dict, success: bool) -> str:
         message = {
@@ -237,8 +267,24 @@ class SocialOAuthService:
             frontend_origin=frontend_origin,
         )
 
-    def _callback_url(self, provider_key: str) -> str:
-        return f"{APP_BASE_URL}/linked-providers/oauth/{provider_key}/callback"
+    def _get_provider_config(self, db: Session, provider_key: str) -> dict:
+        provider_defaults = self._provider_defaults.get(provider_key)
+        if not provider_defaults:
+            return {}
+
+        config = db.execute(
+            select(SocialOAuthConfig).where(SocialOAuthConfig.provider_key == provider_key)
+        ).scalar_one_or_none()
+        if not config or not config.is_enabled:
+            raise SocialOAuthServiceError(f"{provider_key.title()} linking is not configured in MySQL yet.")
+        if not config.client_id.strip() or not config.client_secret.strip():
+            raise SocialOAuthServiceError(f"{provider_key.title()} OAuth credentials are missing in MySQL.")
+
+        return {
+            **provider_defaults,
+            "client_id": config.client_id.strip(),
+            "client_secret": config.client_secret.strip(),
+        }
 
     def _sign_state(self, payload: dict) -> str:
         payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")

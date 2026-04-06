@@ -1,9 +1,8 @@
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
-from app.core.config import APP_BASE_URL
 from app.core.database import get_db
 from app.schemas.linked_provider import (
     LinkedProviderAuthorizeRequest,
@@ -66,17 +65,22 @@ def build_linked_provider_router(
     def get_provider_authorize_url(
         provider_key: str,
         payload: LinkedProviderAuthorizeRequest,
+        request: Request,
+        db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            callback_url = str(request.url_for("provider_oauth_callback", provider_key=provider_key))
             authorize_url = social_oauth_service.create_authorize_url(
+                db,
                 provider_key=provider_key,
                 user_id=authenticated_user_id,
                 frontend_origin=payload.frontendOrigin,
+                callback_url=callback_url,
             )
             return {
                 "authorizeUrl": authorize_url,
-                "callbackOrigin": APP_BASE_URL,
+                "callbackOrigin": str(request.base_url).rstrip("/"),
             }
         except SocialOAuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -84,10 +88,12 @@ def build_linked_provider_router(
     @router.get("/oauth/{provider_key}/callback", response_class=HTMLResponse)
     def provider_oauth_callback(
         provider_key: str,
+        request: Request,
         code: str | None = Query(default=None),
         state: str | None = Query(default=None),
         error: str | None = Query(default=None),
         error_description: str | None = Query(default=None),
+        db: Session = Depends(get_db),
     ):
         if error:
             message = error_description or error or "Provider sign-in was cancelled."
@@ -116,9 +122,11 @@ def build_linked_provider_router(
 
         try:
             profile = social_oauth_service.complete_callback(
+                db,
                 provider_key=provider_key,
                 code=code,
                 state=state,
+                callback_url=str(request.url),
             )
             return HTMLResponse(
                 social_oauth_service.build_popup_response_html(

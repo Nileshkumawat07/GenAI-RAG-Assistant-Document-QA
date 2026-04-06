@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
+from sqlalchemy.orm import Session
 
 from app.api.routes.auth import build_auth_router
 from app.api.routes.contact_requests import build_contact_request_router
@@ -50,6 +51,11 @@ def ensure_linked_provider_schema() -> None:
             connection.execute(text(statement))
 
 
+def ensure_social_oauth_config_seed(social_oauth_service: SocialOAuthService) -> None:
+    with Session(engine) as db:
+        social_oauth_service.ensure_provider_rows(db)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
     Base.metadata.create_all(bind=engine)
@@ -60,6 +66,7 @@ def create_app() -> FastAPI:
     contact_request_service = ContactRequestService()
     linked_provider_service = LinkedProviderService(auth_service)
     social_oauth_service = SocialOAuthService()
+    ensure_social_oauth_config_seed(social_oauth_service)
     base_dir = Path(__file__).resolve().parent
     frontend_build_dir = base_dir.parent / "frontend" / "build"
 
