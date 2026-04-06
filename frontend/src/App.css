@@ -2709,34 +2709,59 @@ body.workspace-body-mode .pricing-plan-grid {
 
 body.workspace-body-mode .pricing-plan-card {
   display: grid;
-  gap: 14px;
-  padding: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.95));
+  gap: 16px;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(31, 68, 129, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(79, 131, 214, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(241, 247, 255, 0.97));
+  box-shadow: 0 18px 38px rgba(13, 36, 76, 0.08);
+  overflow: hidden;
 }
 
 body.workspace-body-mode .pricing-plan-card.popular {
-  border-color: rgba(45, 107, 192, 0.24);
-  box-shadow: 0 14px 30px rgba(45, 107, 192, 0.12);
+  border-color: rgba(45, 107, 192, 0.32);
+  box-shadow: 0 18px 36px rgba(45, 107, 192, 0.18);
 }
 
 body.workspace-body-mode .pricing-plan-card.premium {
-  border-color: rgba(179, 133, 38, 0.25);
-  box-shadow: 0 14px 30px rgba(179, 133, 38, 0.12);
+  border-color: rgba(179, 133, 38, 0.28);
+  box-shadow: 0 18px 36px rgba(179, 133, 38, 0.16);
 }
 
 body.workspace-body-mode .pricing-plan-card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 18px;
+}
+
+body.workspace-body-mode .pricing-plan-card-copy {
+  flex: 1 1 auto;
+}
+
+body.workspace-body-mode .pricing-plan-card-copy h4 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  line-height: 1.05;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .pricing-plan-card-copy p {
+  margin: 0;
+  max-width: 340px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
 }
 
 body.workspace-body-mode .pricing-plan-badge {
   display: inline-flex;
-  margin-bottom: 10px;
-  padding: 5px 10px;
+  margin-bottom: 14px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(18, 61, 122, 0.08);
+  background: rgba(18, 61, 122, 0.09);
   color: var(--primary);
   font-size: 11px;
   font-weight: 800;
@@ -2744,35 +2769,104 @@ body.workspace-body-mode .pricing-plan-badge {
   text-transform: uppercase;
 }
 
-body.workspace-body-mode .pricing-plan-price {
-  text-align: right;
+body.workspace-body-mode .pricing-plan-visual {
+  min-width: 240px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(11, 46, 99, 0.97), rgba(48, 107, 192, 0.95));
+  color: #ffffff;
   display: grid;
-  gap: 3px;
+  gap: 18px;
+  box-shadow: 0 18px 30px rgba(18, 61, 122, 0.22);
+  position: relative;
 }
 
-body.workspace-body-mode .pricing-plan-price strong {
-  font-size: 30px;
-  line-height: 1;
-  color: var(--primary-deep);
+body.workspace-body-mode .pricing-plan-card.premium .pricing-plan-visual {
+  background:
+    linear-gradient(145deg, rgba(103, 73, 16, 0.98), rgba(193, 145, 41, 0.94));
 }
 
-body.workspace-body-mode .pricing-plan-price span {
+body.workspace-body-mode .pricing-plan-visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.22), transparent 28%);
+  pointer-events: none;
+}
+
+body.workspace-body-mode .pricing-plan-visual-top,
+body.workspace-body-mode .pricing-plan-visual-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+body.workspace-body-mode .pricing-plan-visual-top span,
+body.workspace-body-mode .pricing-plan-visual-bottom span,
+body.workspace-body-mode .pricing-plan-visual-bottom strong {
   font-size: 12px;
-  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+body.workspace-body-mode .pricing-plan-visual-top span {
+  opacity: 0.88;
+  text-transform: uppercase;
+}
+
+body.workspace-body-mode .pricing-plan-visual-price {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  position: relative;
+  z-index: 1;
+}
+
+body.workspace-body-mode .pricing-plan-visual-bottom strong {
+  font-size: 14px;
+}
+
+body.workspace-body-mode .pricing-plan-visual-bottom span {
+  opacity: 0.9;
 }
 
 body.workspace-body-mode .pricing-plan-feature-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 body.workspace-body-mode .pricing-plan-feature-item {
-  padding: 10px 12px;
-  border-radius: 4px;
-  border: 1px solid rgba(42, 75, 140, 0.12);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 75, 140, 0.1);
   background: rgba(255, 255, 255, 0.88);
   font-size: 13px;
   color: var(--text);
+  position: relative;
+  padding-left: 40px;
+}
+
+body.workspace-body-mode .pricing-plan-feature-item::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  background: linear-gradient(135deg, #1f62c6, #5e9cff);
+  box-shadow: 0 0 0 4px rgba(31, 98, 198, 0.12);
+}
+
+body.workspace-body-mode .pricing-plan-footer {
+  display: grid;
+  gap: 10px;
 }
 
 body.workspace-body-mode .pricing-plan-note {
@@ -2782,8 +2876,29 @@ body.workspace-body-mode .pricing-plan-note {
   color: var(--muted);
 }
 
+body.workspace-body-mode .pricing-plan-trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.workspace-body-mode .pricing-plan-trust-row span {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(18, 61, 122, 0.06);
+  border: 1px solid rgba(18, 61, 122, 0.08);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 body.workspace-body-mode .pricing-plan-button {
   width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 14px 24px rgba(18, 61, 122, 0.18);
 }
 
 body.workspace-body-mode .workspace-captcha-row,

@@ -13,6 +13,9 @@
     facebook_oauth_enabled_value: "{{ facebook_oauth_enabled | default(lookup('env', 'FACEBOOK_OAUTH_ENABLED'), true) }}"
     facebook_oauth_client_id_value: "{{ facebook_oauth_client_id | default(lookup('env', 'FACEBOOK_OAUTH_CLIENT_ID'), true) }}"
     facebook_oauth_client_secret_value: "{{ facebook_oauth_client_secret | default(lookup('env', 'FACEBOOK_OAUTH_CLIENT_SECRET'), true) }}"
+    razorpay_key_id_value: "{{ razorpay_key_id | default(lookup('env', 'RAZORPAY_KEY_ID'), true) }}"
+    razorpay_key_secret_value: "{{ razorpay_key_secret | default(lookup('env', 'RAZORPAY_KEY_SECRET'), true) }}"
+    razorpay_company_name_value: "{{ razorpay_company_name | default(lookup('env', 'RAZORPAY_COMPANY_NAME'), true) }}"
 
   pre_tasks:
     - name: Ensure required runtime secrets are provided
@@ -29,6 +32,9 @@
           - facebook_oauth_enabled_value | length > 0
           - facebook_oauth_client_id_value | length > 0
           - facebook_oauth_client_secret_value | length > 0
+          - razorpay_key_id_value | length > 0
+          - razorpay_key_secret_value | length > 0
+          - razorpay_company_name_value | length > 0
         fail_msg: "Missing one or more required runtime env vars for Groq or MySQL."
 
   tasks:
@@ -119,6 +125,9 @@
         -e FACEBOOK_OAUTH_ENABLED={{ facebook_oauth_enabled_value | quote }}
         -e FACEBOOK_OAUTH_CLIENT_ID={{ facebook_oauth_client_id_value | quote }}
         -e FACEBOOK_OAUTH_CLIENT_SECRET={{ facebook_oauth_client_secret_value | quote }}
+        -e RAZORPAY_KEY_ID={{ razorpay_key_id_value | quote }}
+        -e RAZORPAY_KEY_SECRET={{ razorpay_key_secret_value | quote }}
+        -e RAZORPAY_COMPANY_NAME={{ razorpay_company_name_value | quote }}
         --restart unless-stopped
         nilesh9890/genai-rag:latest
       no_log: true

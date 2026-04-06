@@ -1819,16 +1819,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                     return (
                       <div key={plan.id} className={`workspace-mini-card pricing-plan-card ${plan.accent}`}>
                         <div className="pricing-plan-card-top">
-                          <div>
+                          <div className="pricing-plan-card-copy">
                             <span className="pricing-plan-badge">
                               {plan.accent === "popular" ? "Most Popular" : plan.accent === "premium" ? "Premium" : "Active Plan"}
                             </span>
                             <h4>{plan.title}</h4>
                             <p>{plan.tagline}</p>
                           </div>
-                          <div className="pricing-plan-price">
-                            <strong>{plan.priceLabel}</strong>
-                            <span>{plan.cadence}</span>
+                          <div className="pricing-plan-visual">
+                            <div className="pricing-plan-visual-top">
+                              <span>Secure Plan</span>
+                              <span>Razorpay</span>
+                            </div>
+                            <div className="pricing-plan-visual-price">{plan.priceLabel}</div>
+                            <div className="pricing-plan-visual-bottom">
+                              <strong>{plan.title}</strong>
+                              <span>{plan.cadence}</span>
+                            </div>
                           </div>
                         </div>
 
@@ -1840,9 +1847,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate }) {
                           ))}
                         </div>
 
-                        <p className="pricing-plan-note">{plan.note}</p>
+                        <div className="pricing-plan-footer">
+                          <p className="pricing-plan-note">{plan.note}</p>
+                          <div className="pricing-plan-trust-row">
+                            <span>Instant activation</span>
+                            <span>Encrypted checkout</span>
+                          </div>
+                        </div>
                         {planState?.text ? (
-                        <p className={planState.type === "success" ? "success-text" : "error-text"}>
+                          <p className={planState.type === "success" ? "success-text" : "error-text"}>
                             {planState.type === "success" ? `Verified: ${planState.text}` : planState.text}
                           </p>
                         ) : null}
