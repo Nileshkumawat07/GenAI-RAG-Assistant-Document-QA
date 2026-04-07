@@ -684,6 +684,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       })),
     ];
   };
+  const getAdminSupportCategoryFilters = () => {
+    const orderedCategories = ["general", "business", "feedback", "technical", "partnership", "media"];
+
+    return orderedCategories.map((category) => ({
+      id: category,
+      title: prettifyKey(category),
+    }));
+  };
   const getAdminTableByName = (tableName) =>
     adminTables.find((table) => table.tableName === tableName);
   const getAdminUserDetails = (userId) => {
@@ -794,7 +802,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }));
     setActiveAdminRequestSection(requestRow.status || "In Progress");
     setFocusedContactRequestId(requestRow.id);
-    setAdminRequestSearch(requestRow.requestCode || requestRow.id || "");
   };
 
   const clearFocusedContactRequest = (requestId) => {
@@ -815,13 +822,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     setSelectedAdminUserId("");
   };
 
-  const handleAdminExport = async (section, format = "csv") => {
+  const handleAdminExport = async (section, format = "csv", searchOverride = null) => {
     try {
       setAdminExportLoading(`${section}-${format}`);
       await downloadAdministrationExport(
         section,
         format,
-        section === "requests" ? adminRequestSearch : ""
+        section === "requests"
+          ? (searchOverride != null ? searchOverride : adminRequestSearch)
+          : ""
       );
     } catch (error) {
       setAdminError(error.message || "Failed to export administration data.");
@@ -1421,11 +1430,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         const selectedRequestSection =
           requestSections.find((section) => section.id === activeAdminRequestSection) ||
           requestSections[0];
-        const selectedRequest =
-          adminRequests.find((item) => item.id === focusedContactRequestId) ||
-          adminRequests.find((item) => item.requestCode === adminRequestSearch) ||
-          null;
-        const selectedRequestLabel = selectedRequest?.requestCode || selectedRequest?.id || adminRequestSearch || "No request selected";
 
         return (
           <>
@@ -1438,20 +1442,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
                 <div className="admin-toolbar">
-                  <div className="admin-selection-bar">
-                    <span>Selected Request ID</span>
-                    <strong>{selectedRequestLabel}</strong>
-                  </div>
-                  <div className="admin-selection-action">
-                    <button
-                      className="admin-table-action-button"
-                      type="button"
-                      onClick={() => handleAdminExport("requests")}
-                      disabled={adminExportLoading === "requests-csv" || !selectedRequest}
-                    >
-                      {adminExportLoading === "requests-csv" ? "Exporting..." : "Export Requests"}
-                    </button>
-                  </div>
                   <div className="admin-toolbar-actions">
                     <input
                       className="auth-input workspace-static-input admin-search-input admin-square-input"
@@ -1517,11 +1507,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                 onClick={() => {
                                   if (focusedContactRequestId === requestItem.id) {
                                     setFocusedContactRequestId("");
-                                    setAdminRequestSearch("");
                                     return;
                                   }
                                   setFocusedContactRequestId(requestItem.id);
-                                  setAdminRequestSearch(requestItem.requestCode || requestItem.id || "");
                                 }}
                               >
                                 <div className="admin-request-card-header">
@@ -1599,6 +1587,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                       type="button"
                                       onClick={(event) => {
                                         event.stopPropagation();
+                                        handleAdminExport("requests", "csv", requestItem.requestCode || requestItem.id || "");
+                                      }}
+                                      disabled={adminExportLoading === "requests-csv"}
+                                    >
+                                      {adminExportLoading === "requests-csv" ? "Exporting..." : "Export Request"}
+                                    </button>
+                                    <button
+                                      className="primary-button"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
                                         handleAdminDelete(requestItem.id);
                                       }}
                                       disabled={adminActionRequestId === requestItem.id}
@@ -1625,7 +1624,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         const requestTable = getAdminTableByName("contact_requests");
         const requestRows = requestTable?.rows || [];
         const requestFilters = getAdminDatabaseRequestFilters();
-        const categoryFilters = getAdminDatabaseRequestCategoryFilters();
+        const categoryFilters = getAdminSupportCategoryFilters();
         const visibleColumns = requestTable ? getVisibleColumnsForTable(requestTable, null) : [];
         const tableColumns = requestTable ? [...visibleColumns, "__open_request__"] : [];
         const filteredRows = requestRows.filter(
@@ -1702,11 +1701,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           (row.status || "In Progress") === activeAdminDatabaseRequestFilter
                       );
                       const count =
-                        filter.id === "All"
-                          ? rowsForStatus.length
-                          : rowsForStatus.filter(
-                              (row) => (row.category || "").toLowerCase() === filter.id
-                            ).length;
+                        rowsForStatus.filter(
+                          (row) => (row.category || "").toLowerCase() === filter.id
+                        ).length;
 
                       return (
                         <button
