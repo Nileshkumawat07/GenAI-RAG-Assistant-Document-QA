@@ -1585,28 +1585,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                     disabled={adminActionRequestId === requestItem.id}
                                   />
                                   <div className="admin-request-action-row">
-                                    <button
-                                      className="primary-button"
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleAdminExport("requests", "csv", requestItem.requestCode || requestItem.id || "");
-                                      }}
-                                      disabled={adminExportLoading === "requests-csv"}
-                                    >
-                                      {adminExportLoading === "requests-csv" ? "Exporting..." : "Export Request"}
-                                    </button>
-                                    <button
-                                      className="primary-button"
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleAdminDelete(requestItem.id);
-                                      }}
-                                      disabled={adminActionRequestId === requestItem.id}
-                                    >
-                                      {adminActionRequestId === requestItem.id ? "Working..." : "Delete Request"}
-                                    </button>
                                     <select
                                       className="auth-input workspace-static-input admin-request-status-select"
                                       value={requestItem.status || statusChoices[0]}
@@ -1620,6 +1598,28 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                         </option>
                                       ))}
                                     </select>
+                                    <button
+                                      className="primary-button"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleAdminDelete(requestItem.id);
+                                      }}
+                                      disabled={adminActionRequestId === requestItem.id}
+                                    >
+                                      {adminActionRequestId === requestItem.id ? "Working..." : "Delete Request"}
+                                    </button>
+                                    <button
+                                      className="primary-button"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleAdminExport("requests", "csv", requestItem.requestCode || requestItem.id || "");
+                                      }}
+                                      disabled={adminExportLoading === "requests-csv"}
+                                    >
+                                      {adminExportLoading === "requests-csv" ? "Exporting..." : "Export Request"}
+                                    </button>
                                   </div>
                                 </div>
                               </article>

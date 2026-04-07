@@ -3660,13 +3660,14 @@ body.workspace-body-mode .admin-loading-state {
 
 body.workspace-body-mode .admin-request-action-row {
   display: grid;
-  grid-template-columns: auto auto minmax(150px, 180px);
+  grid-template-columns: minmax(220px, 1fr) auto auto;
   gap: 12px;
   align-items: center;
 }
 
 body.workspace-body-mode .admin-request-status-select {
-  min-width: 0;
+  width: 100%;
+  min-width: 220px;
 }
 
 body.workspace-body-mode .admin-request-section-stack {
