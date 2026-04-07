@@ -275,6 +275,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [showInvoicesPanel, setShowInvoicesPanel] = useState(false);
   const [showCancelSubscriptionPanel, setShowCancelSubscriptionPanel] = useState(false);
+  const [cancelSubscriptionPassword, setCancelSubscriptionPassword] = useState("");
   const [cancelSubscriptionText, setCancelSubscriptionText] = useState("");
   const [cancelSubscriptionReadConfirmed, setCancelSubscriptionReadConfirmed] = useState(false);
   const [privacyActionLoading, setPrivacyActionLoading] = useState("");
@@ -480,6 +481,21 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     };
   }, [activeTab, currentUser?.id]);
 
+  useEffect(() => {
+    setShowPaymentDetails(false);
+    setShowInvoicesPanel(false);
+    setShowCancelSubscriptionPanel(false);
+    setCancelSubscriptionPassword("");
+    setCancelSubscriptionText("");
+    setCancelSubscriptionReadConfirmed(false);
+    setShowExportPanel(false);
+    setShowDeletePanel(false);
+    setPrivacyExportPassword("");
+    setDeleteAccountPassword("");
+    setDeleteConfirmationText("");
+    setDeleteReadConfirmed(false);
+  }, [activeTab]);
+
   const updateStoredSettings = (updater) => {
     setStoredSettings((current) => updater(current));
   };
@@ -615,6 +631,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       return;
     }
 
+    if (!cancelSubscriptionPassword.trim()) {
+      setFeedback({ type: "error", text: "Enter your current password before canceling the subscription." });
+      return;
+    }
+
+    if (cancelSubscriptionPassword.trim().length < 8) {
+      setFeedback({ type: "error", text: "Enter your full current password to continue with cancellation." });
+      return;
+    }
+
     if (cancelSubscriptionText.trim().toUpperCase() !== "CANCEL SUBSCRIPTION") {
       setFeedback({ type: "error", text: 'Type "CANCEL SUBSCRIPTION" exactly to confirm cancellation.' });
       return;
@@ -622,13 +648,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
 
     try {
       setBillingActionLoading("cancel");
-      const response = await cancelSubscription();
+      const response = await cancelSubscription(cancelSubscriptionPassword.trim());
       if (response.user) {
         onUserUpdate(response.user);
       }
       setFeedback({ type: "success", text: response.message || "Subscription canceled successfully." });
       pushActivity("Subscription canceled successfully.");
       setShowCancelSubscriptionPanel(false);
+      setCancelSubscriptionPassword("");
       setCancelSubscriptionText("");
       setCancelSubscriptionReadConfirmed(false);
       const invoices = await listInvoices();
@@ -1999,7 +2026,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
 
         <div className="billing-action-row">
           <button
-            className={`primary-button ${showPaymentDetails ? "" : "secondary-tone"}`}
+            className="primary-button"
             type="button"
             onClick={() => {
               setShowPaymentDetails((current) => !current);
@@ -2010,7 +2037,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             {showPaymentDetails ? "Hide Payment Details" : "Manage Payment Method"}
           </button>
           <button
-            className={`primary-button ${showInvoicesPanel ? "" : "secondary-tone"}`}
+            className="primary-button"
             type="button"
             onClick={() => {
               setShowInvoicesPanel((current) => !current);
@@ -2021,7 +2048,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             {showInvoicesPanel ? "Hide Invoices" : "View Invoices"}
           </button>
           <button
-            className={`primary-button danger-tone ${showCancelSubscriptionPanel ? "" : "secondary-tone"}`}
+            className="primary-button danger-tone"
             type="button"
             onClick={() => {
               if (subscriptionStatus !== "premium") {
@@ -2083,6 +2110,13 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
               </label>
             </div>
             <div className="workspace-form-stack privacy-inline-stack">
+              <input
+                className="auth-input workspace-static-input"
+                type="password"
+                placeholder="Enter current password to cancel subscription"
+                value={cancelSubscriptionPassword}
+                onChange={(event) => setCancelSubscriptionPassword(event.target.value)}
+              />
               <input
                 className="auth-input workspace-static-input"
                 type="text"

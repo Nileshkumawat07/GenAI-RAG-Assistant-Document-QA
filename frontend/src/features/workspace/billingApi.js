@@ -12,11 +12,12 @@ export async function listInvoices() {
   );
 }
 
-export async function cancelSubscription() {
+export async function cancelSubscription(currentPassword) {
   const data = await requestJson(
     "/payments/subscription/cancel",
     {
       method: "POST",
+      body: JSON.stringify({ currentPassword }),
     },
     "Failed to cancel subscription."
   );

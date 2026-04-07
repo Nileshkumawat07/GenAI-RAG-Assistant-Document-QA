@@ -24,6 +24,10 @@ class VerifyRazorpayPaymentRequest(BaseModel):
     razorpaySignature: str
 
 
+class CancelSubscriptionRequest(BaseModel):
+    currentPassword: str
+
+
 class InvoiceSummaryResponse(BaseModel):
     invoiceNumber: str
     transactionCode: str

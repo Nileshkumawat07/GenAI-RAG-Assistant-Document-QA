@@ -11,6 +11,7 @@ from reportlab.pdfgen import canvas
 
 from app.core.database import get_db
 from app.schemas.payment import (
+    CancelSubscriptionRequest,
     CreateRazorpayOrderRequest,
     InvoiceSummaryResponse,
     RazorpayOrderResponse,
@@ -144,15 +145,23 @@ def build_payment_router(payment_service: PaymentService, auth_service: AuthServ
 
     @router.post("/subscription/cancel")
     def cancel_subscription(
+        payload: CancelSubscriptionRequest,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            auth_service.verify_account_password(
+                db,
+                user_id=authenticated_user_id,
+                password=payload.currentPassword,
+            )
             user = payment_service.cancel_user_subscription(db, user_id=authenticated_user_id)
             return {
                 "message": "Subscription canceled successfully.",
                 "user": serialize_user(user),
             }
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except PaymentServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
