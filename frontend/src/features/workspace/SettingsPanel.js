@@ -198,7 +198,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [preferencesTab, setPreferencesTab] = useState("theme");
   const [feedback, setFeedback] = useState({
     type: "info",
-    text: "Update your settings safely from this panel.",
+    text: "",
   });
   const [storedSettings, setStoredSettings] = useState(createDefaultStoredSettings);
 
@@ -480,6 +480,18 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       ignore = true;
     };
   }, [activeTab, currentUser?.id]);
+
+  useEffect(() => {
+    if (!feedback.text) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setFeedback((current) => (current.text ? { ...current, text: "" } : current));
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [feedback.text]);
 
   useEffect(() => {
     setShowPaymentDetails(false);
@@ -910,6 +922,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             <input
               className="auth-input workspace-static-input"
               placeholder="New email"
+              name="settings-new-email"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
               value={emailForm.newEmail}
               onChange={(event) => {
                 setEmailVerified(false);
@@ -921,6 +938,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
               className="auth-input workspace-static-input"
               type="password"
               placeholder="Current password"
+              name="settings-email-current-password"
+              autoComplete="new-password"
               value={emailForm.currentPassword}
               onChange={(event) => setEmailForm((current) => ({ ...current, currentPassword: event.target.value }))}
             />
@@ -1590,9 +1609,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (activeTab === "account") {
     return (
       <div className="workspace-form-stack">
-        <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-          <p>{feedback.text}</p>
-        </div>
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
         {renderAccount()}
       </div>
     );
@@ -1601,9 +1622,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (activeTab === "security") {
     return (
       <div className="workspace-form-stack">
-        <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-          <p>{feedback.text}</p>
-        </div>
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
         {renderSecurity()}
       </div>
     );
@@ -1612,9 +1635,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (activeTab === "preferences") {
     return (
       <div className="workspace-form-stack">
-        <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-          <p>{feedback.text}</p>
-        </div>
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
         {renderPreferences()}
       </div>
     );
@@ -1623,9 +1648,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (activeTab === "privacy") {
     return (
       <div className="workspace-form-stack">
-        <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-          <p>{feedback.text}</p>
-        </div>
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
         <p className="tool-copy workspace-copy-paragraph">Manage your data preferences below:</p>
         <div className="billing-action-row privacy-action-row">
           <button
@@ -1666,6 +1693,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 className="auth-input workspace-static-input"
                 type="password"
                 placeholder="Enter current password for PDF download"
+                name="settings-export-password"
+                autoComplete="new-password"
                 value={privacyExportPassword}
                 onChange={(event) => setPrivacyExportPassword(event.target.value)}
               />
@@ -1714,6 +1743,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 className="auth-input workspace-static-input"
                 type="password"
                 placeholder="Enter current password to delete account"
+                name="settings-delete-password"
+                autoComplete="new-password"
                 value={deleteAccountPassword}
                 onChange={(event) => setDeleteAccountPassword(event.target.value)}
               />
@@ -2021,9 +2052,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (activeTab === "billing") {
     return (
       <div className="workspace-form-stack">
-        <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-          <p>{feedback.text}</p>
-        </div>
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
         <div className="workspace-mini-card"><h4>Subscription & Billing</h4><p>Plan: {subscriptionPlanName} | {subscriptionPriceLabel}</p></div>
         <div className="workspace-mini-card"><h4>Membership Status</h4><p>Status: {subscriptionStatus === "premium" ? "Premium Active" : subscriptionStatus === "expired" ? "Expired" : subscriptionStatus === "canceled" ? "Canceled" : "Free Access"}{subscriptionActivatedAt ? ` | Activated: ${new Date(subscriptionActivatedAt).toLocaleDateString("en-GB")}` : ""}{subscriptionExpiresAt ? ` | Valid Till: ${new Date(subscriptionExpiresAt).toLocaleDateString("en-GB")}` : ""}</p></div>
 
@@ -2117,6 +2150,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 className="auth-input workspace-static-input"
                 type="password"
                 placeholder="Enter current password to cancel subscription"
+                name="settings-cancel-password"
+                autoComplete="new-password"
                 value={cancelSubscriptionPassword}
                 onChange={(event) => setCancelSubscriptionPassword(event.target.value)}
               />
