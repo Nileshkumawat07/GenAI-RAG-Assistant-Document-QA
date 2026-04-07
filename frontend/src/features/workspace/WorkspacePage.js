@@ -654,7 +654,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     return statuses.map((status) => ({
       id: status,
       title: status,
-      items: adminRequests.filter((item) => (item.status || statuses[0]) === status),
+      items: adminRequests.filter(
+        (item) =>
+          (item.status || statuses[0]) === status &&
+          matchesAdminSearch(
+            {
+              requestCode: item.requestCode,
+              category: item.category,
+              title: item.title,
+              status: item.status,
+              userFullName: item.userFullName,
+              userEmail: item.userEmail,
+              userMobile: item.userMobile,
+              values: item.values,
+            },
+            adminRequestSearch
+          )
+      ),
     }));
   };
   const getAdminDatabaseRequestFilters = () => {
@@ -1441,7 +1457,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             </div>
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
-                <div className="admin-toolbar">
+                <div className="admin-toolbar admin-toolbar-right">
                   <div className="admin-toolbar-actions">
                     <input
                       className="auth-input workspace-static-input admin-search-input admin-square-input"
@@ -1569,19 +1585,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                     disabled={adminActionRequestId === requestItem.id}
                                   />
                                   <div className="admin-request-action-row">
-                                    <select
-                                      className="auth-input workspace-static-input"
-                                      value={requestItem.status || statusChoices[0]}
-                                      onClick={(event) => event.stopPropagation()}
-                                      onChange={(event) => handleAdminStatusChange(requestItem.id, event.target.value)}
-                                      disabled={adminActionRequestId === requestItem.id}
-                                    >
-                                      {statusChoices.map((statusOption) => (
-                                        <option key={statusOption} value={statusOption}>
-                                          {statusOption}
-                                        </option>
-                                      ))}
-                                    </select>
                                     <button
                                       className="primary-button"
                                       type="button"
@@ -1604,6 +1607,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                     >
                                       {adminActionRequestId === requestItem.id ? "Working..." : "Delete Request"}
                                     </button>
+                                    <select
+                                      className="auth-input workspace-static-input admin-request-status-select"
+                                      value={requestItem.status || statusChoices[0]}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={(event) => handleAdminStatusChange(requestItem.id, event.target.value)}
+                                      disabled={adminActionRequestId === requestItem.id}
+                                    >
+                                      {statusChoices.map((statusOption) => (
+                                        <option key={statusOption} value={statusOption}>
+                                          {statusOption}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </div>
                                 </div>
                               </article>
@@ -1676,7 +1692,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           key={filter.id}
                           type="button"
                           className={`contact-request-category-button ${activeAdminDatabaseRequestFilter === filter.id ? "active" : ""}`}
-                          onClick={() => setActiveAdminDatabaseRequestFilter(filter.id)}
+                          onClick={() =>
+                            setActiveAdminDatabaseRequestFilter((current) =>
+                              current === filter.id ? "All" : filter.id
+                            )
+                          }
                         >
                           <span>{filter.title}</span>
                           <strong>{count}</strong>
@@ -1702,7 +1722,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           key={filter.id}
                           type="button"
                           className={`contact-request-category-button ${activeAdminDatabaseRequestCategory === filter.id ? "active" : ""}`}
-                          onClick={() => setActiveAdminDatabaseRequestCategory(filter.id)}
+                          onClick={() =>
+                            setActiveAdminDatabaseRequestCategory((current) =>
+                              current === filter.id ? "All" : filter.id
+                            )
+                          }
                         >
                           <span>{filter.title}</span>
                           <strong>{count}</strong>

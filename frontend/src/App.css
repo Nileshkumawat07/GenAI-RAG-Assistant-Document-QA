@@ -3497,6 +3497,10 @@ body.workspace-body-mode .admin-toolbar {
   flex-wrap: wrap;
 }
 
+body.workspace-body-mode .admin-toolbar-right {
+  justify-content: flex-end;
+}
+
 body.workspace-body-mode .admin-toolbar-copy h4,
 body.workspace-body-mode .admin-section-header h4 {
   margin: 0 0 4px;
@@ -3656,8 +3660,13 @@ body.workspace-body-mode .admin-loading-state {
 
 body.workspace-body-mode .admin-request-action-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(150px, 180px);
   gap: 12px;
+  align-items: center;
+}
+
+body.workspace-body-mode .admin-request-status-select {
+  min-width: 0;
 }
 
 body.workspace-body-mode .admin-request-section-stack {
