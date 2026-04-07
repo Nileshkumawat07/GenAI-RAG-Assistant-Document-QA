@@ -1,19 +1,23 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.core.database import get_db
+from app.models.contact_request import ContactRequest
 from app.schemas.contact import (
     ContactRequestCreate,
     ContactRequestResponse,
     ContactRequestUpdateStatus,
 )
 from app.services.auth_service import AuthService, AuthServiceError
+from app.services.admin_audit_service import AdminAuditService
 from app.services.contact_request_service import ContactRequestService, ContactRequestServiceError
 
 
 def build_contact_request_router(contact_request_service: ContactRequestService, auth_service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/contact-requests", tags=["contact-requests"])
+    admin_audit_service = AdminAuditService()
 
     def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.startswith("Bearer "):
@@ -127,6 +131,15 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
                 status=payload.status,
                 admin_message=payload.adminMessage,
             )
+            admin_audit_service.log_action(
+                db,
+                admin_user_id=authenticated_user_id,
+                action_type="request_status_updated",
+                target_type="contact_request",
+                target_id=item.id,
+                target_label=item.request_code or item.title,
+                detail=f"Status changed to {item.status}. Admin note: {(item.admin_message or 'None')[:180]}",
+            )
             return serialize_contact_request(item)
         except ContactRequestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -155,7 +168,19 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
         try:
             if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
                 raise HTTPException(status_code=403, detail="Admin access is required.")
+            existing_item = db.execute(
+                select(ContactRequest).where(ContactRequest.id == request_id)
+            ).scalar_one_or_none()
             contact_request_service.admin_delete_request(db, request_id=request_id)
+            admin_audit_service.log_action(
+                db,
+                admin_user_id=authenticated_user_id,
+                action_type="request_deleted",
+                target_type="contact_request",
+                target_id=request_id,
+                target_label=(existing_item.request_code if existing_item else None) or (existing_item.title if existing_item else None) or request_id,
+                detail=f"Request '{existing_item.title}' removed from the administration queue." if existing_item else "Request removed from the administration queue.",
+            )
             return {"message": "Contact request deleted successfully."}
         except ContactRequestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -1,6 +1,8 @@
-from io import BytesIO
+import csv
+import json
+from io import BytesIO, StringIO
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, select, text
@@ -13,9 +15,11 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from app.core.database import engine, get_db
+from app.models.admin_audit_log import AdminAuditLog
 from app.models.contact_request import ContactRequest
 from app.models.linked_provider import UserSocialLink
 from app.models.subscription_transaction import SubscriptionTransaction
+from app.models.user import User
 from app.schemas.auth import (
     AuthUserResponse,
     ChangePasswordRequest,
@@ -29,12 +33,18 @@ from app.schemas.auth import (
     UpdateMobileRequest,
     UpdateUsernameRequest,
 )
+from app.services.admin_audit_service import AdminAuditService
 from app.services.auth_service import AuthService, AuthServiceError
+from app.services.contact_request_service import ContactRequestService
 from app.services.otp_service import OTPService, OTPServiceError
+from app.services.subscription_transaction_service import SubscriptionTransactionService
 
 
 def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["auth"])
+    admin_audit_service = AdminAuditService()
+    contact_request_service = ContactRequestService()
+    transaction_service = SubscriptionTransactionService()
 
     def quote_identifier(identifier: str) -> str:
         return f"`{identifier.replace('`', '``')}`"
@@ -67,6 +77,173 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         pdf.setFillColor(colors.HexColor("#162033"))
         pdf.setFont("Helvetica", 9)
         pdf.drawString((x_mm + label_width_mm) * mm, y_mm * mm, value)
+
+    def serialize_admin_audit_log(item: AdminAuditLog) -> dict:
+        return {
+            "id": item.id,
+            "adminUserId": item.admin_user_id,
+            "adminName": item.admin_name,
+            "adminEmail": item.admin_email,
+            "actionType": item.action_type,
+            "targetType": item.target_type,
+            "targetId": item.target_id,
+            "targetLabel": item.target_label,
+            "detail": item.detail,
+            "createdAt": item.created_at.isoformat() if item.created_at else None,
+        }
+
+    def build_admin_renewal_reminders(db: Session) -> list[dict]:
+        now = datetime.now(timezone.utc)
+        users = db.execute(
+            select(User)
+            .where(
+                User.subscription_status == "premium",
+                User.subscription_expires_at.is_not(None),
+            )
+            .order_by(User.subscription_expires_at.asc())
+        ).scalars().all()
+
+        reminders = []
+        for user in users:
+            expires_at = user.subscription_expires_at
+            if not expires_at:
+                continue
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+            seconds_until_expiry = (expires_at - now).total_seconds()
+            if seconds_until_expiry < 0 or seconds_until_expiry > 14 * 24 * 60 * 60:
+                continue
+
+            days_until_expiry = max(0, int(seconds_until_expiry // (24 * 60 * 60)))
+            reminders.append(
+                {
+                    "userId": user.id,
+                    "fullName": user.full_name,
+                    "email": user.email,
+                    "mobile": user.mobile,
+                    "publicUserCode": user.public_user_code,
+                    "subscriptionPlanName": user.subscription_plan_name,
+                    "subscriptionStatus": user.subscription_status,
+                    "subscriptionAmount": user.subscription_amount,
+                    "subscriptionCurrency": user.subscription_currency,
+                    "billingCycle": user.subscription_billing_cycle,
+                    "expiresAt": expires_at.isoformat(),
+                    "daysUntilExpiry": days_until_expiry,
+                    "urgency": "critical" if days_until_expiry <= 2 else "warning" if days_until_expiry <= 7 else "upcoming",
+                    "reminderLabel": (
+                        "Expires today"
+                        if days_until_expiry == 0
+                        else f"Expires in {days_until_expiry} day{'s' if days_until_expiry != 1 else ''}"
+                    ),
+                }
+            )
+
+        return reminders
+
+    def serialize_export_value(value):
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=True)
+        if isinstance(value, list):
+            return json.dumps(value, ensure_ascii=True)
+        if value is None:
+            return ""
+        return str(value)
+
+    def build_admin_export_rows(db: Session, section: str) -> list[dict]:
+        normalized_section = (section or "").strip().lower()
+        if normalized_section == "requests":
+            return [
+                {
+                    "id": item.id,
+                    "requestCode": item.request_code,
+                    "category": item.category,
+                    "title": item.title,
+                    "status": item.status,
+                    "adminMessage": item.admin_message,
+                    "createdAt": item.created_at.isoformat() if item.created_at else None,
+                    "userId": item.user_id,
+                    "userFullName": item.user_full_name,
+                    "userEmail": item.user_email,
+                    "userMobile": item.user_mobile,
+                    "values": json.loads(item.payload_json),
+                }
+                for item in db.execute(
+                    select(ContactRequest).order_by(ContactRequest.created_at.desc())
+                ).scalars().all()
+            ]
+        if normalized_section == "audit":
+            return [
+                serialize_admin_audit_log(item)
+                for item in admin_audit_service.list_recent_actions(db, limit=500)
+            ]
+        if normalized_section == "renewals":
+            return build_admin_renewal_reminders(db)
+        if normalized_section == "users":
+            return [
+                {
+                    "id": item.id,
+                    "publicUserCode": item.public_user_code,
+                    "fullName": item.full_name,
+                    "username": item.username,
+                    "email": item.email,
+                    "mobile": item.mobile,
+                    "subscriptionPlanName": item.subscription_plan_name,
+                    "subscriptionStatus": item.subscription_status,
+                    "subscriptionExpiresAt": item.subscription_expires_at.isoformat() if item.subscription_expires_at else None,
+                    "createdAt": item.created_at.isoformat() if item.created_at else None,
+                }
+                for item in db.execute(select(User).order_by(User.created_at.desc())).scalars().all()
+            ]
+        if normalized_section == "subscriptions":
+            return [
+                {
+                    "invoiceNumber": item.invoice_number,
+                    "transactionCode": item.transaction_code,
+                    "userId": item.user_id,
+                    "customerCode": item.customer_code,
+                    "customerName": item.customer_name,
+                    "customerEmail": item.customer_email,
+                    "customerMobile": item.customer_mobile,
+                    "planName": item.plan_name,
+                    "amount": item.amount,
+                    "currency": item.currency,
+                    "billingCycle": item.billing_cycle,
+                    "status": item.status,
+                    "activatedAt": item.activated_at.isoformat() if item.activated_at else None,
+                    "expiresAt": item.expires_at.isoformat() if item.expires_at else None,
+                    "canceledAt": item.canceled_at.isoformat() if item.canceled_at else None,
+                    "createdAt": item.created_at.isoformat() if item.created_at else None,
+                }
+                for item in transaction_service.list_transactions(db)
+            ]
+        raise HTTPException(status_code=400, detail="Unsupported admin export section.")
+
+    def stream_admin_export(rows: list[dict], *, section: str, export_format: str) -> StreamingResponse:
+        normalized_format = (export_format or "").strip().lower()
+        if normalized_format == "json":
+            payload = json.dumps(rows, ensure_ascii=True, indent=2).encode("utf-8")
+            return StreamingResponse(
+                BytesIO(payload),
+                media_type="application/json",
+                headers={"Content-Disposition": f'attachment; filename="admin-{section}.json"'},
+            )
+
+        if normalized_format != "csv":
+            raise HTTPException(status_code=400, detail="Unsupported admin export format.")
+
+        fieldnames = sorted({key for row in rows for key in row.keys()})
+        csv_buffer = StringIO()
+        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: serialize_export_value(value) for key, value in row.items()})
+
+        return StreamingResponse(
+            BytesIO(csv_buffer.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="admin-{section}.csv"'},
+        )
 
     def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.startswith("Bearer "):
@@ -280,7 +457,40 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     }
                 )
 
-        return {"tables": tables, "statusOptions": list(contact_request_service.STATUS_OPTIONS) if False else ["In Progress", "In Review", "Completed"]}
+        audit_logs = [
+            serialize_admin_audit_log(item)
+            for item in admin_audit_service.list_recent_actions(db, limit=120)
+        ]
+
+        return {
+            "tables": tables,
+            "statusOptions": list(contact_request_service.STATUS_OPTIONS),
+            "auditLogs": audit_logs,
+            "renewalReminders": build_admin_renewal_reminders(db),
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @router.get("/settings/admin/export")
+    def export_admin_data(
+        section: str,
+        format: str = "csv",
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
+            raise HTTPException(status_code=403, detail="Admin access is required.")
+
+        export_rows = build_admin_export_rows(db, section)
+        admin_audit_service.log_action(
+            db,
+            admin_user_id=authenticated_user_id,
+            action_type="admin_export_generated",
+            target_type="admin_panel",
+            target_id=section,
+            target_label=section,
+            detail=f"Exported administration section '{section}' as {format.lower()}.",
+        )
+        return stream_admin_export(export_rows, section=section, export_format=format)
 
     @router.post("/email/send-verification")
     def send_email_verification(payload: SendEmailVerificationRequest):

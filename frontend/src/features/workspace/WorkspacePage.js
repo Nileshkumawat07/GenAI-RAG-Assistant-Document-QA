@@ -4,7 +4,7 @@ import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import SettingsPanel from "./SettingsPanel";
-import { getAdminMysqlOverview, normalizeAuthUser } from "../auth/authApi";
+import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser } from "../auth/authApi";
 import {
   adminDeleteContactRequest,
   adminUpdateContactRequestStatus,
@@ -434,10 +434,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [adminTables, setAdminTables] = useState([]);
   const [adminRequests, setAdminRequests] = useState([]);
   const [adminStatusOptions, setAdminStatusOptions] = useState([]);
+  const [adminAuditLogs, setAdminAuditLogs] = useState([]);
+  const [adminRenewalReminders, setAdminRenewalReminders] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState("");
   const [adminActionRequestId, setAdminActionRequestId] = useState("");
   const [adminReplyDrafts, setAdminReplyDrafts] = useState({});
+  const [adminRequestSearch, setAdminRequestSearch] = useState("");
+  const [adminSupportSearch, setAdminSupportSearch] = useState("");
+  const [adminDatabaseSearch, setAdminDatabaseSearch] = useState("");
+  const [adminAuditSearch, setAdminAuditSearch] = useState("");
+  const [adminExportLoading, setAdminExportLoading] = useState("");
   const [activeAdminRequestSection, setActiveAdminRequestSection] = useState("In Progress");
   const [activeAdminDatabaseSection, setActiveAdminDatabaseSection] = useState("accounts");
   const [activeAdminDatabaseRequestFilter, setActiveAdminDatabaseRequestFilter] = useState("All");
@@ -525,6 +532,22 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       .replace(/_/g, " ")
       .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
       .replace(/\b\w/g, (char) => char.toUpperCase());
+  const matchesAdminSearch = (source, query) => {
+    const normalizedQuery = (query || "").trim().toLowerCase();
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    return JSON.stringify(source || {})
+      .toLowerCase()
+      .includes(normalizedQuery);
+  };
+  const getReminderToneLabel = (urgency) =>
+    urgency === "critical" ? "Needs outreach now" : urgency === "warning" ? "Expiring soon" : "Upcoming renewal";
+  const getAdminExportSectionForDatabaseSection = (sectionId) => {
+    if (sectionId === "subscriptions") return "subscriptions";
+    return "users";
+  };
   const getDatabaseSections = () => {
     const sectionConfigs = [
       {
@@ -631,7 +654,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     return statuses.map((status) => ({
       id: status,
       title: status,
-      items: adminRequests.filter((item) => (item.status || statuses[0]) === status),
+      items: adminRequests.filter(
+        (item) =>
+          (item.status || statuses[0]) === status &&
+          matchesAdminSearch(
+            {
+              requestCode: item.requestCode,
+              category: item.category,
+              title: item.title,
+              status: item.status,
+              userFullName: item.userFullName,
+              userEmail: item.userEmail,
+              userMobile: item.userMobile,
+              values: item.values,
+            },
+            adminRequestSearch
+          )
+      ),
     }));
   };
   const getAdminDatabaseRequestFilters = () => {
@@ -749,6 +788,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       ]);
       setAdminTables(mysqlOverview.tables || []);
       setAdminStatusOptions(mysqlOverview.statusOptions || []);
+      setAdminAuditLogs(mysqlOverview.auditLogs || []);
+      setAdminRenewalReminders(mysqlOverview.renewalReminders || []);
       setAdminRequests(allRequests || []);
       setAdminReplyDrafts(
         Object.fromEntries(
@@ -773,6 +814,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
 
   const clearFocusedContactRequest = (requestId) => {
     setFocusedContactRequestId((current) => (current === requestId || !requestId ? "" : current));
+  };
+
+  const handleAdminExport = async (section, format = "csv") => {
+    try {
+      setAdminExportLoading(`${section}-${format}`);
+      await downloadAdministrationExport(section, format);
+    } catch (error) {
+      setAdminError(error.message || "Failed to export administration data.");
+    } finally {
+      setAdminExportLoading("");
+    }
   };
 
   useEffect(() => {
@@ -963,6 +1015,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         ...current,
         [requestId]: updatedRequest.adminMessage || "",
       }));
+      await loadAdministrationData();
       clearFocusedContactRequest(requestId);
     } catch (updateError) {
       setAdminError(updateError.message || "Failed to update admin request.");
@@ -977,6 +1030,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       setAdminError("");
       await adminDeleteContactRequest(requestId);
       setAdminRequests((current) => current.filter((item) => item.id !== requestId));
+      await loadAdministrationData();
       clearFocusedContactRequest(requestId);
     } catch (deleteError) {
       setAdminError(deleteError.message || "Failed to delete admin request.");
@@ -1197,6 +1251,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       const statusChoices = adminStatusOptions.length > 0
         ? adminStatusOptions
         : ["In Progress", "In Review", "Completed"];
+      const filteredAuditLogs = adminAuditLogs.filter((item) =>
+        matchesAdminSearch(
+          {
+            adminName: item.adminName,
+            adminEmail: item.adminEmail,
+            actionType: item.actionType,
+            targetType: item.targetType,
+            targetLabel: item.targetLabel,
+            detail: item.detail,
+          },
+          adminAuditSearch
+        )
+      );
 
       if (!isAdmin) {
         return (
@@ -1217,6 +1284,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           { title: "Rows Indexed", text: String(totalRows) },
           { title: "Users", text: String(userTable?.rowCount || 0) },
           { title: "Contact Requests", text: String(adminRequests.length || requestTable?.rowCount || 0) },
+          { title: "Renewal Reminders", text: String(adminRenewalReminders.length) },
+          { title: "Audit Entries", text: String(adminAuditLogs.length) },
         ];
 
         return (
@@ -1229,7 +1298,36 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             </div>
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
-                {adminLoading ? <p className="tool-copy">Loading administration data...</p> : null}
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Administration Snapshot</h4>
+                    <p>Live admin data, renewal watchlist, and the latest audit activity.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <button
+                      className="admin-table-action-button"
+                      type="button"
+                      onClick={() => handleAdminExport("renewals")}
+                      disabled={adminExportLoading === "renewals-csv"}
+                    >
+                      {adminExportLoading === "renewals-csv" ? "Exporting..." : "Export Renewals"}
+                    </button>
+                    <button
+                      className="admin-table-action-button"
+                      type="button"
+                      onClick={() => handleAdminExport("audit")}
+                      disabled={adminExportLoading === "audit-csv"}
+                    >
+                      {adminExportLoading === "audit-csv" ? "Exporting..." : "Export Audit"}
+                    </button>
+                  </div>
+                </div>
+                {adminLoading ? (
+                  <div className="admin-empty-state admin-loading-state">
+                    <h4>Loading administration data</h4>
+                    <p>Fetching requests, renewal reminders, audit logs, and database snapshots.</p>
+                  </div>
+                ) : null}
                 {adminError ? <p className="error-text">{adminError}</p> : null}
                 <div className="workspace-info-grid">
                   {overviewCards.map((card) => (
@@ -1238,6 +1336,76 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                       <p>{card.text}</p>
                     </div>
                   ))}
+                </div>
+                <div className="admin-overview-grid">
+                  <section className="workspace-mini-card admin-overview-panel">
+                    <div className="admin-section-header">
+                      <div>
+                        <h4>Subscription Renewal Reminders</h4>
+                        <p>Members whose premium access expires within the next 14 days.</p>
+                      </div>
+                    </div>
+                    {adminLoading ? null : adminRenewalReminders.length === 0 ? (
+                      <div className="admin-empty-state">
+                        <h4>No renewal reminders</h4>
+                        <p>No active premium memberships are close to expiry right now.</p>
+                      </div>
+                    ) : (
+                      <div className="admin-reminder-list">
+                        {adminRenewalReminders.slice(0, 8).map((item) => (
+                          <article key={`${item.userId}-${item.expiresAt}`} className={`admin-reminder-card urgency-${item.urgency}`}>
+                            <div className="admin-reminder-copy">
+                              <strong>{item.fullName || item.email}</strong>
+                              <span>{item.email || "No email"} | {item.publicUserCode || "No member ID"}</span>
+                              <span>{item.subscriptionPlanName || "Premium"} | {item.reminderLabel}</span>
+                            </div>
+                            <div className="admin-reminder-meta">
+                              <strong>{getReminderToneLabel(item.urgency)}</strong>
+                              <span>{new Date(item.expiresAt).toLocaleString("en-GB")}</span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="workspace-mini-card admin-overview-panel">
+                    <div className="admin-section-header">
+                      <div>
+                        <h4>Recent Audit Trail</h4>
+                        <p>Real backend log entries recorded for admin actions.</p>
+                      </div>
+                      <input
+                        className="auth-input workspace-static-input admin-search-input"
+                        type="search"
+                        placeholder="Search audit logs"
+                        value={adminAuditSearch}
+                        onChange={(event) => setAdminAuditSearch(event.target.value)}
+                      />
+                    </div>
+                    {adminLoading ? null : filteredAuditLogs.length === 0 ? (
+                      <div className="admin-empty-state">
+                        <h4>No audit entries found</h4>
+                        <p>Admin actions will appear here after moderation or export events are recorded.</p>
+                      </div>
+                    ) : (
+                      <div className="admin-audit-list">
+                        {filteredAuditLogs.slice(0, 8).map((item) => (
+                          <article key={item.id} className="admin-audit-card">
+                            <div className="admin-audit-card-head">
+                              <strong>{prettifyKey(item.actionType)}</strong>
+                              <span>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Unknown time"}</span>
+                            </div>
+                            <p>{item.detail || "No additional details provided."}</p>
+                            <div className="admin-audit-meta">
+                              <span>{item.adminName || item.adminEmail || "Unknown admin"}</span>
+                              <span>{prettifyKey(item.targetType)}: {item.targetLabel || item.targetId || "Not available"}</span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
                 </div>
               </article>
             </div>
@@ -1261,7 +1429,35 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             </div>
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
-                {adminLoading ? <p className="tool-copy">Loading all contact requests...</p> : null}
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Contact Request Queue</h4>
+                    <p>Search, moderate, and export request data without leaving the admin flow.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <input
+                      className="auth-input workspace-static-input admin-search-input"
+                      type="search"
+                      placeholder="Search requests, users, email, title"
+                      value={adminRequestSearch}
+                      onChange={(event) => setAdminRequestSearch(event.target.value)}
+                    />
+                    <button
+                      className="admin-table-action-button"
+                      type="button"
+                      onClick={() => handleAdminExport("requests")}
+                      disabled={adminExportLoading === "requests-csv"}
+                    >
+                      {adminExportLoading === "requests-csv" ? "Exporting..." : "Export Requests"}
+                    </button>
+                  </div>
+                </div>
+                {adminLoading ? (
+                  <div className="admin-empty-state admin-loading-state">
+                    <h4>Loading request queue</h4>
+                    <p>Collecting every submitted contact request for moderation.</p>
+                  </div>
+                ) : null}
                 {adminError ? <p className="error-text">{adminError}</p> : null}
                 {!adminLoading && adminRequests.length === 0 ? (
                   <div className="workspace-mini-card">
@@ -1293,8 +1489,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           </div>
                         </div>
                         {selectedRequestSection.items.length === 0 ? (
-                          <div className="workspace-mini-card">
-                            <p>No requests in this section.</p>
+                          <div className="admin-empty-state">
+                            <h4>No matching requests</h4>
+                            <p>Try a different status tab or clear the current search text.</p>
                           </div>
                         ) : (
                           <div className="admin-request-grid">
@@ -1408,7 +1605,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             (activeAdminDatabaseRequestFilter === "All" ||
               (row.status || "In Progress") === activeAdminDatabaseRequestFilter) &&
             (activeAdminDatabaseRequestCategory === "All" ||
-              (row.category || "").toLowerCase() === activeAdminDatabaseRequestCategory)
+              (row.category || "").toLowerCase() === activeAdminDatabaseRequestCategory) &&
+            matchesAdminSearch(row, adminSupportSearch)
         );
 
         return (
@@ -1421,6 +1619,29 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             </div>
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Support Request Table</h4>
+                    <p>Use filters for status and category, then search the table or export it.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <input
+                      className="auth-input workspace-static-input admin-search-input"
+                      type="search"
+                      placeholder="Search support table"
+                      value={adminSupportSearch}
+                      onChange={(event) => setAdminSupportSearch(event.target.value)}
+                    />
+                    <button
+                      className="admin-table-action-button"
+                      type="button"
+                      onClick={() => handleAdminExport("requests", "json")}
+                      disabled={adminExportLoading === "requests-json"}
+                    >
+                      {adminExportLoading === "requests-json" ? "Exporting..." : "Export JSON"}
+                    </button>
+                  </div>
+                </div>
                 <div className="workspace-form-stack">
                   <div className="contact-request-category-row">
                     {requestFilters.map((filter) => {
@@ -1514,7 +1735,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           ) : (
                             <tr>
                               <td colSpan={tableColumns.length || 1} className="admin-table-empty-row">
-                                No data available
+                                No support requests matched the current filters.
                               </td>
                             </tr>
                           )}
@@ -1539,7 +1760,35 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           </div>
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
-              {adminLoading ? <p className="tool-copy">Loading database tables...</p> : null}
+              <div className="admin-toolbar">
+                <div className="admin-toolbar-copy">
+                  <h4>Database Overview</h4>
+                  <p>Review live table snapshots, search within the current section, and export account or subscription data.</p>
+                </div>
+                <div className="admin-toolbar-actions">
+                  <input
+                    className="auth-input workspace-static-input admin-search-input"
+                    type="search"
+                    placeholder="Search database rows"
+                    value={adminDatabaseSearch}
+                    onChange={(event) => setAdminDatabaseSearch(event.target.value)}
+                  />
+                  <button
+                    className="admin-table-action-button"
+                    type="button"
+                    onClick={() => handleAdminExport(getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection))}
+                    disabled={adminExportLoading === `${getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection)}-csv`}
+                  >
+                    {adminExportLoading === `${getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection)}-csv` ? "Exporting..." : "Export Section"}
+                  </button>
+                </div>
+              </div>
+              {adminLoading ? (
+                <div className="admin-empty-state admin-loading-state">
+                  <h4>Loading database tables</h4>
+                  <p>Preparing the latest admin-safe table snapshots from the backend.</p>
+                </div>
+              ) : null}
               {adminError ? <p className="error-text">{adminError}</p> : null}
               {!adminLoading && adminTables.length === 0 ? (
                 <div className="workspace-mini-card">
@@ -1673,9 +1922,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                           (activeAdminDatabaseRequestFilter === "All" ||
                                             (row.status || "In Progress") === activeAdminDatabaseRequestFilter) &&
                                           (activeAdminDatabaseRequestCategory === "All" ||
-                                            (row.category || "").toLowerCase() === activeAdminDatabaseRequestCategory)
+                                            (row.category || "").toLowerCase() === activeAdminDatabaseRequestCategory) &&
+                                          matchesAdminSearch(row, adminDatabaseSearch)
                                       )
-                                    : table.rows || [];
+                                    : (table.rows || []).filter((row) => matchesAdminSearch(row, adminDatabaseSearch));
                                 return (
                                   <section key={table.tableName} className="admin-table-section">
                                     <div className="admin-table-header">
@@ -1735,7 +1985,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                           ) : (
                                             <tr>
                                               <td colSpan={tableColumns.length} className="admin-table-empty-row">
-                                                No data available
+                                                No rows matched the current search.
                                               </td>
                                             </tr>
                                           )}

@@ -137,6 +137,42 @@ export async function getAdminMysqlOverview() {
   );
 }
 
+export async function downloadAdministrationExport(section, format = "csv") {
+  const authToken = getAuthToken();
+  const response = await fetch(
+    apiUrl(`/auth/settings/admin/export?section=${encodeURIComponent(section)}&format=${encodeURIComponent(format)}`),
+    {
+      method: "GET",
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = "Failed to export administration data.";
+    try {
+      const data = await response.json();
+      errorMessage = data.detail || errorMessage;
+    } catch {
+      // Keep the fallback message.
+    }
+    throw new Error(errorMessage);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const header = response.headers.get("Content-Disposition") || "";
+  const matchedFileName = header.match(/filename=\"?([^"]+)\"?/i);
+  link.href = url;
+  link.download = matchedFileName?.[1] || `admin-${section}.${format}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+  }, 1500);
+}
+
 export async function downloadAccountDataPdf(password) {
   const authToken = getAuthToken();
   const response = await fetch(apiUrl("/auth/settings/data-export/pdf"), {
