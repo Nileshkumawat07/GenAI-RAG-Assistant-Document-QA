@@ -17,6 +17,9 @@ export async function cancelSubscription(currentPassword) {
     "/payments/subscription/cancel",
     {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ currentPassword }),
     },
     "Failed to cancel subscription."

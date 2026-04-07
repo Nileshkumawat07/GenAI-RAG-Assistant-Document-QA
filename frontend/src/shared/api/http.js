@@ -5,6 +5,33 @@ export function apiUrl(path) {
   return `${API_BASE}${path}`;
 }
 
+function extractErrorMessage(detail, fallbackMessage) {
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+
+  if (Array.isArray(detail) && detail.length > 0) {
+    const firstMessage = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          return item.msg || item.message || item.detail || "";
+        }
+        return "";
+      })
+      .find(Boolean);
+    if (firstMessage) {
+      return firstMessage;
+    }
+  }
+
+  if (detail && typeof detail === "object") {
+    return detail.message || detail.msg || detail.detail || fallbackMessage;
+  }
+
+  return fallbackMessage;
+}
+
 async function readJson(response) {
   try {
     return await response.json();
@@ -27,7 +54,7 @@ export async function requestJson(path, options, fallbackMessage) {
     const data = await readJson(response);
 
     if (!response.ok) {
-      throw new Error(data.detail || fallbackMessage);
+      throw new Error(extractErrorMessage(data.detail, fallbackMessage));
     }
 
     return data;
