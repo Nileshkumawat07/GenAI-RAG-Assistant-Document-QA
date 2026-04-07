@@ -1442,14 +1442,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     <span>Selected Request ID</span>
                     <strong>{selectedRequestLabel}</strong>
                   </div>
-                  <div className="admin-toolbar-actions">
-                    <input
-                      className="auth-input workspace-static-input admin-search-input admin-square-input"
-                      type="search"
-                      placeholder="Search requests, users, email, title"
-                      value={adminRequestSearch}
-                      onChange={(event) => setAdminRequestSearch(event.target.value)}
-                    />
+                  <div className="admin-selection-action">
                     <button
                       className="admin-table-action-button"
                       type="button"
@@ -1458,6 +1451,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     >
                       {adminExportLoading === "requests-csv" ? "Exporting..." : "Export Requests"}
                     </button>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <input
+                      className="auth-input workspace-static-input admin-search-input admin-square-input"
+                      type="search"
+                      placeholder="Search requests, users, email, title"
+                      value={adminRequestSearch}
+                      onChange={(event) => setAdminRequestSearch(event.target.value)}
+                    />
                   </div>
                 </div>
                 {adminLoading ? (
@@ -1480,7 +1482,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           key={section.id}
                           type="button"
                           className={`contact-request-category-button ${selectedRequestSection?.id === section.id ? "active" : ""}`}
-                          onClick={() => setActiveAdminRequestSection(section.id)}
+                          onClick={() => {
+                            setActiveAdminRequestSection(section.id);
+                            setFocusedContactRequestId("");
+                            setAdminRequestSearch("");
+                          }}
                         >
                           <span>{section.title}</span>
                           <strong>{section.items.length}</strong>
@@ -1509,6 +1515,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                 id={`admin-request-${requestItem.id}`}
                                 className={`admin-request-card ${focusedContactRequestId === requestItem.id ? "is-focused" : ""}`}
                                 onClick={() => {
+                                  if (focusedContactRequestId === requestItem.id) {
+                                    setFocusedContactRequestId("");
+                                    setAdminRequestSearch("");
+                                    return;
+                                  }
                                   setFocusedContactRequestId(requestItem.id);
                                   setAdminRequestSearch(requestItem.requestCode || requestItem.id || "");
                                 }}

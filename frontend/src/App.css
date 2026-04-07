@@ -3547,6 +3547,17 @@ body.workspace-body-mode .admin-selection-bar strong {
   word-break: break-word;
 }
 
+body.workspace-body-mode .admin-selection-action {
+  display: flex;
+  align-items: stretch;
+}
+
+body.workspace-body-mode .admin-selection-action .admin-table-action-button {
+  min-width: 140px;
+  min-height: 100%;
+  border-radius: 0;
+}
+
 body.workspace-body-mode .admin-square-input {
   border-radius: 0;
 }
