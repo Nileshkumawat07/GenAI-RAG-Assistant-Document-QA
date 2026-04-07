@@ -153,6 +153,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     def build_admin_export_rows(db: Session, section: str) -> list[dict]:
         normalized_section = (section or "").strip().lower()
         if normalized_section == "requests":
+            records = db.execute(
+                select(ContactRequest, User)
+                .join(User, User.id == ContactRequest.user_id)
+                .order_by(ContactRequest.created_at.desc())
+            ).all()
             return [
                 {
                     "id": item.id,
@@ -163,14 +168,12 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     "adminMessage": item.admin_message,
                     "createdAt": item.created_at.isoformat() if item.created_at else None,
                     "userId": item.user_id,
-                    "userFullName": item.user_full_name,
-                    "userEmail": item.user_email,
-                    "userMobile": item.user_mobile,
+                    "userFullName": user.full_name if user else None,
+                    "userEmail": user.email if user else None,
+                    "userMobile": user.mobile if user else None,
                     "values": json.loads(item.payload_json),
                 }
-                for item in db.execute(
-                    select(ContactRequest).order_by(ContactRequest.created_at.desc())
-                ).scalars().all()
+                for item, user in records
             ]
         if normalized_section == "audit":
             return [
