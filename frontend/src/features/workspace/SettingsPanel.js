@@ -2021,6 +2021,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (activeTab === "billing") {
     return (
       <div className="workspace-form-stack">
+        <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+          <p>{feedback.text}</p>
+        </div>
         <div className="workspace-mini-card"><h4>Subscription & Billing</h4><p>Plan: {subscriptionPlanName} | {subscriptionPriceLabel}</p></div>
         <div className="workspace-mini-card"><h4>Membership Status</h4><p>Status: {subscriptionStatus === "premium" ? "Premium Active" : subscriptionStatus === "expired" ? "Expired" : subscriptionStatus === "canceled" ? "Canceled" : "Free Access"}{subscriptionActivatedAt ? ` | Activated: ${new Date(subscriptionActivatedAt).toLocaleDateString("en-GB")}` : ""}{subscriptionExpiresAt ? ` | Valid Till: ${new Date(subscriptionExpiresAt).toLocaleDateString("en-GB")}` : ""}</p></div>
 
@@ -2128,7 +2131,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 className="primary-button danger-tone"
                 type="button"
                 onClick={handleCancelSubscription}
-                disabled={billingActionLoading === "cancel" || !cancelSubscriptionReadConfirmed}
+                disabled={billingActionLoading === "cancel"}
               >
                 {billingActionLoading === "cancel" ? "Canceling..." : "Confirm Cancel Subscription"}
               </button>
