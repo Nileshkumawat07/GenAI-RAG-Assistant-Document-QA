@@ -1443,6 +1443,13 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     <strong>{selectedRequestLabel}</strong>
                   </div>
                   <div className="admin-toolbar-actions">
+                    <input
+                      className="auth-input workspace-static-input admin-search-input admin-square-input"
+                      type="search"
+                      placeholder="Search requests, users, email, title"
+                      value={adminRequestSearch}
+                      onChange={(event) => setAdminRequestSearch(event.target.value)}
+                    />
                     <button
                       className="admin-table-action-button"
                       type="button"
