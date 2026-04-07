@@ -3522,6 +3522,27 @@ body.workspace-body-mode .admin-toolbar-actions {
   flex-wrap: wrap;
 }
 
+body.workspace-body-mode .admin-selection-bar {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+}
+
+body.workspace-body-mode .admin-selection-bar span {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+body.workspace-body-mode .admin-selection-bar strong {
+  font-size: 18px;
+  color: var(--primary-deep);
+  word-break: break-word;
+}
+
 body.workspace-body-mode .admin-search-input {
   min-width: min(320px, 100%);
 }

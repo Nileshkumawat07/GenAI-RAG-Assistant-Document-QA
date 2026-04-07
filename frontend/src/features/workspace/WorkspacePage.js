@@ -654,23 +654,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     return statuses.map((status) => ({
       id: status,
       title: status,
-      items: adminRequests.filter(
-        (item) =>
-          (item.status || statuses[0]) === status &&
-          matchesAdminSearch(
-            {
-              requestCode: item.requestCode,
-              category: item.category,
-              title: item.title,
-              status: item.status,
-              userFullName: item.userFullName,
-              userEmail: item.userEmail,
-              userMobile: item.userMobile,
-              values: item.values,
-            },
-            adminRequestSearch
-          )
-      ),
+      items: adminRequests.filter((item) => (item.status || statuses[0]) === status),
     }));
   };
   const getAdminDatabaseRequestFilters = () => {
@@ -1437,6 +1421,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         const selectedRequestSection =
           requestSections.find((section) => section.id === activeAdminRequestSection) ||
           requestSections[0];
+        const selectedRequest =
+          adminRequests.find((item) => item.id === focusedContactRequestId) ||
+          adminRequests.find((item) => item.requestCode === adminRequestSearch) ||
+          null;
+        const selectedRequestLabel = selectedRequest?.requestCode || selectedRequest?.id || adminRequestSearch || "No request selected";
 
         return (
           <>
@@ -1449,23 +1438,16 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
                 <div className="admin-toolbar">
-                  <div className="admin-toolbar-copy">
-                    <h4>Contact Request Queue</h4>
-                    <p>Search, moderate, and export request data without leaving the admin flow.</p>
+                  <div className="admin-selection-bar">
+                    <span>Selected Request ID</span>
+                    <strong>{selectedRequestLabel}</strong>
                   </div>
                   <div className="admin-toolbar-actions">
-                    <input
-                      className="auth-input workspace-static-input admin-search-input"
-                      type="search"
-                      placeholder="Search requests, users, email, title"
-                      value={adminRequestSearch}
-                      onChange={(event) => setAdminRequestSearch(event.target.value)}
-                    />
                     <button
                       className="admin-table-action-button"
                       type="button"
                       onClick={() => handleAdminExport("requests")}
-                      disabled={adminExportLoading === "requests-csv"}
+                      disabled={adminExportLoading === "requests-csv" || !selectedRequest}
                     >
                       {adminExportLoading === "requests-csv" ? "Exporting..." : "Export Requests"}
                     </button>
