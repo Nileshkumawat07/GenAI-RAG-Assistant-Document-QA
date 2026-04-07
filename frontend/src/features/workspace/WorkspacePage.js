@@ -1659,14 +1659,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                       value={adminSupportSearch}
                       onChange={(event) => setAdminSupportSearch(event.target.value)}
                     />
-                    <button
-                      className="admin-table-action-button"
-                      type="button"
-                      onClick={() => handleAdminExport("requests", "json")}
-                      disabled={adminExportLoading === "requests-json"}
-                    >
-                      {adminExportLoading === "requests-json" ? "Exporting..." : "Export JSON"}
-                    </button>
                   </div>
                 </div>
                 <div className="workspace-form-stack">
