@@ -810,16 +810,35 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }));
     setActiveAdminRequestSection(requestRow.status || "In Progress");
     setFocusedContactRequestId(requestRow.id);
+    setAdminRequestSearch(requestRow.requestCode || requestRow.id || "");
   };
 
   const clearFocusedContactRequest = (requestId) => {
     setFocusedContactRequestId((current) => (current === requestId || !requestId ? "" : current));
   };
 
+  const resetAdministrationPanelState = () => {
+    setAdminRequestSearch("");
+    setAdminSupportSearch("");
+    setAdminDatabaseSearch("");
+    setAdminAuditSearch("");
+    setAdminExportLoading("");
+    setActiveAdminRequestSection("In Progress");
+    setActiveAdminDatabaseSection("accounts");
+    setActiveAdminDatabaseRequestFilter("All");
+    setActiveAdminDatabaseRequestCategory("All");
+    setFocusedContactRequestId("");
+    setSelectedAdminUserId("");
+  };
+
   const handleAdminExport = async (section, format = "csv") => {
     try {
       setAdminExportLoading(`${section}-${format}`);
-      await downloadAdministrationExport(section, format);
+      await downloadAdministrationExport(
+        section,
+        format,
+        section === "requests" ? adminRequestSearch : ""
+      );
     } catch (error) {
       setAdminError(error.message || "Failed to export administration data.");
     } finally {
@@ -1500,6 +1519,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                 key={requestItem.id}
                                 id={`admin-request-${requestItem.id}`}
                                 className={`admin-request-card ${focusedContactRequestId === requestItem.id ? "is-focused" : ""}`}
+                                onClick={() => {
+                                  setFocusedContactRequestId(requestItem.id);
+                                  setAdminRequestSearch(requestItem.requestCode || requestItem.id || "");
+                                }}
                               >
                                 <div className="admin-request-card-header">
                                   <div>
@@ -1548,6 +1571,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                     rows={4}
                                     placeholder="Write the message that the user should see with this status update."
                                     value={adminReplyDrafts[requestItem.id] || ""}
+                                    onClick={(event) => event.stopPropagation()}
                                     onChange={(event) =>
                                       setAdminReplyDrafts((current) => ({
                                         ...current,
@@ -1560,6 +1584,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                     <select
                                       className="auth-input workspace-static-input"
                                       value={requestItem.status || statusChoices[0]}
+                                      onClick={(event) => event.stopPropagation()}
                                       onChange={(event) => handleAdminStatusChange(requestItem.id, event.target.value)}
                                       disabled={adminActionRequestId === requestItem.id}
                                     >
@@ -1572,7 +1597,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                     <button
                                       className="primary-button"
                                       type="button"
-                                      onClick={() => handleAdminDelete(requestItem.id)}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleAdminDelete(requestItem.id);
+                                      }}
                                       disabled={adminActionRequestId === requestItem.id}
                                     >
                                       {adminActionRequestId === requestItem.id ? "Working..." : "Delete Request"}
@@ -2579,12 +2607,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <button
                     key={tab.id}
                     className={`sidebar-tab ${activeInfoTab === tab.id ? "active" : ""}`}
-                    onClick={() =>
+                    onClick={() => {
+                      if (selectedInfoPage === "administration") {
+                        resetAdministrationPanelState();
+                      }
                       setInfoTabs((current) => ({
                         ...current,
                         [selectedInfoPage]: tab.id,
-                      }))
-                    }
+                      }));
+                    }}
                     type="button"
                   >
                     {tab.label}

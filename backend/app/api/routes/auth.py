@@ -150,15 +150,16 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             return ""
         return str(value)
 
-    def build_admin_export_rows(db: Session, section: str) -> list[dict]:
+    def build_admin_export_rows(db: Session, section: str, search: str | None = None) -> list[dict]:
         normalized_section = (section or "").strip().lower()
+        normalized_search = (search or "").strip().lower()
         if normalized_section == "requests":
             records = db.execute(
                 select(ContactRequest, User)
                 .join(User, User.id == ContactRequest.user_id)
                 .order_by(ContactRequest.created_at.desc())
             ).all()
-            return [
+            rows = [
                 {
                     "id": item.id,
                     "requestCode": item.request_code,
@@ -175,6 +176,12 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 }
                 for item, user in records
             ]
+            if normalized_search:
+                rows = [
+                    row for row in rows
+                    if normalized_search in json.dumps(row, ensure_ascii=True).lower()
+                ]
+            return rows
         if normalized_section == "audit":
             return [
                 serialize_admin_audit_log(item)
@@ -477,13 +484,14 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     def export_admin_data(
         section: str,
         format: str = "csv",
+        search: str | None = None,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
             raise HTTPException(status_code=403, detail="Admin access is required.")
 
-        export_rows = build_admin_export_rows(db, section)
+        export_rows = build_admin_export_rows(db, section, search)
         admin_audit_service.log_action(
             db,
             admin_user_id=authenticated_user_id,
@@ -491,7 +499,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             target_type="admin_panel",
             target_id=section,
             target_label=section,
-            detail=f"Exported administration section '{section}' as {format.lower()}.",
+            detail=(
+                f"Exported administration section '{section}' as {format.lower()}."
+                if not (search or "").strip()
+                else f"Exported administration section '{section}' as {format.lower()} with search '{search.strip()}'."
+            ),
         )
         return stream_admin_export(export_rows, section=section, export_format=format)
 

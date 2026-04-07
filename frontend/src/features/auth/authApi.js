@@ -137,10 +137,17 @@ export async function getAdminMysqlOverview() {
   );
 }
 
-export async function downloadAdministrationExport(section, format = "csv") {
+export async function downloadAdministrationExport(section, format = "csv", search = "") {
   const authToken = getAuthToken();
+  const query = new URLSearchParams({
+    section,
+    format,
+  });
+  if ((search || "").trim()) {
+    query.set("search", search.trim());
+  }
   const response = await fetch(
-    apiUrl(`/auth/settings/admin/export?section=${encodeURIComponent(section)}&format=${encodeURIComponent(format)}`),
+    apiUrl(`/auth/settings/admin/export?${query.toString()}`),
     {
       method: "GET",
       headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
