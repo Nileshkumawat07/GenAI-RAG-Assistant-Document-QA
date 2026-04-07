@@ -494,6 +494,58 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }, [feedback.text]);
 
   useEffect(() => {
+    setFeedback({ type: "info", text: "" });
+    setAccountTab("personalInfo");
+    setSecurityTab("password");
+    setPreferencesTab("theme");
+    setUsernameForm({ newUsername: "", otp: "", captchaInput: "" });
+    setUsernameCaptcha(buildCaptcha());
+    setUsernameOtpConfirmation(null);
+    setUsernameOtpVerified(false);
+    setUsernameOtpCooldown(0);
+    setEmailForm({
+      newEmail: "",
+      currentPassword: "",
+      mobileOtp: "",
+      captchaInput: "",
+    });
+    setEmailCaptcha(buildCaptcha());
+    setEmailMobileConfirmation(null);
+    setEmailMobileVerified(false);
+    setEmailMobileCooldown(0);
+    setEmailLinkCooldown(0);
+    setEmailVerificationSent(false);
+    setEmailVerified(false);
+    setMobileForm({
+      newMobile: "",
+      currentOtp: "",
+      newOtp: "",
+      captchaInput: "",
+    });
+    setMobileCaptcha(buildCaptcha());
+    setMobileCurrentConfirmation(null);
+    setMobileCurrentVerified(false);
+    setMobileCurrentCooldown(0);
+    setMobileNewConfirmation(null);
+    setMobileNewVerified(false);
+    setMobileNewCooldown(0);
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+      otp: "",
+      captchaInput: "",
+    });
+    setPasswordCaptcha(buildCaptcha());
+    setPasswordOtpConfirmation(null);
+    setPasswordOtpVerified(false);
+    setPasswordOtpCooldown(0);
+    setLinkedForms({
+      google: { currentPassword: "" },
+      facebook: { currentPassword: "" },
+      linkedin: { currentPassword: "" },
+    });
+    setResetPassword("");
     setShowPaymentDetails(false);
     setShowInvoicesPanel(false);
     setShowCancelSubscriptionPanel(false);
