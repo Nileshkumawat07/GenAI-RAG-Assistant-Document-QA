@@ -8,6 +8,7 @@ from sqlalchemy import inspect, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.routes.auth import build_auth_router
+from app.api.routes.admin_center import build_admin_center_router
 from app.api.routes.contact_requests import build_contact_request_router
 from app.api.routes.documents import build_document_router
 from app.api.routes.frontend import build_frontend_router, mount_frontend
@@ -22,6 +23,7 @@ from app.core.database import Base, engine
 import app.models  # Ensure ORM models are registered before create_all().
 from app.models.user import User
 from app.services.auth_service import AuthService
+from app.services.admin_center_service import AdminCenterService
 from app.services.contact_request_service import ContactRequestService
 from app.services.linked_provider_service import LinkedProviderService
 from app.services.management_service import ManagementService
@@ -62,6 +64,12 @@ def ensure_contact_request_schema() -> None:
             "completed_at": "ALTER TABLE contact_requests ADD COLUMN completed_at DATETIME NULL",
             "last_status_updated_at": "ALTER TABLE contact_requests ADD COLUMN last_status_updated_at DATETIME NULL",
             "last_status_updated_by_user_id": "ALTER TABLE contact_requests ADD COLUMN last_status_updated_by_user_id VARCHAR(36) NULL",
+            "priority_score": "ALTER TABLE contact_requests ADD COLUMN priority_score INTEGER NULL",
+            "due_at": "ALTER TABLE contact_requests ADD COLUMN due_at DATETIME NULL",
+            "breached_at": "ALTER TABLE contact_requests ADD COLUMN breached_at DATETIME NULL",
+            "escalation_level": "ALTER TABLE contact_requests ADD COLUMN escalation_level INTEGER NOT NULL DEFAULT 0",
+            "queue_owner": "ALTER TABLE contact_requests ADD COLUMN queue_owner VARCHAR(80) NULL",
+            "source_channel": "ALTER TABLE contact_requests ADD COLUMN source_channel VARCHAR(40) NOT NULL DEFAULT 'web'",
         }
         for column_name, statement in required_statements.items():
             if column_name in existing_columns:
@@ -101,6 +109,17 @@ def ensure_user_subscription_schema() -> None:
         "management_granted_by_user_id": "ALTER TABLE users ADD COLUMN management_granted_by_user_id VARCHAR(36) NULL",
         "management_suspended_at": "ALTER TABLE users ADD COLUMN management_suspended_at DATETIME NULL",
         "management_suspended_by_user_id": "ALTER TABLE users ADD COLUMN management_suspended_by_user_id VARCHAR(36) NULL",
+        "account_locked": "ALTER TABLE users ADD COLUMN account_locked BOOLEAN NOT NULL DEFAULT FALSE",
+        "locked_at": "ALTER TABLE users ADD COLUMN locked_at DATETIME NULL",
+        "locked_by_user_id": "ALTER TABLE users ADD COLUMN locked_by_user_id VARCHAR(36) NULL",
+        "reactivated_at": "ALTER TABLE users ADD COLUMN reactivated_at DATETIME NULL",
+        "reactivated_by_user_id": "ALTER TABLE users ADD COLUMN reactivated_by_user_id VARCHAR(36) NULL",
+        "force_password_reset": "ALTER TABLE users ADD COLUMN force_password_reset BOOLEAN NOT NULL DEFAULT FALSE",
+        "archived_at": "ALTER TABLE users ADD COLUMN archived_at DATETIME NULL",
+        "archived_by_user_id": "ALTER TABLE users ADD COLUMN archived_by_user_id VARCHAR(36) NULL",
+        "merged_into_user_id": "ALTER TABLE users ADD COLUMN merged_into_user_id VARCHAR(36) NULL",
+        "last_login_at": "ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL",
+        "admin_2fa_required": "ALTER TABLE users ADD COLUMN admin_2fa_required BOOLEAN NOT NULL DEFAULT FALSE",
         "subscription_plan_id": "ALTER TABLE users ADD COLUMN subscription_plan_id VARCHAR(100) NULL",
         "subscription_plan_name": "ALTER TABLE users ADD COLUMN subscription_plan_name VARCHAR(255) NULL",
         "subscription_status": "ALTER TABLE users ADD COLUMN subscription_status VARCHAR(50) NOT NULL DEFAULT 'free'",
@@ -158,6 +177,11 @@ def ensure_reply_template_seed(management_service: ManagementService) -> None:
         management_service.ensure_default_reply_templates(db)
 
 
+def ensure_admin_center_seed(admin_center_service: AdminCenterService) -> None:
+    with Session(engine) as db:
+        admin_center_service.ensure_seed_data(db)
+
+
 def ensure_subscription_transaction_schema() -> None:
     inspector = inspect(engine)
     if "subscription_transactions" not in inspector.get_table_names():
@@ -172,6 +196,10 @@ def ensure_subscription_transaction_schema() -> None:
         "customer_mobile": "ALTER TABLE subscription_transactions ADD COLUMN customer_mobile VARCHAR(20) NULL",
         "company_name": "ALTER TABLE subscription_transactions ADD COLUMN company_name VARCHAR(255) NULL",
         "canceled_at": "ALTER TABLE subscription_transactions ADD COLUMN canceled_at DATETIME NULL",
+        "refund_status": "ALTER TABLE subscription_transactions ADD COLUMN refund_status VARCHAR(40) NULL",
+        "dispute_status": "ALTER TABLE subscription_transactions ADD COLUMN dispute_status VARCHAR(40) NULL",
+        "retry_count": "ALTER TABLE subscription_transactions ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+        "billing_admin_note": "ALTER TABLE subscription_transactions ADD COLUMN billing_admin_note VARCHAR(255) NULL",
     }
     with engine.begin() as connection:
         for column_name, statement in required_statements.items():
@@ -332,11 +360,13 @@ def create_app() -> FastAPI:
     contact_request_service = ContactRequestService()
     linked_provider_service = LinkedProviderService()
     management_service = ManagementService(auth_service)
+    admin_center_service = AdminCenterService(auth_service)
     social_oauth_service = SocialOAuthService()
     payment_service = PaymentService()
     ensure_social_oauth_config_seed(social_oauth_service)
     ensure_management_support_schema()
     ensure_reply_template_seed(management_service)
+    ensure_admin_center_seed(admin_center_service)
     ensure_manual_test_users(auth_service)
     base_dir = Path(__file__).resolve().parent
     frontend_build_dir = base_dir.parent / "frontend" / "build"
@@ -354,6 +384,7 @@ def create_app() -> FastAPI:
     app.include_router(build_auth_router(otp_service, auth_service))
     app.include_router(build_contact_request_router(contact_request_service, auth_service))
     app.include_router(build_management_router(management_service, auth_service))
+    app.include_router(build_admin_center_router(admin_center_service, auth_service))
     app.include_router(build_linked_provider_router(linked_provider_service, auth_service, social_oauth_service))
     app.include_router(build_payment_router(payment_service, auth_service))
     app.include_router(build_document_router(rag_service))

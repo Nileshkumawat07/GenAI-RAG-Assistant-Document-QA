@@ -4,12 +4,13 @@ import json
 import random
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.models.contact_request import ContactRequest
+from app.models.request_assignment_history import RequestAssignmentHistory
 from app.models.user import User
 
 
@@ -77,6 +78,7 @@ class ContactRequestService:
         self._require_user(db, user_id)
 
         normalized_category = category.strip().lower()
+        due_hours = 6 if normalized_category == "technical" else 24
         request = ContactRequest(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -84,6 +86,10 @@ class ContactRequestService:
             title=title.strip(),
             request_code=self._generate_numeric_code(db),
             status="In Progress",
+            priority_score=90 if normalized_category == "technical" else 75 if normalized_category == "business" else 60,
+            due_at=datetime.now(timezone.utc) + timedelta(hours=due_hours),
+            queue_owner="technical" if normalized_category == "technical" else "general",
+            source_channel="web",
             payload_json=json.dumps(values),
         )
         db.add(request)
@@ -159,13 +165,33 @@ class ContactRequestService:
                 manager = db.execute(select(User).where(User.id == assigned_manager_user_id)).scalar_one_or_none()
                 if not manager:
                     raise ContactRequestServiceError("Assigned management user was not found.")
+                previous_manager_user_id = request.assigned_manager_user_id
                 request.assigned_manager_user_id = assigned_manager_user_id
                 request.assigned_by_user_id = acting_user_id
                 request.assigned_at = now
+                db.add(
+                    RequestAssignmentHistory(
+                        id=str(uuid.uuid4()),
+                        request_id=request.id,
+                        previous_manager_user_id=previous_manager_user_id,
+                        next_manager_user_id=assigned_manager_user_id,
+                        assigned_by_user_id=acting_user_id,
+                    )
+                )
             else:
+                previous_manager_user_id = request.assigned_manager_user_id
                 request.assigned_manager_user_id = None
                 request.assigned_by_user_id = acting_user_id
                 request.assigned_at = now
+                db.add(
+                    RequestAssignmentHistory(
+                        id=str(uuid.uuid4()),
+                        request_id=request.id,
+                        previous_manager_user_id=previous_manager_user_id,
+                        next_manager_user_id=None,
+                        assigned_by_user_id=acting_user_id,
+                    )
+                )
 
         request.status = normalized_status
         request.admin_message = (admin_message or "").strip() or None

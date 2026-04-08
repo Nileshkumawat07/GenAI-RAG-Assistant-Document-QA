@@ -19,6 +19,17 @@ import {
   exportManagementReport,
   getManagementOverview,
 } from "./managementApi";
+import {
+  assignAdminRole,
+  createAdminCommunicationTemplate,
+  forceAdminPasswordReset,
+  getAdminCenterOverview,
+  lockAdminUser,
+  reactivateAdminUser,
+  runAdminDatabaseQuery,
+  saveAdminContent,
+  updateBillingAdministration,
+} from "./adminCenterApi";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 
@@ -409,6 +420,20 @@ const INFO_PAGE_CONFIG = {
     statusItems: ["Admin session active", "Request moderation enabled", "Database overview ready"],
     tabs: [
       { id: "overview", label: "Overview", heading: "Administration Overview" },
+      { id: "users", label: "Users", heading: "User Administration Center" },
+      { id: "roles", label: "Roles", heading: "Role And Permission System" },
+      { id: "sla", label: "SLA", heading: "Ticket SLA Dashboard" },
+      { id: "assignments", label: "Assignments", heading: "Assignment Engine" },
+      { id: "analytics", label: "Analytics", heading: "Advanced Analytics" },
+      { id: "billing", label: "Billing", heading: "Billing Administration" },
+      { id: "communications", label: "Communications", heading: "Communication Hub" },
+      { id: "compliance", label: "Compliance", heading: "Compliance And Audit" },
+      { id: "operations", label: "Operations", heading: "System Operations Panel" },
+      { id: "content", label: "Content", heading: "Content And Knowledge Admin" },
+      { id: "security", label: "Security", heading: "Abuse And Security Controls" },
+      { id: "automation", label: "Automation", heading: "Workflow Automation" },
+      { id: "notifications", label: "Notifications", heading: "Admin Notifications" },
+      { id: "reports", label: "Reports", heading: "Report Builder" },
       { id: "management", label: "Management", heading: "Management Users" },
       { id: "database", label: "Database", heading: "MySQL Table Overview" },
     ],
@@ -494,6 +519,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [newTemplateCategory, setNewTemplateCategory] = useState("");
   const [newTemplateBody, setNewTemplateBody] = useState("");
   const [managementReportLoading, setManagementReportLoading] = useState("");
+  const [adminCenterData, setAdminCenterData] = useState(null);
+  const [adminDatabaseQuery, setAdminDatabaseQuery] = useState("SELECT id, full_name, email FROM users");
+  const [adminDatabaseQueryResult, setAdminDatabaseQueryResult] = useState(null);
+  const [adminContentDraft, setAdminContentDraft] = useState({
+    pageKey: "about",
+    sectionKey: "company",
+    title: "",
+    bodyJson: "{\"body\":[]}",
+    isPublished: true,
+  });
+  const [adminCommunicationDraft, setAdminCommunicationDraft] = useState({
+    channel: "email",
+    category: "support",
+    title: "",
+    body: "",
+    requiresApproval: false,
+  });
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -847,6 +889,22 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       (managementRequestCountFilter === "idle" && item.requestCount === 0);
     return matchesSearch && matchesAccess && matchesRequestCount;
   });
+  const adminCenterPanels = adminCenterData || {};
+  const adminUsersPanel = adminCenterPanels.userAdministration || { users: [], archivedUsers: [] };
+  const adminRolesPanel = adminCenterPanels.rolesAndPermissions || { roles: [], permissions: [], assignments: [] };
+  const adminSlaPanel = adminCenterPanels.ticketSlaDashboard || { overdueQueue: [], breachedQueue: [], agingBuckets: [], statusCounts: {} };
+  const adminAssignmentsPanel = adminCenterPanels.assignmentEngine || { managerLoad: [], assignmentHistory: [], queueOwnership: [] };
+  const adminAnalyticsPanel = adminCenterPanels.advancedAnalytics || { categoryHeatmap: [], completionFunnel: {}, subscriptionConversions: {} };
+  const adminBillingPanel = adminCenterPanels.billingAdministration || { transactions: [], billingNotes: [] };
+  const adminCommunicationsPanel = adminCenterPanels.communicationHub || { templates: [], logs: [] };
+  const adminCompliancePanel = adminCenterPanels.complianceAndAudit || { auditLogs: [] };
+  const adminOperationsPanel = adminCenterPanels.systemOperationsPanel || {};
+  const adminContentPanel = adminCenterPanels.contentAndKnowledgeAdmin || { entries: [] };
+  const adminDatabaseToolsPanel = adminCenterPanels.databaseSafetyTools || { tables: [] };
+  const adminSecurityPanel = adminCenterPanels.abuseAndSecurityControls || { securityEvents: [] };
+  const adminAutomationPanel = adminCenterPanels.workflowAutomation || { rules: [] };
+  const adminNotificationsPanel = adminCenterPanels.adminNotifications || { items: [], unreadCount: 0 };
+  const adminReportsPanel = adminCenterPanels.reportBuilder || { presets: [], formats: [] };
 
   const hasQuestion = question.trim().length > 0;
 
@@ -883,9 +941,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     try {
       setAdminLoading(true);
       setAdminError("");
-      const [mysqlOverview, managementOverview] = await Promise.all([
+      const [mysqlOverview, managementOverview, adminCenterOverview] = await Promise.all([
         getAdminMysqlOverview(),
         getManagementOverview(),
+        isAdmin ? getAdminCenterOverview() : Promise.resolve(null),
       ]);
       setAdminTables(mysqlOverview.tables || []);
       setAdminStatusOptions(mysqlOverview.statusOptions || []);
@@ -913,6 +972,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           (managementOverview.requests || []).map((item) => [item.id, item.assignedManagerUserId || ""])
         )
       );
+      setAdminCenterData(adminCenterOverview);
     } catch (loadError) {
       setAdminError(loadError.message || "Failed to load administration data.");
     } finally {
@@ -1297,6 +1357,79 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       setAdminError(reportError.message || "Failed to export management report.");
     } finally {
       setManagementReportLoading("");
+    }
+  };
+
+  const handleAdminUserStateAction = async (userId, action) => {
+    try {
+      setAdminError("");
+      if (action === "lock") {
+        await lockAdminUser(userId, { reason: "Locked from administration center." });
+      } else if (action === "reactivate") {
+        await reactivateAdminUser(userId, { reason: "Reactivated from administration center." });
+      } else if (action === "force-reset") {
+        await forceAdminPasswordReset(userId);
+      }
+      await loadAdministrationData();
+    } catch (actionError) {
+      setAdminError(actionError.message || "Failed to update the user.");
+    }
+  };
+
+  const handleAdminAssignRole = async (userId, roleName) => {
+    try {
+      setAdminError("");
+      await assignAdminRole({ userId, roleName });
+      await loadAdministrationData();
+    } catch (roleError) {
+      setAdminError(roleError.message || "Failed to assign role.");
+    }
+  };
+
+  const handleAdminBillingQuickUpdate = async (transactionId, patch) => {
+    try {
+      setAdminError("");
+      await updateBillingAdministration({ transactionId, ...patch });
+      await loadAdministrationData();
+    } catch (billingError) {
+      setAdminError(billingError.message || "Failed to update billing administration.");
+    }
+  };
+
+  const handleAdminSaveContent = async () => {
+    try {
+      setAdminError("");
+      await saveAdminContent(adminContentDraft);
+      await loadAdministrationData();
+    } catch (contentError) {
+      setAdminError(contentError.message || "Failed to save content.");
+    }
+  };
+
+  const handleAdminCreateCommunicationTemplate = async () => {
+    try {
+      setAdminError("");
+      await createAdminCommunicationTemplate(adminCommunicationDraft);
+      setAdminCommunicationDraft({
+        channel: "email",
+        category: "support",
+        title: "",
+        body: "",
+        requiresApproval: false,
+      });
+      await loadAdministrationData();
+    } catch (templateError) {
+      setAdminError(templateError.message || "Failed to create communication template.");
+    }
+  };
+
+  const handleAdminDatabaseQuery = async () => {
+    try {
+      setAdminError("");
+      const result = await runAdminDatabaseQuery({ sql: adminDatabaseQuery });
+      setAdminDatabaseQueryResult(result);
+    } catch (queryError) {
+      setAdminError(queryError.message || "Failed to run the database query.");
     }
   };
 
@@ -2290,6 +2423,325 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         );
       }
 
+      if (selectedInfoPage === "administration" && activeInfoTab === "users") {
+        return (
+          <>
+            <div className="insight-section">
+              <div className="insight-card">
+                <h3 className="tool-title">{activeInfoContent.heading}</h3>
+                <p className="tool-copy">Edit users, verify contact fields, lock or reactivate accounts, require password reset, and inspect each user timeline.</p>
+              </div>
+            </div>
+            <div className="content-grid single-column">
+              <article className="tool-card workspace-copy-card">
+                <div className="admin-request-grid">
+                  {adminUsersPanel.users.map((user) => (
+                    <article key={user.id} className="admin-request-card">
+                      <div className="admin-request-card-header">
+                        <div>
+                          <p className="contact-request-type">{(user.roles || []).join(", ") || "No roles"}</p>
+                          <h4>{user.fullName}</h4>
+                        </div>
+                        <span className={`contact-request-status-chip status-${user.accountLocked ? "completed" : "in-review"}`}>
+                          {user.accountLocked ? "Locked" : "Active"}
+                        </span>
+                      </div>
+                      <div className="admin-request-meta-grid">
+                        <div className="contact-request-meta-item"><span>Email</span><strong>{user.email}</strong></div>
+                        <div className="contact-request-meta-item"><span>Mobile</span><strong>{user.mobile}</strong></div>
+                        <div className="contact-request-meta-item"><span>Last Login</span><strong>{user.lastLoginAt || "Not available"}</strong></div>
+                      </div>
+                      <div className="admin-request-action-row">
+                        <button className="admin-table-action-button" type="button" onClick={() => handleAdminUserStateAction(user.id, user.accountLocked ? "reactivate" : "lock")}>
+                          {user.accountLocked ? "Reactivate" : "Lock"}
+                        </button>
+                        <button className="admin-table-action-button" type="button" onClick={() => handleAdminUserStateAction(user.id, "force-reset")}>
+                          Force Password Reset
+                        </button>
+                        <button className="admin-table-action-button" type="button" onClick={() => handleAdminAssignRole(user.id, "support")}>
+                          Give Support
+                        </button>
+                      </div>
+                      <div className="admin-user-history-list">
+                        {(user.timeline || []).slice(0, 5).map((item, index) => (
+                          <div key={`${user.id}-${index}`} className="admin-user-history-item">
+                            <strong>{item.title}</strong>
+                            <p>{item.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+            </div>
+          </>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "roles") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                {adminRolesPanel.roles.map((role) => (
+                  <div key={role.id} className="workspace-mini-card">
+                    <h4>{role.name}</h4>
+                    <p>{role.description || "No description"}</p>
+                    <p>{(role.permissions || []).join(", ") || "No permissions"}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "sla") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                <div className="workspace-mini-card"><h4>First Response Avg</h4><p>{adminSlaPanel.firstResponseAverageMinutes ?? "N/A"} min</p></div>
+                <div className="workspace-mini-card"><h4>Overdue Queue</h4><p>{(adminSlaPanel.overdueQueue || []).length}</p></div>
+                <div className="workspace-mini-card"><h4>Breached Queue</h4><p>{(adminSlaPanel.breachedQueue || []).length}</p></div>
+                <div className="workspace-mini-card"><h4>Escalations</h4><p>{adminSlaPanel.escalations || 0}</p></div>
+              </div>
+              <div className="admin-audit-list">
+                {(adminSlaPanel.agingBuckets || []).map((item) => (
+                  <article key={item.bucket} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{item.bucket}</strong><span>{item.count}</span></div>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "assignments") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                {(adminAssignmentsPanel.managerLoad || []).map((item) => (
+                  <div key={item.managerUserId} className="workspace-mini-card">
+                    <h4>{item.managerName}</h4>
+                    <p>{item.assignedCount} assigned | {item.inReviewCount} in review | {item.technicalCount} technical</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "analytics") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                <div className="workspace-mini-card"><h4>Daily Requests</h4><p>{adminAnalyticsPanel.dailyRequests || 0}</p></div>
+                <div className="workspace-mini-card"><h4>Weekly Requests</h4><p>{adminAnalyticsPanel.weeklyRequests || 0}</p></div>
+                <div className="workspace-mini-card"><h4>Monthly Requests</h4><p>{adminAnalyticsPanel.monthlyRequests || 0}</p></div>
+                <div className="workspace-mini-card"><h4>Premium Users</h4><p>{adminAnalyticsPanel.subscriptionConversions?.premiumUsers || 0}</p></div>
+              </div>
+              <div className="admin-audit-list">
+                {(adminAnalyticsPanel.categoryHeatmap || []).map((item) => (
+                  <article key={item.category} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{item.category}</strong><span>{item.count}</span></div>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "billing") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="admin-request-grid">
+                {(adminBillingPanel.transactions || []).slice(0, 20).map((item) => (
+                  <article key={item.id} className="admin-request-card">
+                    <div className="admin-request-card-header">
+                      <div><p className="contact-request-type">{item.invoiceNumber}</p><h4>{item.planName}</h4></div>
+                      <span className="contact-request-status-chip status-in-review">{item.status}</span>
+                    </div>
+                    <p>{item.customerName}</p>
+                    <p>Refund: {item.refundStatus || "none"} | Dispute: {item.disputeStatus || "none"} | Retries: {item.retryCount || 0}</p>
+                    <div className="admin-request-action-row">
+                      <button className="admin-table-action-button" type="button" onClick={() => handleAdminBillingQuickUpdate(item.id, { refundStatus: "review" })}>Mark Refund Review</button>
+                      <button className="admin-table-action-button" type="button" onClick={() => handleAdminBillingQuickUpdate(item.id, { retryCount: (item.retryCount || 0) + 1 })}>Retry +1</button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "communications") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-form-stack">
+                <input className="auth-input workspace-static-input" type="text" placeholder="Title" value={adminCommunicationDraft.title} onChange={(event) => setAdminCommunicationDraft((current) => ({ ...current, title: event.target.value }))} />
+                <textarea className="question-input workspace-static-textarea" rows={3} placeholder="Body" value={adminCommunicationDraft.body} onChange={(event) => setAdminCommunicationDraft((current) => ({ ...current, body: event.target.value }))} />
+                <button className="admin-table-action-button" type="button" onClick={handleAdminCreateCommunicationTemplate}>Create Template</button>
+              </div>
+              <div className="admin-audit-list">
+                {(adminCommunicationsPanel.templates || []).slice(0, 12).map((item) => (
+                  <article key={item.id} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{item.title}</strong><span>{item.channel}</span></div>
+                    <p>{item.body}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "compliance") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                <div className="workspace-mini-card"><h4>Immutable Audit Trail</h4><p>{(adminCompliancePanel.auditLogs || []).length} entries</p></div>
+                <div className="workspace-mini-card"><h4>Signed Reports</h4><p>{adminCompliancePanel.signedReportReady ? "Ready" : "Not ready"}</p></div>
+                <div className="workspace-mini-card"><h4>Retention Policy</h4><p>{adminCompliancePanel.retentionPolicyDays || 0} days</p></div>
+              </div>
+              <div className="admin-audit-list">
+                {(adminCompliancePanel.auditLogs || []).slice(0, 15).map((item) => (
+                  <article key={item.id} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{prettifyKey(item.actionType)}</strong><span>{item.createdAt || "Unknown time"}</span></div>
+                    <p>{item.detail}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "operations") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                <div className="workspace-mini-card"><h4>App Health</h4><p>{adminOperationsPanel.appHealth || "Unknown"}</p></div>
+                <div className="workspace-mini-card"><h4>Pending Queue</h4><p>{adminOperationsPanel.queueStatus?.pendingRequests || 0}</p></div>
+                <div className="workspace-mini-card"><h4>Document Files</h4><p>{adminOperationsPanel.storageUsage?.documentFiles || 0}</p></div>
+                <div className="workspace-mini-card"><h4>Webhook Failures</h4><p>{adminOperationsPanel.webhookFailures || 0}</p></div>
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "content") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-form-stack">
+                <input className="auth-input workspace-static-input" type="text" placeholder="Page key" value={adminContentDraft.pageKey} onChange={(event) => setAdminContentDraft((current) => ({ ...current, pageKey: event.target.value }))} />
+                <input className="auth-input workspace-static-input" type="text" placeholder="Section key" value={adminContentDraft.sectionKey} onChange={(event) => setAdminContentDraft((current) => ({ ...current, sectionKey: event.target.value }))} />
+                <input className="auth-input workspace-static-input" type="text" placeholder="Title" value={adminContentDraft.title} onChange={(event) => setAdminContentDraft((current) => ({ ...current, title: event.target.value }))} />
+                <textarea className="question-input workspace-static-textarea" rows={4} placeholder="JSON body" value={adminContentDraft.bodyJson} onChange={(event) => setAdminContentDraft((current) => ({ ...current, bodyJson: event.target.value }))} />
+                <button className="admin-table-action-button" type="button" onClick={handleAdminSaveContent}>Save Content</button>
+              </div>
+              <div className="admin-audit-list">
+                {(adminContentPanel.entries || []).slice(0, 20).map((item) => (
+                  <article key={item.id} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{item.pageKey}:{item.sectionKey}</strong><span>{item.updatedAt || "Unknown time"}</span></div>
+                    <p>{item.title}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "security") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                <div className="workspace-mini-card"><h4>Locked Users</h4><p>{adminSecurityPanel.lockedUsers || 0}</p></div>
+                <div className="workspace-mini-card"><h4>2FA Required Admins</h4><p>{adminSecurityPanel.twoFactorRequiredAdmins || 0}</p></div>
+                <div className="workspace-mini-card"><h4>Flagged Requests</h4><p>{adminSecurityPanel.flaggedRequests || 0}</p></div>
+              </div>
+              <div className="admin-audit-list">
+                {(adminSecurityPanel.securityEvents || []).slice(0, 15).map((item) => (
+                  <article key={item.id} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{prettifyKey(item.eventType)}</strong><span>{item.severity}</span></div>
+                    <p>{item.detail}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "automation") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="admin-audit-list">
+                {(adminAutomationPanel.rules || []).map((item) => (
+                  <article key={item.id} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{item.name}</strong><span>{item.triggerKey}</span></div>
+                    <p>Conditions: {item.conditionsJson}</p>
+                    <p>Actions: {item.actionsJson}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "notifications") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-mini-card"><h4>Unread Notifications</h4><p>{adminNotificationsPanel.unreadCount || 0}</p></div>
+              <div className="admin-audit-list">
+                {(adminNotificationsPanel.items || []).map((item) => (
+                  <article key={item.id} className="admin-audit-card">
+                    <div className="admin-audit-card-head"><strong>{item.title}</strong><span>{item.level}</span></div>
+                    <p>{item.message}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
+      if (selectedInfoPage === "administration" && activeInfoTab === "reports") {
+        return (
+          <div className="content-grid single-column">
+            <article className="tool-card workspace-copy-card">
+              <div className="workspace-info-grid">
+                {(adminReportsPanel.presets || []).map((item) => (
+                  <div key={item.id} className="workspace-mini-card">
+                    <h4>{item.name}</h4>
+                    <p>{item.outputFormat}</p>
+                    <p>{item.filtersJson}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+        );
+      }
+
       if (
         (activeInfoTab === "management" && selectedInfoPage === "administration") ||
         (activeInfoTab === "users" && selectedInfoPage === "management")
@@ -2467,12 +2919,12 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           </div>
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
-              <div className="admin-toolbar">
-                <div className="admin-toolbar-copy">
-                  <h4>Database Overview</h4>
-                  <p>Review live table snapshots, search within the current section, and export account or subscription data.</p>
-                </div>
-                <div className="admin-toolbar-actions">
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Database Overview</h4>
+                    <p>Review live table snapshots, search within the current section, export data, and run read-only admin queries.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
                   <input
                     className="auth-input workspace-static-input admin-search-input"
                     type="search"
@@ -2480,16 +2932,33 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     value={adminDatabaseSearch}
                     onChange={(event) => setAdminDatabaseSearch(event.target.value)}
                   />
-                  <button
-                    className="admin-table-action-button"
-                    type="button"
-                    onClick={() => handleAdminExport(getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection))}
-                    disabled={adminExportLoading === `${getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection)}-csv`}
-                  >
-                    {adminExportLoading === `${getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection)}-csv` ? "Exporting..." : "Export Section"}
-                  </button>
+                    <button
+                      className="admin-table-action-button"
+                      type="button"
+                      onClick={() => handleAdminExport(getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection))}
+                      disabled={adminExportLoading === `${getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection)}-csv`}
+                    >
+                      {adminExportLoading === `${getAdminExportSectionForDatabaseSection(activeAdminDatabaseSection)}-csv` ? "Exporting..." : "Export Section"}
+                    </button>
+                  </div>
                 </div>
-              </div>
+                {selectedInfoPage === "administration" ? (
+                  <div className="workspace-form-stack">
+                    <textarea
+                      className="question-input workspace-static-textarea"
+                      rows={3}
+                      value={adminDatabaseQuery}
+                      onChange={(event) => setAdminDatabaseQuery(event.target.value)}
+                    />
+                    <button className="admin-table-action-button" type="button" onClick={handleAdminDatabaseQuery}>
+                      Run Read-Only Query
+                    </button>
+                    <p className="tool-copy">Mode: {adminDatabaseToolsPanel.queryMode || "read-only"} | Known tables: {adminDatabaseToolsPanel.tableCount || 0}</p>
+                    {adminDatabaseQueryResult ? (
+                      <p className="tool-copy">Rows returned: {adminDatabaseQueryResult.rowCount || 0}</p>
+                    ) : null}
+                  </div>
+                ) : null}
               {adminLoading ? (
                 <div className="admin-empty-state admin-loading-state">
                   <h4>Loading database tables</h4>

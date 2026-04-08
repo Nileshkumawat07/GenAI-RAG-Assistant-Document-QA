@@ -23,6 +23,12 @@ class ContactRequest(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_status_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_status_updated_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    priority_score: Mapped[int | None] = mapped_column(nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    breached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    escalation_level: Mapped[int] = mapped_column(nullable=False, default=0)
+    queue_owner: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source_channel: Mapped[str] = mapped_column(String(40), nullable=False, default="web")
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

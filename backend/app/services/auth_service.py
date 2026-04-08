@@ -177,7 +177,12 @@ class AuthService:
 
         if not user or not self._verify_password(password, user.password_hash):
             raise AuthServiceError("Invalid email/username or password.")
+        if bool(getattr(user, "account_locked", False)):
+            raise AuthServiceError("This account is locked. Contact support or an administrator.")
 
+        user.last_login_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(user)
         self.sync_user_subscription(db, user)
         return self._serialize_user(user)
 
