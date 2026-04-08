@@ -27,6 +27,8 @@ def build_payment_router(payment_service: PaymentService, auth_service: AuthServ
     transaction_service = SubscriptionTransactionService()
 
     def serialize_user(user):
+        is_admin = auth_service.is_admin_email(user.email)
+        is_management = bool(getattr(user, "is_management", False))
         return {
             "id": user.id,
             "fullName": user.full_name,
@@ -40,6 +42,7 @@ def build_payment_router(payment_service: PaymentService, auth_service: AuthServ
             "securityAnswer": user.security_answer,
             "referralCode": user.referral_code,
             "publicUserCode": user.public_user_code,
+            "isManagement": is_management,
             "emailVerified": user.email_verified,
             "mobileVerified": user.mobile_verified,
             "subscriptionPlanId": user.subscription_plan_id,
@@ -51,8 +54,8 @@ def build_payment_router(payment_service: PaymentService, auth_service: AuthServ
             "subscriptionActivatedAt": user.subscription_activated_at.isoformat() if user.subscription_activated_at else None,
             "subscriptionExpiresAt": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
             "createdAt": user.created_at.isoformat(),
-            "isAdmin": auth_service.is_admin_email(user.email),
-            "mode": "admin" if auth_service.is_admin_email(user.email) else "member",
+            "isAdmin": is_admin,
+            "mode": "admin" if is_admin else "management" if is_management else "member",
             "authToken": auth_service.create_access_token(user_id=user.id),
         }
 

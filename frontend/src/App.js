@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import HomePage from "./features/auth/HomePage";
 import LoginPage from "./features/auth/LoginPage";
 import SignupPage from "./features/auth/SignupPage";
-import { loginUser, signupUser } from "./features/auth/authApi";
+import { fetchCurrentSessionUser, loginUser, signupUser } from "./features/auth/authApi";
 import {
   clearCurrentUser,
   getCurrentUser,
@@ -217,6 +217,31 @@ function App() {
       window.removeEventListener("hashchange", syncFromBrowserRoute);
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser || screen !== "workspace") {
+      return undefined;
+    }
+
+    let active = true;
+    const refreshCurrentUser = async () => {
+      try {
+        const latestUser = await fetchCurrentSessionUser();
+        if (active) {
+          handleUserUpdate(latestUser);
+        }
+      } catch {
+        // Keep the current session state if refresh fails.
+      }
+    };
+
+    refreshCurrentUser();
+    window.addEventListener("focus", refreshCurrentUser);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshCurrentUser);
+    };
+  }, [currentUser, screen]);
 
   return (
     <main

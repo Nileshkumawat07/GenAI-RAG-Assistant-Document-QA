@@ -586,6 +586,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         columns: null,
       },
       {
+        id: "management",
+        title: "Management",
+        copy: "Users who currently have management access.",
+        tableNames: ["users"],
+        columns: ["public_user_code", "full_name", "username", "email", "mobile", "is_management", "created_at"],
+        rowFilter: (row) => !!row.is_management,
+      },
+      {
         id: "provider-config",
         title: "Provider Configuration",
         copy: "OAuth and provider setup entries, excluding secrets.",
@@ -603,7 +611,21 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
 
         tables.forEach((table) => usedTableNames.add(table.tableName));
 
-        return tables.length > 0 ? { ...section, tables } : null;
+        if (tables.length === 0) {
+          return null;
+        }
+
+        const filteredTables = section.rowFilter
+          ? tables
+            .map((table) => ({
+              ...table,
+              rows: (table.rows || []).filter(section.rowFilter),
+              rowCount: (table.rows || []).filter(section.rowFilter).length,
+            }))
+            .filter((table) => (table.rowCount || 0) > 0)
+          : tables;
+
+        return filteredTables.length > 0 ? { ...section, tables: filteredTables } : null;
       })
       .filter(Boolean);
 

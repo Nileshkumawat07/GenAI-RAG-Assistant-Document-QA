@@ -337,6 +337,17 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
+    @router.get("/session/current", response_model=AuthUserResponse)
+    def get_current_session_user(
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            user = auth_service.get_user_by_id(db, user_id=authenticated_user_id)
+            return serialize_user(user)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+
     @router.post("/settings/username", response_model=AuthUserResponse)
     def update_username(
         payload: UpdateUsernameRequest,

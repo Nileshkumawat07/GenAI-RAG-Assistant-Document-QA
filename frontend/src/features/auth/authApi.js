@@ -66,6 +66,18 @@ export async function loginUser(payload) {
   return normalizeAuthUser(data);
 }
 
+export async function fetchCurrentSessionUser() {
+  const data = await requestJson(
+    "/auth/session/current",
+    {
+      method: "GET",
+    },
+    "Failed to load current user."
+  );
+
+  return normalizeAuthUser(data);
+}
+
 export async function updateUsername(payload) {
   const data = await requestJson(
     "/auth/settings/username",
