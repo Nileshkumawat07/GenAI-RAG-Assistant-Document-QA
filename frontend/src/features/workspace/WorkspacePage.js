@@ -3224,24 +3224,36 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
 
                     return (
                       <>
-                        <div className="contact-request-category-row">
-                          {databaseSections.map((section) => (
-                            <button
-                              key={section.id}
-                              type="button"
-                              className={`contact-request-category-button ${selectedDatabaseSection?.id === section.id ? "active" : ""}`}
-                              onClick={() => setActiveAdminDatabaseSection(section.id)}
-                            >
-                              <span>{section.title}</span>
-                              <strong>
-                                {section.tables.reduce((sum, table) => sum + (table.rowCount || 0), 0)}
-                              </strong>
-                            </button>
-                          ))}
-                        </div>
+                        <section className="admin-db-switcher-panel">
+                          <div className="admin-db-switcher-header">
+                            <div>
+                              <h4>Database Sections</h4>
+                              <p>Switch between accounts, linked providers, subscriptions, and other live snapshots.</p>
+                            </div>
+                            <div className="admin-db-switcher-meta">
+                              <span>{databaseSections.length} sections</span>
+                              <strong>{selectedDatabaseSection?.title || "Database Overview"}</strong>
+                            </div>
+                          </div>
+                          <div className="contact-request-category-row admin-db-switcher-row">
+                            {databaseSections.map((section) => (
+                              <button
+                                key={section.id}
+                                type="button"
+                                className={`contact-request-category-button ${selectedDatabaseSection?.id === section.id ? "active" : ""}`}
+                                onClick={() => setActiveAdminDatabaseSection(section.id)}
+                              >
+                                <span>{section.title}</span>
+                                <strong>
+                                  {section.tables.reduce((sum, table) => sum + (table.rowCount || 0), 0)}
+                                </strong>
+                              </button>
+                            ))}
+                          </div>
+                        </section>
 
                         {selectedDatabaseSection ? (
-                          <section className="admin-db-group">
+                          <section className="admin-db-group admin-db-content-panel">
                             <div className="admin-db-group-header">
                               <div>
                                 <h4>{selectedDatabaseSection.title}</h4>

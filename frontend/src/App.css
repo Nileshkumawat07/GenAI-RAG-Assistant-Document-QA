@@ -3828,6 +3828,62 @@ body.workspace-body-mode .admin-db-group {
   border: 1px solid rgba(42, 75, 140, 0.12);
 }
 
+body.workspace-body-mode .admin-db-switcher-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(245, 249, 255, 0.98), rgba(238, 244, 255, 0.95));
+  border: 1px solid rgba(42, 75, 140, 0.12);
+}
+
+body.workspace-body-mode .admin-db-switcher-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+body.workspace-body-mode .admin-db-switcher-header h4 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .admin-db-switcher-header p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .admin-db-switcher-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 160px;
+}
+
+body.workspace-body-mode .admin-db-switcher-meta span {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--primary-soft);
+}
+
+body.workspace-body-mode .admin-db-switcher-meta strong {
+  font-size: 14px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .admin-db-switcher-row {
+  margin-top: 0;
+}
+
+body.workspace-body-mode .admin-db-content-panel {
+  margin-top: 14px;
+}
+
 body.workspace-body-mode .admin-db-group-header h4 {
   margin: 0 0 4px;
   font-size: 20px;
