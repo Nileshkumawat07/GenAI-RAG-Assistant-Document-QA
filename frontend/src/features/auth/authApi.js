@@ -316,3 +316,53 @@ export async function saveSettingsCategory(category, payload) {
     `Failed to save ${category} settings.`
   );
 }
+
+export async function listUserSessions() {
+  return requestJson(
+    "/auth/settings/sessions",
+    {
+      method: "GET",
+    },
+    "Failed to load sessions."
+  );
+}
+
+export async function revokeUserSession(sessionId) {
+  return requestJson(
+    `/auth/settings/sessions/${encodeURIComponent(sessionId)}/revoke`,
+    {
+      method: "POST",
+    },
+    "Failed to sign out the selected session."
+  );
+}
+
+export async function revokeAllOtherSessions() {
+  return requestJson(
+    "/auth/settings/sessions/revoke-all",
+    {
+      method: "POST",
+    },
+    "Failed to sign out other sessions."
+  );
+}
+
+export async function listUserDevices() {
+  return requestJson(
+    "/auth/settings/devices",
+    {
+      method: "GET",
+    },
+    "Failed to load devices."
+  );
+}
+
+export async function removeUserDevice(sessionId) {
+  return requestJson(
+    `/auth/settings/devices/${encodeURIComponent(sessionId)}/remove`,
+    {
+      method: "POST",
+    },
+    "Failed to remove device."
+  );
+}

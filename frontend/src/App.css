@@ -3132,6 +3132,140 @@ body.workspace-body-mode .billing-status-pill {
   font-weight: 800;
 }
 
+body.workspace-body-mode .settings-section-hero {
+  display: grid;
+  gap: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(86, 138, 245, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.96));
+}
+
+body.workspace-body-mode .settings-section-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--primary-soft);
+}
+
+body.workspace-body-mode .settings-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.workspace-body-mode .settings-stat-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 75, 140, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+body.workspace-body-mode .settings-stat-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .settings-stat-card strong {
+  font-size: 30px;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .settings-stat-meta {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+body.workspace-body-mode .settings-toolbar-row {
+  align-items: center;
+}
+
+body.workspace-body-mode .settings-record-list {
+  display: grid;
+  gap: 12px;
+}
+
+body.workspace-body-mode .settings-record-card {
+  display: grid;
+  gap: 12px;
+}
+
+body.workspace-body-mode .settings-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.workspace-body-mode .settings-card-head h4 {
+  margin: 0 0 6px;
+}
+
+body.workspace-body-mode .settings-card-head p {
+  margin: 0;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .settings-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+body.workspace-body-mode .settings-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.workspace-body-mode .settings-meta-item {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 75, 140, 0.12);
+  background: rgba(245, 249, 255, 0.92);
+}
+
+body.workspace-body-mode .settings-meta-item span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+body.workspace-body-mode .settings-meta-item strong {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--primary-deep);
+}
+
+body.workspace-body-mode .settings-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+body.workspace-body-mode .settings-empty-state {
+  min-height: 160px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
+body.workspace-body-mode .settings-empty-state h4,
+body.workspace-body-mode .settings-empty-state p {
+  margin: 0;
+}
+
 body.workspace-body-mode .billing-invoice-scroll {
   max-height: 540px;
   overflow-y: auto;
@@ -4254,6 +4388,19 @@ body.workspace-body-mode .contact-request-empty-card p {
   body.workspace-body-mode .admin-toolbar-actions,
   body.workspace-body-mode .admin-search-input {
     width: 100%;
+  }
+
+  body.workspace-body-mode .settings-overview-grid,
+  body.workspace-body-mode .settings-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.workspace-body-mode .settings-card-head {
+    flex-direction: column;
+  }
+
+  body.workspace-body-mode .settings-pill-row {
+    justify-content: flex-start;
   }
 }
 

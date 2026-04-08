@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, select, text
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -21,15 +21,18 @@ from app.models.contact_request import ContactRequest
 from app.models.linked_provider import UserSocialLink
 from app.models.subscription_transaction import SubscriptionTransaction
 from app.models.user import User
+from app.models.user_login_session import UserLoginSession
 from app.models.user_setting import UserSetting
 from app.schemas.auth import (
     AuthUserResponse,
     ChangePasswordRequest,
     CheckEmailVerificationRequest,
+    DeviceItemResponse,
     DeleteAccountRequest,
     DownloadAccountDataRequest,
     LoginRequest,
     SendEmailVerificationRequest,
+    SessionItemResponse,
     SignupRequest,
     SettingsCategoryResponse,
     UpdateManagementAccessRequest,
@@ -51,6 +54,123 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     admin_audit_service = AdminAuditService()
     contact_request_service = ContactRequestService()
     transaction_service = SubscriptionTransactionService()
+
+    def extract_client_ip(request: Request) -> str | None:
+        forwarded = request.headers.get("x-forwarded-for", "").strip()
+        if forwarded:
+            return forwarded.split(",", 1)[0].strip()
+        if request.client and request.client.host:
+            return request.client.host
+        return None
+
+    def extract_browser_name(user_agent: str | None) -> str | None:
+        text_value = (user_agent or "").lower()
+        if "edg/" in text_value:
+            return "Microsoft Edge"
+        if "chrome/" in text_value and "edg/" not in text_value:
+            return "Google Chrome"
+        if "firefox/" in text_value:
+            return "Mozilla Firefox"
+        if "safari/" in text_value and "chrome/" not in text_value:
+            return "Safari"
+        return "Unknown browser" if text_value else None
+
+    def extract_os_name(user_agent: str | None) -> str | None:
+        text_value = (user_agent or "").lower()
+        if "windows" in text_value:
+            return "Windows"
+        if "android" in text_value:
+            return "Android"
+        if "iphone" in text_value or "ipad" in text_value or "ios" in text_value:
+            return "iOS"
+        if "mac os" in text_value or "macintosh" in text_value:
+            return "macOS"
+        if "linux" in text_value:
+            return "Linux"
+        return "Unknown OS" if text_value else None
+
+    def extract_device_type(user_agent: str | None) -> str:
+        text_value = (user_agent or "").lower()
+        if "mobile" in text_value or "android" in text_value or "iphone" in text_value:
+            return "mobile"
+        if "ipad" in text_value or "tablet" in text_value:
+            return "tablet"
+        return "desktop"
+
+    def build_device_label(browser_name: str | None, os_name: str | None, device_type: str) -> str:
+        parts = [part for part in [browser_name, os_name] if part and not part.startswith("Unknown")]
+        if parts:
+            return " on ".join(parts[:2])
+        return "Mobile device" if device_type == "mobile" else "Desktop device"
+
+    def serialize_session_item(item: UserLoginSession, current_token_id: str | None = None) -> SessionItemResponse:
+        return SessionItemResponse(
+            id=item.id,
+            deviceLabel=item.device_label,
+            deviceType=item.device_type,
+            browserName=item.browser_name,
+            osName=item.os_name,
+            ipAddress=item.ip_address,
+            locationLabel=item.location_label,
+            rememberDevice=bool(item.remember_device),
+            trusted=bool(item.trusted),
+            isCurrent=bool(current_token_id and item.token_id == current_token_id and not item.is_revoked),
+            isRevoked=bool(item.is_revoked),
+            createdAt=item.created_at.isoformat() if item.created_at else None,
+            lastSeenAt=item.last_seen_at.isoformat() if item.last_seen_at else None,
+            revokedAt=item.revoked_at.isoformat() if item.revoked_at else None,
+        )
+
+    def serialize_device_items(items: list[UserLoginSession], current_token_id: str | None = None) -> list[DeviceItemResponse]:
+        grouped: dict[str, list[UserLoginSession]] = {}
+        for item in items:
+            grouped.setdefault(item.device_label, []).append(item)
+
+        device_rows = []
+        for _, sessions in grouped.items():
+            ordered = sorted(sessions, key=lambda entry: entry.last_seen_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+            latest = ordered[0]
+            device_rows.append(
+                DeviceItemResponse(
+                    id=latest.id,
+                    deviceLabel=latest.device_label,
+                    deviceType=latest.device_type,
+                    browserName=latest.browser_name,
+                    osName=latest.os_name,
+                    trusted=any(bool(entry.trusted) for entry in sessions),
+                    isCurrent=bool(current_token_id and latest.token_id == current_token_id and not latest.is_revoked),
+                    sessionCount=len([entry for entry in sessions if not entry.is_revoked]),
+                    lastSeenAt=latest.last_seen_at.isoformat() if latest.last_seen_at else None,
+                    ipAddress=latest.ip_address,
+                    locationLabel=latest.location_label,
+                )
+            )
+        return device_rows
+
+    def create_login_session(db: Session, user_id: str, request: Request) -> UserLoginSession:
+        token_id = secrets.token_hex(24)
+        user_agent = request.headers.get("user-agent")
+        browser_name = extract_browser_name(user_agent)
+        os_name = extract_os_name(user_agent)
+        device_type = extract_device_type(user_agent)
+        session = UserLoginSession(
+            id=str(secrets.token_hex(18)),
+            user_id=user_id,
+            token_id=token_id,
+            device_label=build_device_label(browser_name, os_name, device_type),
+            device_type=device_type,
+            browser_name=browser_name,
+            os_name=os_name,
+            user_agent=user_agent,
+            ip_address=extract_client_ip(request),
+            location_label="Current network",
+            remember_device=False,
+            trusted=False,
+        )
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+        return session
 
     def quote_identifier(identifier: str) -> str:
         return f"`{identifier.replace('`', '``')}`"
@@ -273,13 +393,38 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             raise HTTPException(status_code=401, detail="Missing authorization token.")
 
         try:
-            user_id = auth_service.verify_access_token(token)
+            user_id, token_id = auth_service.verify_access_token_details(token)
+            if token_id:
+                login_session = db.execute(
+                    select(UserLoginSession).where(UserLoginSession.token_id == token_id)
+                ).scalar_one_or_none()
+                if login_session and login_session.is_revoked:
+                    raise AuthServiceError("This session has been signed out.")
+                if login_session:
+                    login_session.last_seen_at = datetime.now(timezone.utc)
+                    db.commit()
             auth_service.get_user_by_id(db, user_id=user_id)
             return user_id
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
-    def serialize_user(user):
+    def get_authenticated_session_context(
+        authorization: str | None,
+        db: Session,
+    ) -> tuple[str, str | None]:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing authorization token.")
+        token = authorization.split(" ", 1)[1].strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing authorization token.")
+        try:
+            user_id, token_id = auth_service.verify_access_token_details(token)
+            auth_service.get_user_by_id(db, user_id=user_id)
+            return user_id, token_id
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    def serialize_user(user, token_id: str | None = None):
         is_admin = auth_service.is_admin_email(user.email)
         is_management = bool(getattr(user, "is_management", False))
         return AuthUserResponse(
@@ -315,7 +460,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             createdAt=user.created_at,
             isAdmin=is_admin,
             mode="admin" if is_admin else "management" if is_management else "member",
-            authToken=auth_service.create_access_token(user_id=user.id),
+            authToken=auth_service.create_access_token(user_id=user.id, token_id=token_id),
         )
 
     def serialize_settings_category(item: UserSetting | None, category: str) -> SettingsCategoryResponse:
@@ -330,7 +475,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         return SettingsCategoryResponse(category=category, payload=payload, updatedAt=updated_at)
 
     @router.post("/signup", response_model=AuthUserResponse)
-    def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+    def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_db)):
         try:
             user = auth_service.register_user(
                 db,
@@ -348,19 +493,21 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 email_verified=payload.emailVerified,
                 mobile_verified=payload.mobileVerified,
             )
-            return serialize_user(user)
+            login_session = create_login_session(db, user.id, request)
+            return serialize_user(user, token_id=login_session.token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/login", response_model=AuthUserResponse)
-    def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
         try:
             user = auth_service.authenticate_user(
                 db,
                 identifier=payload.identifier,
                 password=payload.password,
             )
-            return serialize_user(user)
+            login_session = create_login_session(db, user.id, request)
+            return serialize_user(user, token_id=login_session.token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
@@ -489,6 +636,107 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/settings/sessions", response_model=list[SessionItemResponse])
+    def list_user_sessions(
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ):
+        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        rows = db.execute(
+            select(UserLoginSession)
+            .where(UserLoginSession.user_id == user_id)
+            .order_by(UserLoginSession.last_seen_at.desc(), UserLoginSession.created_at.desc())
+        ).scalars().all()
+        return [serialize_session_item(item, current_token_id=current_token_id) for item in rows]
+
+    @router.post("/settings/sessions/{session_id}/revoke")
+    def revoke_user_session(
+        session_id: str,
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ):
+        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        session_row = db.execute(
+            select(UserLoginSession).where(
+                UserLoginSession.id == session_id,
+                UserLoginSession.user_id == user_id,
+            )
+        ).scalar_one_or_none()
+        if not session_row:
+            raise HTTPException(status_code=404, detail="Session was not found.")
+        if current_token_id and session_row.token_id == current_token_id:
+            raise HTTPException(status_code=400, detail="Use sign out all from the current session, or keep the current session active.")
+        session_row.is_revoked = True
+        session_row.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"message": "Session signed out successfully."}
+
+    @router.post("/settings/sessions/revoke-all")
+    def revoke_all_user_sessions(
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ):
+        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        rows = db.execute(
+            select(UserLoginSession).where(
+                UserLoginSession.user_id == user_id,
+                UserLoginSession.token_id != (current_token_id or ""),
+                UserLoginSession.is_revoked.is_(False),
+            )
+        ).scalars().all()
+        now = datetime.now(timezone.utc)
+        for item in rows:
+            item.is_revoked = True
+            item.revoked_at = now
+        db.commit()
+        return {"message": "Signed out all other sessions successfully."}
+
+    @router.get("/settings/devices", response_model=list[DeviceItemResponse])
+    def list_user_devices(
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ):
+        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        rows = db.execute(
+            select(UserLoginSession)
+            .where(UserLoginSession.user_id == user_id)
+            .order_by(UserLoginSession.last_seen_at.desc(), UserLoginSession.created_at.desc())
+        ).scalars().all()
+        return serialize_device_items(rows, current_token_id=current_token_id)
+
+    @router.post("/settings/devices/{session_id}/remove")
+    def remove_user_device(
+        session_id: str,
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ):
+        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        session_row = db.execute(
+            select(UserLoginSession).where(
+                UserLoginSession.id == session_id,
+                UserLoginSession.user_id == user_id,
+            )
+        ).scalar_one_or_none()
+        if not session_row:
+            raise HTTPException(status_code=404, detail="Device was not found.")
+        if current_token_id and session_row.token_id == current_token_id:
+            raise HTTPException(status_code=400, detail="The current device cannot be removed from the active session.")
+
+        matching_sessions = db.execute(
+            select(UserLoginSession).where(
+                UserLoginSession.user_id == user_id,
+                UserLoginSession.device_label == session_row.device_label,
+                UserLoginSession.is_revoked.is_(False),
+            )
+        ).scalars().all()
+        now = datetime.now(timezone.utc)
+        for item in matching_sessions:
+            item.is_revoked = True
+            item.revoked_at = now
+            item.trusted = False
+        db.commit()
+        return {"message": "Device removed successfully."}
 
     @router.get("/settings/categories/{category}", response_model=SettingsCategoryResponse)
     def get_settings_category(

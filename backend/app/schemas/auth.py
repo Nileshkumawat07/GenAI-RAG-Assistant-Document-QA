@@ -87,6 +87,37 @@ class SettingsCategoryResponse(BaseModel):
     updatedAt: str | None = None
 
 
+class SessionItemResponse(BaseModel):
+    id: str
+    deviceLabel: str
+    deviceType: str
+    browserName: str | None = None
+    osName: str | None = None
+    ipAddress: str | None = None
+    locationLabel: str | None = None
+    rememberDevice: bool = False
+    trusted: bool = False
+    isCurrent: bool = False
+    isRevoked: bool = False
+    createdAt: str | None = None
+    lastSeenAt: str | None = None
+    revokedAt: str | None = None
+
+
+class DeviceItemResponse(BaseModel):
+    id: str
+    deviceLabel: str
+    deviceType: str
+    browserName: str | None = None
+    osName: str | None = None
+    trusted: bool = False
+    isCurrent: bool = False
+    sessionCount: int = 0
+    lastSeenAt: str | None = None
+    ipAddress: str | None = None
+    locationLabel: str | None = None
+
+
 class AuthUserResponse(BaseModel):
     id: str
     fullName: str

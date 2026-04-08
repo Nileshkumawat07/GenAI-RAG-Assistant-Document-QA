@@ -72,8 +72,8 @@ class AuthService:
         self.sync_user_subscription(db, user)
         return self._serialize_user(user)
 
-    def create_access_token(self, *, user_id: str) -> str:
-        payload = user_id.encode("utf-8")
+    def create_access_token(self, *, user_id: str, token_id: str | None = None) -> str:
+        payload = f"{user_id}:{token_id or ''}".encode("utf-8")
         signature = hmac.new(self._token_secret, payload, hashlib.sha256).digest()
         return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
 
@@ -97,6 +97,10 @@ class AuthService:
             raise AuthServiceError("This account is locked. Contact support or an administrator.")
 
     def verify_access_token(self, token: str) -> str:
+        user_id, _ = self.verify_access_token_details(token)
+        return user_id
+
+    def verify_access_token_details(self, token: str) -> tuple[str, str | None]:
         try:
             payload_b64, signature_b64 = token.split(".", 1)
             payload = base64.urlsafe_b64decode(self._restore_padding(payload_b64))
@@ -108,10 +112,18 @@ class AuthService:
         if not hmac.compare_digest(signature, expected_signature):
             raise AuthServiceError("Invalid session token.")
 
-        user_id = payload.decode("utf-8").strip()
+        raw_payload = payload.decode("utf-8").strip()
+        if not raw_payload:
+            raise AuthServiceError("Invalid session token.")
+
+        if ":" in raw_payload:
+            user_id, token_id = raw_payload.split(":", 1)
+            token_id = token_id or None
+        else:
+            user_id, token_id = raw_payload, None
         if not user_id:
             raise AuthServiceError("Invalid session token.")
-        return user_id
+        return user_id, token_id
 
     def register_user(
         self,

@@ -159,6 +159,36 @@ def ensure_user_settings_schema() -> None:
         )
 
 
+def ensure_user_login_sessions_schema() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "user_login_sessions" in table_names:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE user_login_sessions ("
+                "id VARCHAR(36) PRIMARY KEY, "
+                "user_id VARCHAR(36) NOT NULL, "
+                "token_id VARCHAR(64) NOT NULL, "
+                "device_label VARCHAR(160) NOT NULL, "
+                "device_type VARCHAR(40) NOT NULL, "
+                "browser_name VARCHAR(80) NULL, "
+                "os_name VARCHAR(80) NULL, "
+                "user_agent VARCHAR(500) NULL, "
+                "ip_address VARCHAR(80) NULL, "
+                "location_label VARCHAR(120) NULL, "
+                "remember_device BOOLEAN NOT NULL DEFAULT FALSE, "
+                "trusted BOOLEAN NOT NULL DEFAULT FALSE, "
+                "is_revoked BOOLEAN NOT NULL DEFAULT FALSE, "
+                "created_at DATETIME NOT NULL, "
+                "last_seen_at DATETIME NOT NULL, "
+                "revoked_at DATETIME NULL)"
+            )
+        )
+
+
 def ensure_management_support_schema() -> None:
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
@@ -372,6 +402,7 @@ def create_app() -> FastAPI:
     ensure_contact_request_schema()
     ensure_user_subscription_schema()
     ensure_user_settings_schema()
+    ensure_user_login_sessions_schema()
     ensure_subscription_transaction_schema()
     ensure_public_codes()
     ensure_contact_request_code_schema()

@@ -4,8 +4,11 @@ import {
   changePassword,
   deleteAccount,
   downloadAccountDataPdf,
-  fetchSettingsCategory,
-  saveSettingsCategory,
+  listUserDevices,
+  listUserSessions,
+  removeUserDevice,
+  revokeAllOtherSessions,
+  revokeUserSession,
   updateProfile,
   updateEmail,
   updateMobile,
@@ -196,97 +199,33 @@ function createActivityEntry(text) {
   };
 }
 
-function slugifySettingLabel(label) {
-  return (label || "")
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function createDefaultCategoryPayload(categoryId) {
-  const features = CATEGORY_FEATURES[categoryId] || [];
-  return {
-    items: features.reduce((accumulator, featureLabel) => {
-      accumulator[slugifySettingLabel(featureLabel)] = {
-        label: featureLabel,
-        mode: "disabled",
-        value: "",
-      };
-      return accumulator;
-    }, {}),
-  };
-}
-
-function normalizeCategoryPayload(categoryId, rawPayload) {
-  const defaults = createDefaultCategoryPayload(categoryId);
-  const nextItems = { ...defaults.items };
-  const rawItems = rawPayload?.items || {};
-
-  Object.entries(nextItems).forEach(([itemKey, itemValue]) => {
-    const rawItem = rawItems[itemKey];
-    nextItems[itemKey] = {
-      ...itemValue,
-      ...(rawItem || {}),
-      label: itemValue.label,
-      mode: rawItem?.mode || "disabled",
-      value: rawItem?.value || "",
-    };
-  });
-
-  return { items: nextItems };
-}
-
-function getSettingModes(featureLabel) {
-  const normalized = (featureLabel || "").toLowerCase();
-  if (
-    normalized.includes("history")
-    || normalized.includes("logs")
-    || normalized.includes("list")
-    || normalized.includes("view")
-    || normalized.includes("status")
-    || normalized.includes("summary")
-    || normalized.includes("preview")
-    || normalized.includes("notes")
-    || normalized.includes("metrics")
-  ) {
-    return ["hidden", "visible", "detailed"];
+function formatSettingsDateTime(value) {
+  if (!value) return "Not available";
+  try {
+    return new Date(value).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "Not available";
   }
-  if (
-    normalized.includes("frequency")
-    || normalized.includes("sync")
-    || normalized.includes("schedule")
-    || normalized.includes("retention")
-    || normalized.includes("format")
-    || normalized.includes("tone")
-    || normalized.includes("strictness")
-    || normalized.includes("level")
-    || normalized.includes("preference")
-  ) {
-    return ["default", "custom", "strict"];
-  }
-  if (
-    normalized.includes("delete")
-    || normalized.includes("revoke")
-    || normalized.includes("unlink")
-    || normalized.includes("remove")
-    || normalized.includes("archive")
-    || normalized.includes("deactivate")
-  ) {
-    return ["protected", "enabled", "confirm-required"];
-  }
-  return ["disabled", "enabled", "required"];
 }
 
-function getSettingPlaceholder(featureLabel) {
-  const normalized = (featureLabel || "").toLowerCase();
-  if (normalized.includes("email") || normalized.includes("contact")) return "Enter email, channel, or destination";
-  if (normalized.includes("url") || normalized.includes("webhook")) return "Enter URL or endpoint";
-  if (normalized.includes("color") || normalized.includes("theme")) return "Enter theme, color, or variant";
-  if (normalized.includes("time") || normalized.includes("schedule")) return "Enter timing or schedule rule";
-  if (normalized.includes("model") || normalized.includes("ai")) return "Enter model, preset, or AI rule";
-  if (normalized.includes("policy") || normalized.includes("compliance")) return "Enter policy or compliance detail";
-  return "Enter setting value or display detail";
+function formatSettingsRelativeTime(value) {
+  if (!value) return "No recent activity";
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return "No recent activity";
+  const diffMs = Date.now() - timestamp;
+  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 }
 
 function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted }) {
@@ -299,9 +238,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     text: "",
   });
   const [storedSettings, setStoredSettings] = useState(createDefaultStoredSettings);
-  const [categoryPayloads, setCategoryPayloads] = useState({});
-  const [categoryLoading, setCategoryLoading] = useState(false);
-  const [categorySaving, setCategorySaving] = useState(false);
   const [profileEditMode, setProfileEditMode] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileForm, setProfileForm] = useState({
@@ -381,6 +317,12 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [billingInvoices, setBillingInvoices] = useState([]);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingActionLoading, setBillingActionLoading] = useState("");
+  const [userSessions, setUserSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionActionLoading, setSessionActionLoading] = useState("");
+  const [userDevices, setUserDevices] = useState([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [deviceActionLoading, setDeviceActionLoading] = useState("");
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [showInvoicesPanel, setShowInvoicesPanel] = useState(false);
   const [showCancelSubscriptionPanel, setShowCancelSubscriptionPanel] = useState(false);
@@ -431,18 +373,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const activityEntries = storedSettings.activity || [];
   const preferenceFontSizeLabel = storedSettings.preferences.fontSize || "Medium";
   const preferenceFontScale = preferenceFontSizeLabel === "Small" ? 0.94 : preferenceFontSizeLabel === "Large" ? 1.08 : 1;
-  const currentCategoryPayload = categoryPayloads[activeTab] || createDefaultCategoryPayload(activeTab);
-
-  const updateCategoryPayload = (categoryId, updater) => {
-    setCategoryPayloads((current) => {
-      const currentPayload = current[categoryId] || createDefaultCategoryPayload(categoryId);
-      const nextPayload = typeof updater === "function" ? updater(currentPayload) : updater;
-      return {
-        ...current,
-        [categoryId]: nextPayload,
-      };
-    });
-  };
+  const activeSessionCount = userSessions.filter((session) => !session.isRevoked).length;
+  const signedOutSessionCount = userSessions.filter((session) => session.isRevoked).length;
+  const currentSession = userSessions.find((session) => session.isCurrent) || null;
+  const trustedDeviceCount = userDevices.filter((device) => device.trusted).length;
+  const currentDevice = userDevices.find((device) => device.isCurrent) || null;
 
   useEffect(() => {
     if (!storageKey) {
@@ -478,41 +413,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
     }
   }, [storageKey, storedSettings]);
-
-  useEffect(() => {
-    if (!currentUser?.id || !CATEGORY_FEATURES[activeTab]) {
-      return;
-    }
-
-    let ignore = false;
-
-    const loadCategoryPayload = async () => {
-      try {
-        setCategoryLoading(true);
-        const response = await fetchSettingsCategory(activeTab);
-        if (!ignore) {
-          setCategoryPayloads((current) => ({
-            ...current,
-            [activeTab]: normalizeCategoryPayload(activeTab, response?.payload || {}),
-          }));
-        }
-      } catch (error) {
-        if (!ignore) {
-          setFeedback({ type: "error", text: error.message || `Failed to load ${activeTab} settings.` });
-        }
-      } finally {
-        if (!ignore) {
-          setCategoryLoading(false);
-        }
-      }
-    };
-
-    loadCategoryPayload();
-
-    return () => {
-      ignore = true;
-    };
-  }, [activeTab, currentUser?.id]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--workspace-font-scale", String(preferenceFontScale));
@@ -642,6 +542,68 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     };
 
     loadInvoices();
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, currentUser?.id]);
+
+  useEffect(() => {
+    if (activeTab !== "sessions" || !currentUser?.id) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadSessions = async () => {
+      try {
+        setSessionsLoading(true);
+        const rows = await listUserSessions();
+        if (!ignore) {
+          setUserSessions(rows || []);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setFeedback({ type: "error", text: error.message || "Failed to load sessions." });
+        }
+      } finally {
+        if (!ignore) {
+          setSessionsLoading(false);
+        }
+      }
+    };
+
+    loadSessions();
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, currentUser?.id]);
+
+  useEffect(() => {
+    if (activeTab !== "devices" || !currentUser?.id) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadDevices = async () => {
+      try {
+        setDevicesLoading(true);
+        const rows = await listUserDevices();
+        if (!ignore) {
+          setUserDevices(rows || []);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setFeedback({ type: "error", text: error.message || "Failed to load devices." });
+        }
+      } finally {
+        if (!ignore) {
+          setDevicesLoading(false);
+        }
+      }
+    };
+
+    loadDevices();
     return () => {
       ignore = true;
     };
@@ -1021,110 +983,49 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     }
   };
 
-  const handleSaveCategoryFeatures = async (categoryId, successText = "Settings saved successfully.") => {
+  const handleRevokeSession = async (sessionId) => {
     try {
-      setCategorySaving(true);
-      await saveSettingsCategory(categoryId, categoryPayloads[categoryId] || createDefaultCategoryPayload(categoryId));
-      setFeedback({ type: "success", text: successText });
-      pushActivity(`${categoryId.replace(/-/g, " ")} settings were updated.`);
+      setSessionActionLoading(sessionId);
+      const response = await revokeUserSession(sessionId);
+      setFeedback({ type: "success", text: response.message || "Session signed out successfully." });
+      pushActivity("A session was signed out.");
+      setUserSessions(await listUserSessions());
+      setUserDevices(await listUserDevices());
     } catch (error) {
-      setFeedback({ type: "error", text: error.message || "Failed to save settings." });
+      setFeedback({ type: "error", text: error.message || "Failed to sign out session." });
     } finally {
-      setCategorySaving(false);
+      setSessionActionLoading("");
     }
   };
 
-  const renderCategoryFeatureSection = (categoryId, title) => {
-    const features = CATEGORY_FEATURES[categoryId];
-    if (!features || features.length === 0) {
-      return null;
+  const handleRevokeAllOtherSessions = async () => {
+    try {
+      setSessionActionLoading("all");
+      const response = await revokeAllOtherSessions();
+      setFeedback({ type: "success", text: response.message || "Signed out other sessions successfully." });
+      pushActivity("Other sessions were signed out.");
+      setUserSessions(await listUserSessions());
+      setUserDevices(await listUserDevices());
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to sign out other sessions." });
+    } finally {
+      setSessionActionLoading("");
     }
+  };
 
-    const payload = categoryPayloads[categoryId] || createDefaultCategoryPayload(categoryId);
-
-    return (
-      <div className="workspace-form-stack">
-        <div className="workspace-mini-card">
-          <h4>{title || "Feature Roadmap Settings"}</h4>
-          <p>These settings are saved through the backend category store for this account.</p>
-        </div>
-        {categoryLoading ? <p className="tool-copy">Loading category details...</p> : null}
-        <div className="workspace-info-grid">
-          {features.map((featureLabel) => {
-            const itemKey = slugifySettingLabel(featureLabel);
-            const item = payload.items?.[itemKey] || { label: featureLabel, mode: "disabled", value: "" };
-            const modes = getSettingModes(featureLabel);
-
-            return (
-              <div key={`${categoryId}-${itemKey}`} className="workspace-mini-card">
-                <div className="billing-payment-card-head">
-                  <div>
-                    <h4>{featureLabel}</h4>
-                    <p>Configure how this setting should behave for your workspace or account.</p>
-                  </div>
-                  <span className="billing-status-pill">{item.mode || "disabled"}</span>
-                </div>
-                <div className="workspace-form-stack">
-                  <label className="auth-label">Mode</label>
-                  <select
-                    className="auth-input workspace-static-input"
-                    value={item.mode || modes[0]}
-                    onChange={(event) =>
-                      updateCategoryPayload(categoryId, (current) => ({
-                        ...current,
-                        items: {
-                          ...current.items,
-                          [itemKey]: {
-                            ...(current.items?.[itemKey] || {}),
-                            label: featureLabel,
-                            mode: event.target.value,
-                            value: current.items?.[itemKey]?.value || "",
-                          },
-                        },
-                      }))
-                    }
-                  >
-                    {modes.map((mode) => (
-                      <option key={`${itemKey}-${mode}`} value={mode}>
-                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="auth-label">Value</label>
-                  <input
-                    className="auth-input workspace-static-input"
-                    placeholder={getSettingPlaceholder(featureLabel)}
-                    value={item.value || ""}
-                    onChange={(event) =>
-                      updateCategoryPayload(categoryId, (current) => ({
-                        ...current,
-                        items: {
-                          ...current.items,
-                          [itemKey]: {
-                            ...(current.items?.[itemKey] || {}),
-                            label: featureLabel,
-                            mode: current.items?.[itemKey]?.mode || modes[0],
-                            value: event.target.value,
-                          },
-                        },
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <button
-          className="primary-button"
-          type="button"
-          onClick={() => handleSaveCategoryFeatures(categoryId, `${title || "Category"} saved successfully.`)}
-          disabled={categorySaving}
-        >
-          {categorySaving ? "Saving..." : "Save Settings"}
-        </button>
-      </div>
-    );
+  const handleRemoveDevice = async (sessionId) => {
+    try {
+      setDeviceActionLoading(sessionId);
+      const response = await removeUserDevice(sessionId);
+      setFeedback({ type: "success", text: response.message || "Device removed successfully." });
+      pushActivity("A device was removed from trusted access.");
+      setUserDevices(await listUserDevices());
+      setUserSessions(await listUserSessions());
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to remove device." });
+    } finally {
+      setDeviceActionLoading("");
+    }
   };
 
   const renderAccount = () => {
@@ -2040,7 +1941,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           ) : null}
           {renderAccount()}
         </div>
-        {renderCategoryFeatureSection("account", "Account Extensions")}
       </>
     );
   }
@@ -2056,7 +1956,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           ) : null}
           {renderSecurity()}
         </div>
-        {renderCategoryFeatureSection("security", "Security Extensions")}
       </>
     );
   }
@@ -2197,7 +2096,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           ) : null}
         </div>
-        {renderCategoryFeatureSection("privacy", "Privacy Extensions")}
       </>
     );
   }
@@ -2259,7 +2157,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             Clear Activity Log
           </button>
         </div>
-        {renderCategoryFeatureSection("activity", "Activity Extensions")}
       </>
     );
   }
@@ -2435,7 +2332,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           })}
         </div>
       </div>
-      {renderCategoryFeatureSection("linked-accounts", "Linked Account Extensions")}
       </>
     );
   }
@@ -2485,7 +2381,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </label>
         <button className="primary-button" type="button" onClick={saveNotifications}>Save Preferences</button>
       </div>
-      {renderCategoryFeatureSection("notifications", "Notification Extensions")}
       </>
     );
   }
@@ -2679,7 +2574,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
         ) : null}
       </div>
-      {renderCategoryFeatureSection("billing", "Billing Extensions")}
       </>
     );
   }
@@ -2737,7 +2631,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </select>
         <button className="primary-button" type="button" onClick={saveRegion}>Save Region & Language</button>
       </div>
-      {renderCategoryFeatureSection("region", "Region Extensions")}
       </>
     );
   }
@@ -2754,8 +2647,202 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
         <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Support center is not enabled in this build." })}>Open Support Center</button>
       </div>
-      {renderCategoryFeatureSection("support", "Support Extensions")}
       </>
+    );
+  }
+
+  if (activeTab === "sessions") {
+    return (
+      <div className="workspace-form-stack">
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
+        <div className="workspace-mini-card settings-section-hero">
+          <div>
+            <p className="settings-section-kicker">Session Control</p>
+            <h4>Manage where your account is signed in</h4>
+            <p>
+              Review every login, see the current session, and remove access from browsers or devices you no longer trust.
+            </p>
+          </div>
+          <div className="settings-overview-grid">
+            <div className="settings-stat-card">
+              <span className="settings-stat-label">Active sessions</span>
+              <strong>{activeSessionCount}</strong>
+              <span className="settings-stat-meta">
+                {currentSession ? `Current: ${currentSession.browserName || "Browser"}` : "No active session detected"}
+              </span>
+            </div>
+            <div className="settings-stat-card">
+              <span className="settings-stat-label">Signed out</span>
+              <strong>{signedOutSessionCount}</strong>
+              <span className="settings-stat-meta">Historical session records stay visible for review.</span>
+            </div>
+          </div>
+        </div>
+        <div className="billing-action-row settings-toolbar-row">
+          <button
+            className="primary-button danger-tone"
+            type="button"
+            onClick={handleRevokeAllOtherSessions}
+            disabled={sessionActionLoading === "all" || activeSessionCount <= 1}
+          >
+            {sessionActionLoading === "all" ? "Signing out..." : "Sign Out All Other Sessions"}
+          </button>
+          <p className="tool-copy">Keep this device active and remove access everywhere else in one step.</p>
+        </div>
+        {sessionsLoading ? <p className="tool-copy">Loading sessions...</p> : null}
+        {!sessionsLoading && userSessions.length === 0 ? (
+          <div className="workspace-mini-card settings-empty-state">
+            <h4>No session records yet</h4>
+            <p>Your next sign-in will appear here with browser, device, IP address, and recent activity.</p>
+          </div>
+        ) : null}
+        {!sessionsLoading && userSessions.length > 0 ? (
+          <div className="settings-record-list">
+            {userSessions.map((session) => (
+              <div key={session.id} className="workspace-mini-card settings-record-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h4>{session.deviceLabel}</h4>
+                    <p>{session.browserName || "Unknown browser"} on {session.osName || "Unknown OS"} • {session.deviceType}</p>
+                  </div>
+                  <div className="settings-pill-row">
+                    {session.isCurrent ? <span className="billing-status-pill">Current session</span> : null}
+                    {session.trusted ? <span className="billing-status-pill">Trusted</span> : null}
+                    {session.isRevoked ? <span className="billing-status-pill danger-pill">Signed out</span> : null}
+                    {!session.isCurrent && !session.isRevoked ? <span className="billing-status-pill">Active</span> : null}
+                  </div>
+                </div>
+                <div className="settings-meta-grid">
+                  <div className="settings-meta-item">
+                    <span>IP address</span>
+                    <strong>{session.ipAddress || "Not available"}</strong>
+                  </div>
+                  <div className="settings-meta-item">
+                    <span>Network</span>
+                    <strong>{session.locationLabel || "Current network"}</strong>
+                  </div>
+                  <div className="settings-meta-item">
+                    <span>Signed in</span>
+                    <strong>{formatSettingsDateTime(session.createdAt)}</strong>
+                  </div>
+                  <div className="settings-meta-item">
+                    <span>Last activity</span>
+                    <strong>{formatSettingsRelativeTime(session.lastSeenAt)}</strong>
+                  </div>
+                </div>
+                <p className="tool-copy">Last seen at {formatSettingsDateTime(session.lastSeenAt)}.</p>
+                <div className="settings-card-actions">
+                  {!session.isCurrent && !session.isRevoked ? (
+                    <button
+                      className="primary-button danger-tone"
+                      type="button"
+                      onClick={() => handleRevokeSession(session.id)}
+                      disabled={sessionActionLoading === session.id}
+                    >
+                      {sessionActionLoading === session.id ? "Signing out..." : "Sign Out Session"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (activeTab === "devices") {
+    return (
+      <div className="workspace-form-stack">
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
+        <div className="workspace-mini-card settings-section-hero">
+          <div>
+            <p className="settings-section-kicker">Known Devices</p>
+            <h4>See the browsers and devices that have accessed your account</h4>
+            <p>Review device activity, spot old sign-ins, and remove devices you no longer use.</p>
+          </div>
+          <div className="settings-overview-grid">
+            <div className="settings-stat-card">
+              <span className="settings-stat-label">Known devices</span>
+              <strong>{userDevices.length}</strong>
+              <span className="settings-stat-meta">
+                {currentDevice ? `Current: ${currentDevice.deviceLabel}` : "Current device not yet tracked"}
+              </span>
+            </div>
+            <div className="settings-stat-card">
+              <span className="settings-stat-label">Trusted devices</span>
+              <strong>{trustedDeviceCount}</strong>
+              <span className="settings-stat-meta">Trusted devices can keep access across sessions.</span>
+            </div>
+          </div>
+        </div>
+        {devicesLoading ? <p className="tool-copy">Loading devices...</p> : null}
+        {!devicesLoading && userDevices.length === 0 ? (
+          <div className="workspace-mini-card settings-empty-state">
+            <h4>No devices found yet</h4>
+            <p>Once your account is used on browsers or phones, they will appear here with recent activity.</p>
+          </div>
+        ) : null}
+        {!devicesLoading && userDevices.length > 0 ? (
+          <div className="settings-record-list">
+            {userDevices.map((device) => (
+              <div key={device.id} className="workspace-mini-card settings-record-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h4>{device.deviceLabel}</h4>
+                    <p>{device.browserName || "Unknown browser"} on {device.osName || "Unknown OS"}</p>
+                  </div>
+                  <div className="settings-pill-row">
+                    {device.isCurrent ? <span className="billing-status-pill">Current device</span> : null}
+                    {device.trusted ? <span className="billing-status-pill">Trusted</span> : <span className="billing-status-pill">Known</span>}
+                  </div>
+                </div>
+                <div className="settings-meta-grid">
+                  <div className="settings-meta-item">
+                    <span>Device type</span>
+                    <strong>{device.deviceType}</strong>
+                  </div>
+                  <div className="settings-meta-item">
+                    <span>Active sessions</span>
+                    <strong>{device.sessionCount}</strong>
+                  </div>
+                  <div className="settings-meta-item">
+                    <span>Last activity</span>
+                    <strong>{formatSettingsRelativeTime(device.lastSeenAt)}</strong>
+                  </div>
+                  <div className="settings-meta-item">
+                    <span>IP address</span>
+                    <strong>{device.ipAddress || "Not available"}</strong>
+                  </div>
+                </div>
+                <p className="tool-copy">
+                  {device.locationLabel || "Current network"} • last seen {formatSettingsDateTime(device.lastSeenAt)}
+                </p>
+                <div className="settings-card-actions">
+                  {!device.isCurrent ? (
+                    <button
+                      className="primary-button danger-tone"
+                      type="button"
+                      onClick={() => handleRemoveDevice(device.id)}
+                      disabled={deviceActionLoading === device.id}
+                    >
+                      {deviceActionLoading === device.id ? "Removing..." : "Remove Device"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -2783,7 +2870,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             {privacyActionLoading === "download" ? "Downloading..." : "Download Account Data PDF"}
           </button>
         </div>
-        {renderCategoryFeatureSection("data-export", "Data Export Extensions")}
       </>
     );
   }
@@ -2843,7 +2929,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           ) : null}
         </div>
-        {renderCategoryFeatureSection("danger-zone", "Danger Zone Extensions")}
       </>
     );
   }
@@ -2858,7 +2943,28 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }
 
   if (CATEGORY_FEATURES[activeTab]) {
-    return renderCategoryFeatureSection(activeTab, `${activeTab.replace(/-/g, " ")} Settings`);
+    return (
+      <div className="workspace-form-stack">
+        <div className="workspace-mini-card settings-section-hero">
+          <div>
+            <p className="settings-section-kicker">Settings Section</p>
+            <h4>{activeTab.replace(/-/g, " ")} is being upgraded</h4>
+            <p>
+              This area is reserved for real backend-powered controls. Placeholder edit fields have been removed so only
+              working settings appear here.
+            </p>
+          </div>
+        </div>
+        <div className="workspace-info-grid privacy-capability-grid">
+          {(CATEGORY_FEATURES[activeTab] || []).slice(0, 10).map((featureLabel) => (
+            <div key={featureLabel} className="workspace-mini-card">
+              <h4>{featureLabel}</h4>
+              <p>This setting will appear here once the related backend workflow is enabled.</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
