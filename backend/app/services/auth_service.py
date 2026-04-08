@@ -39,6 +39,11 @@ class UserPayload:
     referral_code: str | None
     public_user_code: str | None
     is_management: bool
+    management_access_suspended: bool
+    management_granted_at: str | None
+    management_granted_by_user_id: str | None
+    management_suspended_at: str | None
+    management_suspended_by_user_id: str | None
     email_verified: bool
     mobile_verified: bool
     subscription_plan_id: str | None
@@ -83,7 +88,7 @@ class AuthService:
 
     def user_has_management_access(self, db: Session, *, user_id: str) -> bool:
         user = self._get_user_model_by_id(db, user_id)
-        return self.is_admin_email(user.email) or bool(user.is_management)
+        return self.is_admin_email(user.email) or (bool(user.is_management) and not bool(user.management_access_suspended))
 
     def verify_access_token(self, token: str) -> str:
         try:
@@ -284,12 +289,37 @@ class AuthService:
         db.delete(user)
         db.commit()
 
-    def update_management_access(self, db: Session, *, user_id: str, is_management: bool) -> UserPayload:
+    def update_management_access(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        is_management: bool,
+        suspended: bool = False,
+        changed_by_user_id: str | None = None,
+    ) -> UserPayload:
         user = self._get_user_model_by_id(db, user_id)
         if self.is_admin_email(user.email):
             raise AuthServiceError("Admin accounts already have administration access.")
 
+        now = datetime.now(timezone.utc)
         user.is_management = is_management
+        if is_management:
+            if not user.management_granted_at:
+                user.management_granted_at = now
+            if changed_by_user_id:
+                user.management_granted_by_user_id = changed_by_user_id
+            user.management_access_suspended = bool(suspended)
+            if suspended:
+                user.management_suspended_at = now
+                user.management_suspended_by_user_id = changed_by_user_id
+            else:
+                user.management_suspended_at = None
+                user.management_suspended_by_user_id = None
+        else:
+            user.management_access_suspended = False
+            user.management_suspended_at = None
+            user.management_suspended_by_user_id = None
         db.commit()
         db.refresh(user)
         return self._serialize_user(user)
@@ -359,6 +389,11 @@ class AuthService:
             referral_code=user.referral_code,
             public_user_code=user.public_user_code,
             is_management=bool(user.is_management),
+            management_access_suspended=bool(user.management_access_suspended),
+            management_granted_at=user.management_granted_at.isoformat() if user.management_granted_at else None,
+            management_granted_by_user_id=user.management_granted_by_user_id,
+            management_suspended_at=user.management_suspended_at.isoformat() if user.management_suspended_at else None,
+            management_suspended_by_user_id=user.management_suspended_by_user_id,
             email_verified=user.email_verified,
             mobile_verified=user.mobile_verified,
             subscription_plan_id=user.subscription_plan_id,

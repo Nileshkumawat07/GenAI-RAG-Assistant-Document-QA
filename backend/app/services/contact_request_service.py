@@ -4,6 +4,7 @@ import json
 import random
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -25,6 +26,15 @@ class ContactRequestPayload:
     request_code: str | None
     status: str
     admin_message: str | None
+    assigned_manager_user_id: str | None
+    assigned_manager_name: str | None
+    assigned_manager_email: str | None
+    assigned_by_user_id: str | None
+    assigned_at: str | None
+    first_response_at: str | None
+    completed_at: str | None
+    last_status_updated_at: str | None
+    last_status_updated_by_user_id: str | None
     values: dict[str, str]
     created_at: str
     user_full_name: str | None = None
@@ -130,6 +140,8 @@ class ContactRequestService:
         request_id: str,
         status: str,
         admin_message: str | None = None,
+        acting_user_id: str | None = None,
+        assigned_manager_user_id: str | None = None,
     ) -> ContactRequestPayload:
         normalized_status = self._normalize_status(status)
         if not normalized_status:
@@ -141,12 +153,65 @@ class ContactRequestService:
         if not request:
             raise ContactRequestServiceError("Contact request was not found.")
 
+        now = datetime.now(timezone.utc)
+        if assigned_manager_user_id is not None:
+            if assigned_manager_user_id:
+                manager = db.execute(select(User).where(User.id == assigned_manager_user_id)).scalar_one_or_none()
+                if not manager:
+                    raise ContactRequestServiceError("Assigned management user was not found.")
+                request.assigned_manager_user_id = assigned_manager_user_id
+                request.assigned_by_user_id = acting_user_id
+                request.assigned_at = now
+            else:
+                request.assigned_manager_user_id = None
+                request.assigned_by_user_id = acting_user_id
+                request.assigned_at = now
+
         request.status = normalized_status
         request.admin_message = (admin_message or "").strip() or None
+        request.last_status_updated_at = now
+        request.last_status_updated_by_user_id = acting_user_id
+        if request.first_response_at is None and request.admin_message:
+            request.first_response_at = now
+        if normalized_status == "Completed":
+            request.completed_at = now
+        elif request.completed_at is not None:
+            request.completed_at = None
         db.commit()
         db.refresh(request)
-        user = db.execute(select(User).where(User.id == request.user_id)).scalar_one_or_none()
-        return self._serialize(request, user)
+        return self._serialize(request)
+
+    def bulk_update_status(
+        self,
+        db: Session,
+        *,
+        request_ids: list[str],
+        status: str,
+        acting_user_id: str | None = None,
+    ) -> list[ContactRequestPayload]:
+        normalized_status = self._normalize_status(status)
+        if not normalized_status:
+            raise ContactRequestServiceError("Invalid request status.")
+        if not request_ids:
+            raise ContactRequestServiceError("Select at least one request.")
+
+        items = db.execute(
+            select(ContactRequest).where(ContactRequest.id.in_(request_ids))
+        ).scalars().all()
+        if not items:
+            return []
+
+        now = datetime.now(timezone.utc)
+        for request in items:
+            request.status = normalized_status
+            request.last_status_updated_at = now
+            request.last_status_updated_by_user_id = acting_user_id
+            if normalized_status == "Completed":
+                request.completed_at = now
+            elif request.completed_at is not None:
+                request.completed_at = None
+        db.commit()
+        return [self._serialize(item) for item in items]
 
     def _require_user(self, db: Session, user_id: str) -> None:
         user = db.execute(select(User.id).where(User.id == user_id)).scalar_one_or_none()
@@ -195,6 +260,17 @@ class ContactRequestService:
         return self.STATUS_ALIASES.get(normalized.lower())
 
     def _serialize(self, request: ContactRequest, user: User | None = None) -> ContactRequestPayload:
+        db_user = user
+        assigned_manager = None
+        if hasattr(request, "_sa_instance_state"):
+            session = request._sa_instance_state.session
+            if db_user is None and session is not None:
+                db_user = session.execute(select(User).where(User.id == request.user_id)).scalar_one_or_none()
+            if request.assigned_manager_user_id and session is not None:
+                assigned_manager = session.execute(
+                    select(User).where(User.id == request.assigned_manager_user_id)
+                ).scalar_one_or_none()
+
         return ContactRequestPayload(
             id=request.id,
             user_id=request.user_id,
@@ -203,9 +279,18 @@ class ContactRequestService:
             request_code=request.request_code,
             status=self._normalize_status(request.status) or request.status,
             admin_message=request.admin_message,
+            assigned_manager_user_id=request.assigned_manager_user_id,
+            assigned_manager_name=assigned_manager.full_name if assigned_manager else None,
+            assigned_manager_email=assigned_manager.email if assigned_manager else None,
+            assigned_by_user_id=request.assigned_by_user_id,
+            assigned_at=request.assigned_at.isoformat() if request.assigned_at else None,
+            first_response_at=request.first_response_at.isoformat() if request.first_response_at else None,
+            completed_at=request.completed_at.isoformat() if request.completed_at else None,
+            last_status_updated_at=request.last_status_updated_at.isoformat() if request.last_status_updated_at else None,
+            last_status_updated_by_user_id=request.last_status_updated_by_user_id,
             values=json.loads(request.payload_json),
             created_at=request.created_at.isoformat(),
-            user_full_name=user.full_name if user else None,
-            user_email=user.email if user else None,
-            user_mobile=user.mobile if user else None,
+            user_full_name=db_user.full_name if db_user else None,
+            user_email=db_user.email if db_user else None,
+            user_mobile=db_user.mobile if db_user else None,
         )

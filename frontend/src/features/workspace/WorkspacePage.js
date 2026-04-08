@@ -10,9 +10,15 @@ import {
   adminUpdateContactRequestStatus,
   createContactRequest,
   deleteContactRequest,
-  listAllContactRequests,
   listContactRequests,
 } from "../info/contactApi";
+import {
+  bulkUpdateManagementRequests,
+  createManagementNote,
+  createReplyTemplate,
+  exportManagementReport,
+  getManagementOverview,
+} from "./managementApi";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 
@@ -465,6 +471,28 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [managementToggleUserId, setManagementToggleUserId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState({});
   const [activePlanPurchaseId, setActivePlanPurchaseId] = useState("");
+  const [managementSummary, setManagementSummary] = useState({
+    totalManagementUsers: 0,
+    openRequests: 0,
+    inReviewRequests: 0,
+    completedToday: 0,
+  });
+  const [managementUsers, setManagementUsers] = useState([]);
+  const [managementNotes, setManagementNotes] = useState([]);
+  const [replyTemplates, setReplyTemplates] = useState([]);
+  const [recentManagementActions, setRecentManagementActions] = useState([]);
+  const [managementActivityDashboard, setManagementActivityDashboard] = useState([]);
+  const [managementUserSearch, setManagementUserSearch] = useState("");
+  const [managementAccessFilter, setManagementAccessFilter] = useState("all");
+  const [managementRequestCountFilter, setManagementRequestCountFilter] = useState("all");
+  const [selectedBulkRequestIds, setSelectedBulkRequestIds] = useState([]);
+  const [requestManagerAssignments, setRequestManagerAssignments] = useState({});
+  const [requestTemplateSelections, setRequestTemplateSelections] = useState({});
+  const [managementNoteDrafts, setManagementNoteDrafts] = useState({});
+  const [newTemplateTitle, setNewTemplateTitle] = useState("");
+  const [newTemplateCategory, setNewTemplateCategory] = useState("");
+  const [newTemplateBody, setNewTemplateBody] = useState("");
+  const [managementReportLoading, setManagementReportLoading] = useState("");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -750,7 +778,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     if (!userRow) return null;
 
     const userRequests = (requestsTable?.rows || []).filter((row) => row.user_id === userId);
+    const handledRequests = adminRequests.filter((row) => row.assignedManagerUserId === userId);
     const userProviders = (providersTable?.rows || []).filter((row) => row.user_id === userId);
+    const managementMeta = managementUsers.find((item) => item.id === userId) || null;
     const requestStatusCounts = ["In Progress", "In Review", "Completed"].map((status) => ({
       status,
       count: userRequests.filter((row) => (row.status || "In Progress") === status).length,
@@ -765,9 +795,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         title: "Subscription Active",
         text: `${userRow.subscription_plan_name} | Valid till ${userRow.subscription_expires_at || "Unknown"}`,
       }] : []),
+      ...(managementMeta?.managementGrantedAt ? [{
+        title: "Management Access Granted",
+        text: `${managementMeta.managementGrantedAt} | ${managementMeta.managementGrantedByName || "Unknown admin"}`,
+      }] : []),
       ...userRequests.slice(0, 6).map((requestRow) => ({
         title: `${prettifyKey(requestRow.category || "request")} request`,
         text: `${requestRow.status || "In Progress"} | ${requestRow.created_at || "Unknown date"}`,
+      })),
+      ...handledRequests.slice(0, 6).map((requestRow) => ({
+        title: `Handled ${prettifyKey(requestRow.category || "request")}`,
+        text: `${requestRow.status || "In Progress"} | ${requestRow.requestCode || requestRow.id}`,
       })),
       ...userProviders.slice(0, 4).map((providerRow) => ({
         title: `Linked ${prettifyKey(providerRow.provider || "provider")}`,
@@ -778,11 +816,36 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     return {
       userRow,
       userRequests,
+      handledRequests,
       userProviders,
+      managementMeta,
       requestStatusCounts,
       timelineItems,
     };
   };
+
+  const managementEligibleUsers = managementUsers.filter((item) => item.isManagement);
+  const filteredManagementUsers = managementEligibleUsers.filter((item) => {
+    const matchesSearch = matchesAdminSearch(
+      {
+        fullName: item.fullName,
+        email: item.email,
+        username: item.username,
+        requestCount: item.requestCount,
+        accessSuspended: item.accessSuspended,
+      },
+      managementUserSearch
+    );
+    const matchesAccess =
+      managementAccessFilter === "all" ||
+      (managementAccessFilter === "active" && !item.accessSuspended) ||
+      (managementAccessFilter === "suspended" && item.accessSuspended);
+    const matchesRequestCount =
+      managementRequestCountFilter === "all" ||
+      (managementRequestCountFilter === "assigned" && item.requestCount > 0) ||
+      (managementRequestCountFilter === "idle" && item.requestCount === 0);
+    return matchesSearch && matchesAccess && matchesRequestCount;
+  });
 
   const hasQuestion = question.trim().length > 0;
 
@@ -819,18 +882,34 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     try {
       setAdminLoading(true);
       setAdminError("");
-      const [mysqlOverview, allRequests] = await Promise.all([
+      const [mysqlOverview, managementOverview] = await Promise.all([
         getAdminMysqlOverview(),
-        listAllContactRequests(),
+        getManagementOverview(),
       ]);
       setAdminTables(mysqlOverview.tables || []);
       setAdminStatusOptions(mysqlOverview.statusOptions || []);
-      setAdminAuditLogs(mysqlOverview.auditLogs || []);
+      setAdminAuditLogs(managementOverview.recentActions || mysqlOverview.auditLogs || []);
       setAdminRenewalReminders(mysqlOverview.renewalReminders || []);
-      setAdminRequests(allRequests || []);
+      setAdminRequests(managementOverview.requests || []);
+      setManagementSummary(managementOverview.summary || {
+        totalManagementUsers: 0,
+        openRequests: 0,
+        inReviewRequests: 0,
+        completedToday: 0,
+      });
+      setManagementUsers(managementOverview.managementUsers || []);
+      setManagementNotes(managementOverview.notes || []);
+      setReplyTemplates(managementOverview.replyTemplates || []);
+      setRecentManagementActions(managementOverview.recentActions || []);
+      setManagementActivityDashboard(managementOverview.activityDashboard || []);
       setAdminReplyDrafts(
         Object.fromEntries(
-          (allRequests || []).map((item) => [item.id, item.adminMessage || ""])
+          (managementOverview.requests || []).map((item) => [item.id, item.adminMessage || ""])
+        )
+      );
+      setRequestManagerAssignments(
+        Object.fromEntries(
+          (managementOverview.requests || []).map((item) => [item.id, item.assignedManagerUserId || ""])
         )
       );
     } catch (loadError) {
@@ -859,13 +938,18 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     setAdminSupportSearch("");
     setAdminDatabaseSearch("");
     setAdminAuditSearch("");
+    setManagementUserSearch("");
+    setManagementAccessFilter("all");
+    setManagementRequestCountFilter("all");
     setAdminExportLoading("");
+    setManagementReportLoading("");
     setActiveAdminRequestSection("In Progress");
     setActiveAdminDatabaseSection("accounts");
     setActiveAdminDatabaseRequestFilter("All");
     setActiveAdminDatabaseRequestCategory("All");
     setFocusedContactRequestId("");
     setSelectedAdminUserId("");
+    setSelectedBulkRequestIds([]);
     setManagementToggleUserId("");
   };
 
@@ -1066,6 +1150,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       const updatedRequest = await adminUpdateContactRequestStatus(requestId, {
         status,
         adminMessage: adminReplyDrafts[requestId] || "",
+        assignedManagerUserId: requestManagerAssignments[requestId] || null,
       });
       setAdminRequests((current) =>
         current.map((item) => (item.id === requestId ? updatedRequest : item))
@@ -1099,12 +1184,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   };
 
   const handleManagementAccessToggle = async (userId, nextIsManagement) => {
+    const currentManager = managementUsers.find((item) => item.id === userId);
     try {
       setManagementToggleUserId(userId);
       setAdminError("");
       await updateManagementAccess({
         userId,
         isManagement: nextIsManagement,
+        suspended: nextIsManagement ? !!currentManager?.accessSuspended : false,
       });
       await loadAdministrationData();
       if (!nextIsManagement) {
@@ -1114,6 +1201,101 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       setAdminError(toggleError.message || "Failed to update management access.");
     } finally {
       setManagementToggleUserId("");
+    }
+  };
+
+  const handleManagementSuspendToggle = async (userId, suspended) => {
+    try {
+      setManagementToggleUserId(userId);
+      setAdminError("");
+      await updateManagementAccess({
+        userId,
+        isManagement: true,
+        suspended,
+      });
+      await loadAdministrationData();
+    } catch (toggleError) {
+      setAdminError(toggleError.message || "Failed to update management access.");
+    } finally {
+      setManagementToggleUserId("");
+    }
+  };
+
+  const handleBulkRequestStatusChange = async (status) => {
+    if (selectedBulkRequestIds.length === 0) {
+      setAdminError("Select at least one request for a bulk action.");
+      return;
+    }
+    try {
+      setAdminError("");
+      setAdminActionRequestId("bulk");
+      await bulkUpdateManagementRequests({
+        requestIds: selectedBulkRequestIds,
+        status,
+      });
+      setSelectedBulkRequestIds([]);
+      await loadAdministrationData();
+    } catch (bulkError) {
+      setAdminError(bulkError.message || "Failed to update the selected requests.");
+    } finally {
+      setAdminActionRequestId("");
+    }
+  };
+
+  const handleCreateManagementNote = async ({ requestId = null, targetUserId = null }) => {
+    const draftKey = requestId || targetUserId;
+    const noteText = (managementNoteDrafts[draftKey] || "").trim();
+    if (!noteText) {
+      setAdminError("Write a note before saving it.");
+      return;
+    }
+    try {
+      setAdminError("");
+      await createManagementNote({
+        requestId,
+        targetUserId,
+        noteText,
+      });
+      setManagementNoteDrafts((current) => ({
+        ...current,
+        [draftKey]: "",
+      }));
+      await loadAdministrationData();
+    } catch (noteError) {
+      setAdminError(noteError.message || "Failed to save management note.");
+    }
+  };
+
+  const handleCreateReplyTemplate = async () => {
+    if (!newTemplateTitle.trim() || !newTemplateBody.trim()) {
+      setAdminError("Template title and body are required.");
+      return;
+    }
+    try {
+      setAdminError("");
+      await createReplyTemplate({
+        title: newTemplateTitle,
+        category: newTemplateCategory || null,
+        body: newTemplateBody,
+      });
+      setNewTemplateTitle("");
+      setNewTemplateCategory("");
+      setNewTemplateBody("");
+      await loadAdministrationData();
+    } catch (templateError) {
+      setAdminError(templateError.message || "Failed to create reply template.");
+    }
+  };
+
+  const handleManagementReportExport = async (format) => {
+    try {
+      setAdminError("");
+      setManagementReportLoading(format);
+      await exportManagementReport(format);
+    } catch (reportError) {
+      setAdminError(reportError.message || "Failed to export management report.");
+    } finally {
+      setManagementReportLoading("");
     }
   };
 
@@ -1362,14 +1544,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       }
 
       if (activeInfoTab === "overview") {
-        const overviewCards = [
-          { title: "Visible Tables", text: String(adminTables.length) },
-          { title: "Rows Indexed", text: String(totalRows) },
-          { title: "Users", text: String(userTable?.rowCount || 0) },
-          { title: "Contact Requests", text: String(adminRequests.length || requestTable?.rowCount || 0) },
-          { title: "Renewal Reminders", text: String(adminRenewalReminders.length) },
-          { title: "Audit Entries", text: String(adminAuditLogs.length) },
-        ];
+        const overviewCards = selectedInfoPage === "management"
+          ? [
+              { title: "Management Users", text: String(managementSummary.totalManagementUsers || 0) },
+              { title: "Open Requests", text: String(managementSummary.openRequests || 0) },
+              { title: "In Review", text: String(managementSummary.inReviewRequests || 0) },
+              { title: "Completed Today", text: String(managementSummary.completedToday || 0) },
+              { title: "Internal Notes", text: String(managementNotes.length) },
+              { title: "Reply Templates", text: String(replyTemplates.length) },
+            ]
+          : [
+              { title: "Visible Tables", text: String(adminTables.length) },
+              { title: "Rows Indexed", text: String(totalRows) },
+              { title: "Users", text: String(userTable?.rowCount || 0) },
+              { title: "Contact Requests", text: String(adminRequests.length || requestTable?.rowCount || 0) },
+              { title: "Renewal Reminders", text: String(adminRenewalReminders.length) },
+              { title: "Audit Entries", text: String(adminAuditLogs.length) },
+            ];
 
         return (
           <>
@@ -1409,7 +1600,26 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                       {adminExportLoading === "audit-csv" ? "Exporting..." : "Export Audit"}
                     </button>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="admin-toolbar-actions">
+                      <button
+                        className="admin-table-action-button"
+                        type="button"
+                        onClick={() => handleManagementReportExport("csv")}
+                        disabled={managementReportLoading === "csv"}
+                      >
+                        {managementReportLoading === "csv" ? "Exporting..." : "Export CSV"}
+                      </button>
+                      <button
+                        className="admin-table-action-button"
+                        type="button"
+                        onClick={() => handleManagementReportExport("pdf")}
+                        disabled={managementReportLoading === "pdf"}
+                      >
+                        {managementReportLoading === "pdf" ? "Exporting..." : "Export PDF"}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {adminLoading ? (
                   <div className="admin-empty-state admin-loading-state">
@@ -1430,25 +1640,25 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <section className="workspace-mini-card admin-overview-panel">
                     <div className="admin-section-header">
                       <div>
-                        <h4>{selectedInfoPage === "management" ? "Request Status Overview" : "Subscription Renewal Reminders"}</h4>
+                        <h4>{selectedInfoPage === "management" ? "Management Activity Dashboard" : "Subscription Renewal Reminders"}</h4>
                         <p>
                           {selectedInfoPage === "management"
-                            ? "A quick summary of request volume available to management users."
+                            ? "Handled requests, pending queue, and average response time by management user."
                             : "Members whose premium access expires within the next 14 days."}
                         </p>
                       </div>
                     </div>
                     {selectedInfoPage === "management" ? (
                       <div className="admin-reminder-list">
-                        {statusChoices.map((status) => (
-                          <article key={status} className="admin-reminder-card">
+                        {managementActivityDashboard.map((item) => (
+                          <article key={item.managerUserId} className="admin-reminder-card">
                             <div className="admin-reminder-copy">
-                              <strong>{status}</strong>
-                              <span>Requests currently in this queue</span>
+                              <strong>{item.managerName}</strong>
+                              <span>{item.handledRequests} handled | {item.pendingQueue} pending</span>
                             </div>
                             <div className="admin-reminder-meta">
-                              <strong>{adminRequests.filter((item) => (item.status || statusChoices[0]) === status).length}</strong>
-                              <span>{requestTable?.rowCount || adminRequests.length} total requests</span>
+                              <strong>{item.averageResponseMinutes != null ? `${item.averageResponseMinutes} min` : "No replies yet"}</strong>
+                              <span>{item.completedToday} completed today</span>
                             </div>
                           </article>
                         ))}
@@ -1480,10 +1690,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <section className="workspace-mini-card admin-overview-panel">
                     <div className="admin-section-header">
                       <div>
-                        <h4>{selectedInfoPage === "management" ? "Management Queue Notes" : "Recent Audit Trail"}</h4>
+                        <h4>{selectedInfoPage === "management" ? "Recent Actions" : "Recent Audit Trail"}</h4>
                         <p>
                           {selectedInfoPage === "management"
-                            ? "Use the request and support tabs to open, update, and close submitted items."
+                            ? "The latest status updates, replies, removals, notes, and management changes."
                             : "Real backend log entries recorded for admin actions."}
                         </p>
                       </div>
@@ -1499,20 +1709,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     </div>
                     {selectedInfoPage === "management" ? (
                       <div className="admin-audit-list">
-                        <article className="admin-audit-card">
-                          <div className="admin-audit-card-head">
-                            <strong>Contact Requests</strong>
-                            <span>{adminRequests.length} items</span>
-                          </div>
-                          <p>Review submitted requests, reply to users, and update request status from one queue.</p>
-                        </article>
-                        <article className="admin-audit-card">
-                          <div className="admin-audit-card-head">
-                            <strong>Support Table</strong>
-                            <span>{requestTable?.rowCount || 0} rows</span>
-                          </div>
-                          <p>Filter support data by status or category and open the matching request instantly.</p>
-                        </article>
+                        {recentManagementActions.slice(0, 8).map((item) => (
+                          <article key={item.id} className="admin-audit-card">
+                            <div className="admin-audit-card-head">
+                              <strong>{prettifyKey(item.actionType)}</strong>
+                              <span>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Unknown time"}</span>
+                            </div>
+                            <p>{item.detail || "No additional details provided."}</p>
+                            <div className="admin-audit-meta">
+                              <span>{item.actorName || item.actorEmail || "Unknown user"}</span>
+                              <span>{prettifyKey(item.targetType)}: {item.targetLabel || item.targetId || "Not available"}</span>
+                            </div>
+                          </article>
+                        ))}
                       </div>
                     ) : adminLoading ? null : filteredAuditLogs.length === 0 ? (
                       <div className="admin-empty-state">
@@ -1538,6 +1747,81 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     )}
                   </section>
                 </div>
+                {selectedInfoPage === "management" ? (
+                  <div className="admin-overview-grid">
+                    <section className="workspace-mini-card admin-overview-panel">
+                      <div className="admin-section-header">
+                        <div>
+                          <h4>Reply Templates</h4>
+                          <p>Quick canned responses for common support and request cases.</p>
+                        </div>
+                      </div>
+                      <div className="admin-audit-list">
+                        {replyTemplates.slice(0, 6).map((item) => (
+                          <article key={item.id} className="admin-audit-card">
+                            <div className="admin-audit-card-head">
+                              <strong>{item.title}</strong>
+                              <span>{prettifyKey(item.category || "general")}</span>
+                            </div>
+                            <p>{item.body}</p>
+                          </article>
+                        ))}
+                      </div>
+                      {isAdmin ? (
+                        <div className="workspace-form-stack">
+                          <input
+                            className="auth-input workspace-static-input"
+                            type="text"
+                            placeholder="Template title"
+                            value={newTemplateTitle}
+                            onChange={(event) => setNewTemplateTitle(event.target.value)}
+                          />
+                          <input
+                            className="auth-input workspace-static-input"
+                            type="text"
+                            placeholder="Category like general or technical"
+                            value={newTemplateCategory}
+                            onChange={(event) => setNewTemplateCategory(event.target.value)}
+                          />
+                          <textarea
+                            className="question-input workspace-static-textarea"
+                            rows={3}
+                            placeholder="Template body"
+                            value={newTemplateBody}
+                            onChange={(event) => setNewTemplateBody(event.target.value)}
+                          />
+                          <button className="admin-table-action-button" type="button" onClick={handleCreateReplyTemplate}>
+                            Save Template
+                          </button>
+                        </div>
+                      ) : null}
+                    </section>
+
+                    <section className="workspace-mini-card admin-overview-panel">
+                      <div className="admin-section-header">
+                        <div>
+                          <h4>Manager Notes</h4>
+                          <p>Internal notes visible only to admin and management accounts.</p>
+                        </div>
+                      </div>
+                      <div className="admin-audit-list">
+                        {managementNotes.slice(0, 6).map((item) => (
+                          <article key={item.id} className="admin-audit-card">
+                            <div className="admin-audit-card-head">
+                              <strong>{item.authorName || "Unknown user"}</strong>
+                              <span>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Unknown time"}</span>
+                            </div>
+                            <p>{item.noteText}</p>
+                            <div className="admin-audit-meta">
+                              <span>Request: {item.requestId || "Not linked"}</span>
+                              <span>User: {item.targetUserId || "Not linked"}</span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
               </article>
             </div>
           </>
@@ -1569,6 +1853,22 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                       value={adminRequestSearch}
                       onChange={(event) => setAdminRequestSearch(event.target.value)}
                     />
+                    <button
+                      className="admin-table-action-button"
+                      type="button"
+                      onClick={() => handleBulkRequestStatusChange("In Review")}
+                      disabled={adminActionRequestId === "bulk"}
+                    >
+                      {adminActionRequestId === "bulk" ? "Updating..." : "Bulk In Review"}
+                    </button>
+                    <button
+                      className="admin-table-action-button"
+                      type="button"
+                      onClick={() => handleBulkRequestStatusChange("Completed")}
+                      disabled={adminActionRequestId === "bulk"}
+                    >
+                      {adminActionRequestId === "bulk" ? "Updating..." : "Bulk Completed"}
+                    </button>
                   </div>
                 </div>
                 {adminLoading ? (
@@ -1633,6 +1933,18 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                               >
                                 <div className="admin-request-card-header">
                                   <div>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedBulkRequestIds.includes(requestItem.id)}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={(event) => {
+                                        setSelectedBulkRequestIds((current) =>
+                                          event.target.checked
+                                            ? [...current, requestItem.id]
+                                            : current.filter((item) => item !== requestItem.id)
+                                        );
+                                      }}
+                                    />
                                     <p className="contact-request-type">{requestItem.category || "General Request"}</p>
                                     <h4>{requestItem.requestCode || requestItem.title || "Contact Request"}</h4>
                                   </div>
@@ -1661,6 +1973,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                     <span>Title</span>
                                     <strong>{requestItem.title || "Not provided"}</strong>
                                   </div>
+                                  <div className="contact-request-meta-item">
+                                    <span>Assigned</span>
+                                    <strong>{requestItem.assignedManagerName || "Unassigned"}</strong>
+                                  </div>
                                 </div>
 
                                 <div className="admin-request-detail-grid">
@@ -1673,6 +1989,62 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                 </div>
 
                                 <div className="workspace-form-stack admin-request-actions">
+                                  <select
+                                    className="auth-input workspace-static-input"
+                                    value={requestManagerAssignments[requestItem.id] || ""}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) =>
+                                      setRequestManagerAssignments((current) => ({
+                                        ...current,
+                                        [requestItem.id]: event.target.value,
+                                      }))
+                                    }
+                                    disabled={adminActionRequestId === requestItem.id}
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {managementEligibleUsers.filter((item) => !item.accessSuspended).map((manager) => (
+                                      <option key={manager.id} value={manager.id}>
+                                        {manager.fullName} | {manager.email}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <div className="admin-request-action-row">
+                                    <select
+                                      className="auth-input workspace-static-input"
+                                      value={requestTemplateSelections[requestItem.id] || ""}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={(event) =>
+                                        setRequestTemplateSelections((current) => ({
+                                          ...current,
+                                          [requestItem.id]: event.target.value,
+                                        }))
+                                      }
+                                    >
+                                      <option value="">Reply template</option>
+                                      {replyTemplates
+                                        .filter((item) => !item.category || item.category === requestItem.category)
+                                        .map((item) => (
+                                          <option key={item.id} value={item.id}>
+                                            {item.title}
+                                          </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                      className="admin-table-action-button"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        const template = replyTemplates.find((item) => item.id === requestTemplateSelections[requestItem.id]);
+                                        if (!template) return;
+                                        setAdminReplyDrafts((current) => ({
+                                          ...current,
+                                          [requestItem.id]: template.body,
+                                        }));
+                                      }}
+                                    >
+                                      Apply Template
+                                    </button>
+                                  </div>
                                   <textarea
                                     className="question-input workspace-static-textarea"
                                     rows={4}
@@ -1686,6 +2058,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                       }))
                                     }
                                     disabled={adminActionRequestId === requestItem.id}
+                                  />
+                                  <textarea
+                                    className="question-input workspace-static-textarea"
+                                    rows={3}
+                                    placeholder="Manager note visible only to admin and management"
+                                    value={managementNoteDrafts[requestItem.id] || ""}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) =>
+                                      setManagementNoteDrafts((current) => ({
+                                        ...current,
+                                        [requestItem.id]: event.target.value,
+                                      }))
+                                    }
                                   />
                                   <div className="admin-request-action-row">
                                     <select
@@ -1701,6 +2086,16 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                         </option>
                                       ))}
                                     </select>
+                                    <button
+                                      className="admin-table-action-button"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleCreateManagementNote({ requestId: requestItem.id, targetUserId: requestItem.userId });
+                                      }}
+                                    >
+                                      Save Note
+                                    </button>
                                     <button
                                       className="primary-button"
                                       type="button"
@@ -1895,16 +2290,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       }
 
       if (activeInfoTab === "management" && selectedInfoPage === "administration") {
-        const usersTable = getAdminTableByName("users");
-        const managementRows = (usersTable?.rows || []).filter((row) => !!row.is_management);
-        const filteredManagementRows = managementRows.filter((row) => matchesAdminSearch(row, adminDatabaseSearch));
         const tableColumns = [
-          "public_user_code",
-          "full_name",
+          "publicUserCode",
+          "fullName",
           "username",
           "email",
-          "mobile",
-          "created_at",
+          "requestCount",
+          "accessStatus",
+          "managementGrantedAt",
           "__management_actions__",
         ];
 
@@ -1913,31 +2306,67 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             <div className="insight-section">
               <div className="insight-card">
                 <h3 className="tool-title">{activeInfoContent.heading}</h3>
-                <p className="tool-copy">Review users with management access and remove that access directly from this list.</p>
+                <p className="tool-copy">Search management users, review access dates, suspend access, open handled request history, and track workload.</p>
               </div>
             </div>
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
+                <div className="workspace-info-grid">
+                  <div className="workspace-mini-card">
+                    <h4>Total Management Users</h4>
+                    <p>{managementSummary.totalManagementUsers || 0}</p>
+                  </div>
+                  <div className="workspace-mini-card">
+                    <h4>Open Requests</h4>
+                    <p>{managementSummary.openRequests || 0}</p>
+                  </div>
+                  <div className="workspace-mini-card">
+                    <h4>In Review Requests</h4>
+                    <p>{managementSummary.inReviewRequests || 0}</p>
+                  </div>
+                  <div className="workspace-mini-card">
+                    <h4>Completed Today</h4>
+                    <p>{managementSummary.completedToday || 0}</p>
+                  </div>
+                </div>
                 <div className="admin-toolbar">
                   <div className="admin-toolbar-copy">
                     <h4>Management User List</h4>
-                    <p>Open the user profile or remove management access from the table.</p>
+                    <p>Filter by name, email, request count, and active or suspended access.</p>
                   </div>
                   <div className="admin-toolbar-actions">
                     <input
                       className="auth-input workspace-static-input admin-search-input"
                       type="search"
                       placeholder="Search management users"
-                      value={adminDatabaseSearch}
-                      onChange={(event) => setAdminDatabaseSearch(event.target.value)}
+                      value={managementUserSearch}
+                      onChange={(event) => setManagementUserSearch(event.target.value)}
                     />
+                    <select
+                      className="auth-input workspace-static-input"
+                      value={managementAccessFilter}
+                      onChange={(event) => setManagementAccessFilter(event.target.value)}
+                    >
+                      <option value="all">All Access</option>
+                      <option value="active">Active</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                    <select
+                      className="auth-input workspace-static-input"
+                      value={managementRequestCountFilter}
+                      onChange={(event) => setManagementRequestCountFilter(event.target.value)}
+                    >
+                      <option value="all">All Request Counts</option>
+                      <option value="assigned">Assigned Requests</option>
+                      <option value="idle">No Requests</option>
+                    </select>
                   </div>
                 </div>
                 <section className="admin-table-section">
                   <div className="admin-table-header">
                     <div>
                       <h4>Users</h4>
-                      <p>{filteredManagementRows.length} rows</p>
+                      <p>{filteredManagementUsers.length} rows</p>
                     </div>
                   </div>
                   <div className="admin-table-scroll">
@@ -1956,8 +2385,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredManagementRows.length > 0 ? (
-                          filteredManagementRows.map((row, index) => (
+                        {filteredManagementUsers.length > 0 ? (
+                          filteredManagementUsers.map((row, index) => (
                             <tr key={`management-user-${index}`}>
                               {tableColumns.map((columnName) => (
                                 <td key={`management-user-${index}-${columnName}`}>
@@ -1972,6 +2401,18 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                       </button>
                                       <button
                                         type="button"
+                                        className="admin-table-action-button"
+                                        onClick={() => handleManagementSuspendToggle(row.id, !row.accessSuspended)}
+                                        disabled={managementToggleUserId === row.id}
+                                      >
+                                        {managementToggleUserId === row.id
+                                          ? "Updating..."
+                                          : row.accessSuspended
+                                            ? "Resume"
+                                            : "Suspend"}
+                                      </button>
+                                      <button
+                                        type="button"
                                         className="admin-table-action-button danger-tone"
                                         onClick={() => handleManagementAccessToggle(row.id, false)}
                                         disabled={managementToggleUserId === row.id}
@@ -1980,7 +2421,12 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                       </button>
                                     </div>
                                   ) : (
-                                    renderDatabaseCell(columnName, row[columnName])
+                                    renderDatabaseCell(
+                                      columnName,
+                                      columnName === "accessStatus"
+                                        ? row.accessSuspended ? "Suspended" : "Active"
+                                        : row[columnName]
+                                    )
                                   )}
                                 </td>
                               ))}
@@ -2812,6 +3258,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         { title: "Date Of Birth", text: selectedAdminUserDetails.userRow.date_of_birth || "Not available" },
         { title: "Referral Code", text: selectedAdminUserDetails.userRow.referral_code || "Not available" },
         { title: "Management Access", text: selectedAdminUserDetails.userRow.is_management ? "Enabled" : "Disabled" },
+        { title: "Access Status", text: selectedAdminUserDetails.managementMeta?.accessSuspended ? "Suspended" : "Active" },
+        { title: "Granted On", text: selectedAdminUserDetails.managementMeta?.managementGrantedAt || "Not available" },
+        { title: "Granted By", text: selectedAdminUserDetails.managementMeta?.managementGrantedByName || "Not available" },
         { title: "Email Verified", text: selectedAdminUserDetails.userRow.email_verified ? "Yes" : "No" },
         { title: "Mobile Verified", text: selectedAdminUserDetails.userRow.mobile_verified ? "Yes" : "No" },
         { title: "Security Question", text: selectedAdminUserDetails.userRow.security_question || "Not available" },
@@ -2994,6 +3443,21 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           ? "Remove Management"
                           : "Give Management"}
                     </button>
+                    {selectedAdminUserDetails.userRow.is_management ? (
+                      <button
+                        type="button"
+                        className="admin-table-action-button"
+                        onClick={() =>
+                          handleManagementSuspendToggle(
+                            selectedAdminUserDetails.userRow.id,
+                            !selectedAdminUserDetails.managementMeta?.accessSuspended
+                          )
+                        }
+                        disabled={managementToggleUserId === selectedAdminUserDetails.userRow.id}
+                      >
+                        {selectedAdminUserDetails.managementMeta?.accessSuspended ? "Resume Access" : "Suspend Access"}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -3029,6 +3493,49 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {selectedAdminUserDetails.handledRequests.length > 0 ? (
+                <div className="admin-user-history-panel">
+                  <h4>Handled Request History</h4>
+                  <div className="admin-user-history-list">
+                    {selectedAdminUserDetails.handledRequests.map((item) => (
+                      <div key={item.id} className="admin-user-history-item">
+                        <strong>{item.requestCode || item.title || item.id}</strong>
+                        <p>{item.status} | {item.userFullName || item.userEmail || "Unknown user"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="admin-toolbar">
+                <div className="admin-toolbar-copy">
+                  <h4>Internal Manager Note</h4>
+                  <p>Add a note that only administration and management users can see.</p>
+                </div>
+                <div className="admin-toolbar-actions" />
+              </div>
+              <div className="workspace-form-stack">
+                <textarea
+                  className="question-input workspace-static-textarea"
+                  rows={3}
+                  placeholder="Write an internal note for this user"
+                  value={managementNoteDrafts[selectedAdminUserDetails.userRow.id] || ""}
+                  onChange={(event) =>
+                    setManagementNoteDrafts((current) => ({
+                      ...current,
+                      [selectedAdminUserDetails.userRow.id]: event.target.value,
+                    }))
+                  }
+                />
+                <button
+                  type="button"
+                  className="admin-table-action-button"
+                  onClick={() => handleCreateManagementNote({ targetUserId: selectedAdminUserDetails.userRow.id })}
+                >
+                  Save User Note
+                </button>
               </div>
             </section>
           </div>

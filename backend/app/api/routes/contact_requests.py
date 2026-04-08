@@ -41,6 +41,15 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
             requestCode=item.request_code,
             status=item.status,
             adminMessage=item.admin_message,
+            assignedManagerUserId=item.assigned_manager_user_id,
+            assignedManagerName=item.assigned_manager_name,
+            assignedManagerEmail=item.assigned_manager_email,
+            assignedByUserId=item.assigned_by_user_id,
+            assignedAt=item.assigned_at,
+            firstResponseAt=item.first_response_at,
+            completedAt=item.completed_at,
+            lastStatusUpdatedAt=item.last_status_updated_at,
+            lastStatusUpdatedByUserId=item.last_status_updated_by_user_id,
             values=item.values,
             createdAt=item.created_at,
             userFullName=item.user_full_name,
@@ -130,6 +139,8 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
                 request_id=request_id,
                 status=payload.status,
                 admin_message=payload.adminMessage,
+                acting_user_id=authenticated_user_id,
+                assigned_manager_user_id=payload.assignedManagerUserId,
             )
             admin_audit_service.log_action(
                 db,
@@ -138,7 +149,11 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
                 target_type="contact_request",
                 target_id=item.id,
                 target_label=item.request_code or item.title,
-                detail=f"Status changed to {item.status}. Admin note: {(item.admin_message or 'None')[:180]}",
+                detail=(
+                    f"Status changed to {item.status}. "
+                    f"Assigned manager: {item.assigned_manager_name or 'Unassigned'}. "
+                    f"Reply: {(item.admin_message or 'None')[:180]}"
+                ),
             )
             return serialize_contact_request(item)
         except ContactRequestServiceError as exc:

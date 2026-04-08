@@ -286,6 +286,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             referralCode=user.referral_code,
             publicUserCode=user.public_user_code,
             isManagement=is_management,
+            managementAccessSuspended=bool(getattr(user, "management_access_suspended", False)),
+            managementGrantedAt=getattr(user, "management_granted_at", None),
+            managementGrantedByUserId=getattr(user, "management_granted_by_user_id", None),
+            managementSuspendedAt=getattr(user, "management_suspended_at", None),
+            managementSuspendedByUserId=getattr(user, "management_suspended_by_user_id", None),
             emailVerified=user.email_verified,
             mobileVerified=user.mobile_verified,
             subscriptionPlanId=user.subscription_plan_id,
@@ -422,6 +427,8 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 db,
                 user_id=payload.userId,
                 is_management=payload.isManagement,
+                suspended=payload.suspended,
+                changed_by_user_id=authenticated_user_id,
             )
             admin_audit_service.log_action(
                 db,
@@ -432,7 +439,8 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 target_label=user.public_user_code or user.username,
                 detail=(
                     f"Management access {'enabled' if user.is_management else 'disabled'} "
-                    f"for {user.full_name} ({user.email})."
+                    f"for {user.full_name} ({user.email}). "
+                    f"Suspended: {'yes' if user.management_access_suspended else 'no'}."
                 ),
             )
             return serialize_user(user)

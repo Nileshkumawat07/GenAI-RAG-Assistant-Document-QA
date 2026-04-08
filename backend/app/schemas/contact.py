@@ -14,6 +14,8 @@ class ContactRequestUpdateStatus(BaseModel):
     userId: Optional[str] = None
     status: str
     adminMessage: Optional[str] = None
+    assignedManagerUserId: Optional[str] = None
+    templateId: Optional[str] = None
 
 
 class ContactRequestResponse(BaseModel):
@@ -24,6 +26,15 @@ class ContactRequestResponse(BaseModel):
     requestCode: str | None = None
     status: str
     adminMessage: str | None = None
+    assignedManagerUserId: str | None = None
+    assignedManagerName: str | None = None
+    assignedManagerEmail: str | None = None
+    assignedByUserId: str | None = None
+    assignedAt: str | None = None
+    firstResponseAt: str | None = None
+    completedAt: str | None = None
+    lastStatusUpdatedAt: str | None = None
+    lastStatusUpdatedByUserId: str | None = None
     values: dict[str, str]
     createdAt: str
     userFullName: str | None = None

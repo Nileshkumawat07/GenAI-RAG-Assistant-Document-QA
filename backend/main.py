@@ -14,6 +14,7 @@ from app.api.routes.frontend import build_frontend_router, mount_frontend
 from app.api.routes.health import build_health_router
 from app.api.routes.image_generation import build_image_generation_router
 from app.api.routes.linked_providers import build_linked_provider_router
+from app.api.routes.management import build_management_router
 from app.api.routes.object_detection import build_object_detection_router
 from app.api.routes.payments import build_payment_router
 from app.core.config import FRONTEND_ORIGIN
@@ -23,6 +24,7 @@ from app.models.user import User
 from app.services.auth_service import AuthService
 from app.services.contact_request_service import ContactRequestService
 from app.services.linked_provider_service import LinkedProviderService
+from app.services.management_service import ManagementService
 from app.services.otp_service import OTPService
 from app.services.payment_service import PaymentService
 from app.services.rag_service import RAGService
@@ -52,6 +54,19 @@ def ensure_contact_request_schema() -> None:
     with engine.begin() as connection:
         if "admin_message" not in existing_columns:
             connection.execute(text("ALTER TABLE contact_requests ADD COLUMN admin_message TEXT NULL"))
+        required_statements = {
+            "assigned_manager_user_id": "ALTER TABLE contact_requests ADD COLUMN assigned_manager_user_id VARCHAR(36) NULL",
+            "assigned_by_user_id": "ALTER TABLE contact_requests ADD COLUMN assigned_by_user_id VARCHAR(36) NULL",
+            "assigned_at": "ALTER TABLE contact_requests ADD COLUMN assigned_at DATETIME NULL",
+            "first_response_at": "ALTER TABLE contact_requests ADD COLUMN first_response_at DATETIME NULL",
+            "completed_at": "ALTER TABLE contact_requests ADD COLUMN completed_at DATETIME NULL",
+            "last_status_updated_at": "ALTER TABLE contact_requests ADD COLUMN last_status_updated_at DATETIME NULL",
+            "last_status_updated_by_user_id": "ALTER TABLE contact_requests ADD COLUMN last_status_updated_by_user_id VARCHAR(36) NULL",
+        }
+        for column_name, statement in required_statements.items():
+            if column_name in existing_columns:
+                continue
+            connection.execute(text(statement))
 
 
 def ensure_contact_request_code_schema() -> None:
@@ -81,6 +96,11 @@ def ensure_user_subscription_schema() -> None:
     required_statements = {
         "public_user_code": "ALTER TABLE users ADD COLUMN public_user_code VARCHAR(6) NULL",
         "is_management": "ALTER TABLE users ADD COLUMN is_management BOOLEAN NOT NULL DEFAULT FALSE",
+        "management_access_suspended": "ALTER TABLE users ADD COLUMN management_access_suspended BOOLEAN NOT NULL DEFAULT FALSE",
+        "management_granted_at": "ALTER TABLE users ADD COLUMN management_granted_at DATETIME NULL",
+        "management_granted_by_user_id": "ALTER TABLE users ADD COLUMN management_granted_by_user_id VARCHAR(36) NULL",
+        "management_suspended_at": "ALTER TABLE users ADD COLUMN management_suspended_at DATETIME NULL",
+        "management_suspended_by_user_id": "ALTER TABLE users ADD COLUMN management_suspended_by_user_id VARCHAR(36) NULL",
         "subscription_plan_id": "ALTER TABLE users ADD COLUMN subscription_plan_id VARCHAR(100) NULL",
         "subscription_plan_name": "ALTER TABLE users ADD COLUMN subscription_plan_name VARCHAR(255) NULL",
         "subscription_status": "ALTER TABLE users ADD COLUMN subscription_status VARCHAR(50) NOT NULL DEFAULT 'free'",
@@ -98,6 +118,44 @@ def ensure_user_subscription_schema() -> None:
             if column_name in existing_columns:
                 continue
             connection.execute(text(statement))
+
+
+def ensure_management_support_schema() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    with engine.begin() as connection:
+        if "management_notes" not in table_names:
+            connection.execute(
+                text(
+                    "CREATE TABLE management_notes ("
+                    "id VARCHAR(36) PRIMARY KEY, "
+                    "author_user_id VARCHAR(36) NOT NULL, "
+                    "request_id VARCHAR(36) NULL, "
+                    "target_user_id VARCHAR(36) NULL, "
+                    "note_text TEXT NOT NULL, "
+                    "created_at DATETIME NOT NULL)"
+                )
+            )
+
+        if "reply_templates" not in table_names:
+            connection.execute(
+                text(
+                    "CREATE TABLE reply_templates ("
+                    "id VARCHAR(36) PRIMARY KEY, "
+                    "title VARCHAR(140) NOT NULL, "
+                    "category VARCHAR(50) NULL, "
+                    "body TEXT NOT NULL, "
+                    "created_by_user_id VARCHAR(36) NULL, "
+                    "is_active BOOLEAN NOT NULL DEFAULT TRUE, "
+                    "created_at DATETIME NOT NULL, "
+                    "updated_at DATETIME NOT NULL)"
+                )
+            )
+
+
+def ensure_reply_template_seed(management_service: ManagementService) -> None:
+    with Session(engine) as db:
+        management_service.ensure_default_reply_templates(db)
 
 
 def ensure_subscription_transaction_schema() -> None:
@@ -273,9 +331,12 @@ def create_app() -> FastAPI:
     auth_service = AuthService()
     contact_request_service = ContactRequestService()
     linked_provider_service = LinkedProviderService()
+    management_service = ManagementService(auth_service)
     social_oauth_service = SocialOAuthService()
     payment_service = PaymentService()
     ensure_social_oauth_config_seed(social_oauth_service)
+    ensure_management_support_schema()
+    ensure_reply_template_seed(management_service)
     ensure_manual_test_users(auth_service)
     base_dir = Path(__file__).resolve().parent
     frontend_build_dir = base_dir.parent / "frontend" / "build"
@@ -292,6 +353,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router(rag_service))
     app.include_router(build_auth_router(otp_service, auth_service))
     app.include_router(build_contact_request_router(contact_request_service, auth_service))
+    app.include_router(build_management_router(management_service, auth_service))
     app.include_router(build_linked_provider_router(linked_provider_service, auth_service, social_oauth_service))
     app.include_router(build_payment_router(payment_service, auth_service))
     app.include_router(build_document_router(rag_service))

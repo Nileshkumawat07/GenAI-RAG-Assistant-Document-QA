@@ -66,6 +66,7 @@ class DeleteAccountRequest(BaseModel):
 class UpdateManagementAccessRequest(BaseModel):
     userId: str
     isManagement: bool
+    suspended: bool = False
 
 
 class AuthUserResponse(BaseModel):
@@ -82,6 +83,11 @@ class AuthUserResponse(BaseModel):
     referralCode: str | None = None
     publicUserCode: str | None = None
     isManagement: bool = False
+    managementAccessSuspended: bool = False
+    managementGrantedAt: str | None = None
+    managementGrantedByUserId: str | None = None
+    managementSuspendedAt: str | None = None
+    managementSuspendedByUserId: str | None = None
     emailVerified: bool
     mobileVerified: bool
     subscriptionPlanId: str | None = None
