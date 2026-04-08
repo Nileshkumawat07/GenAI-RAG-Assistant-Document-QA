@@ -525,6 +525,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [adminDatabaseQueryResult, setAdminDatabaseQueryResult] = useState(null);
   const [adminAuditFocusId, setAdminAuditFocusId] = useState("");
   const [managementAuditFocusId, setManagementAuditFocusId] = useState("");
+  const [adminUserTimelineFocusById, setAdminUserTimelineFocusById] = useState({});
   const [adminContentDraft, setAdminContentDraft] = useState({
     pageKey: "about",
     sectionKey: "company",
@@ -2535,14 +2536,43 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           Give Support
                         </button>
                       </div>
-                      <div className="admin-user-history-list">
-                        {(user.timeline || []).slice(0, 5).map((item, index) => (
-                          <div key={`${user.id}-${index}`} className="admin-user-history-item">
-                            <strong>{item.title}</strong>
-                            <p>{item.text}</p>
+                      {(() => {
+                        const timelineItems = (user.timeline || []).slice(0, 5);
+                        const selectedTimelineIndex = Number(adminUserTimelineFocusById[user.id] ?? 0);
+                        const selectedTimelineItem = timelineItems[selectedTimelineIndex] || timelineItems[0] || null;
+
+                        return timelineItems.length > 0 ? (
+                          <>
+                            <select
+                              className="auth-input workspace-static-input admin-dropdown-select"
+                              value={String(selectedTimelineIndex)}
+                              onChange={(event) =>
+                                setAdminUserTimelineFocusById((current) => ({
+                                  ...current,
+                                  [user.id]: Number(event.target.value),
+                                }))
+                              }
+                            >
+                              {timelineItems.map((item, index) => (
+                                <option key={`${user.id}-${item.title}-${index}`} value={String(index)}>
+                                  {item.title}
+                                </option>
+                              ))}
+                            </select>
+                            {selectedTimelineItem ? (
+                              <article className="admin-user-history-item">
+                                <strong>{selectedTimelineItem.title}</strong>
+                                <p>{selectedTimelineItem.text}</p>
+                              </article>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="admin-empty-state">
+                            <h4>No timeline entries</h4>
+                            <p>This user does not have any recorded timeline activity yet.</p>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
                     </article>
                   ))}
                 </div>
@@ -3141,6 +3171,34 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     <p className="tool-copy">Mode: {adminDatabaseToolsPanel.queryMode || "read-only"} | Known tables: {adminDatabaseToolsPanel.tableCount || 0}</p>
                     {adminDatabaseQueryResult ? (
                       <p className="tool-copy">Rows returned: {adminDatabaseQueryResult.rowCount || 0}</p>
+                    ) : null}
+                    {adminDatabaseQueryResult?.rows?.length ? (
+                      <div className="admin-table-scroll">
+                        <table className="admin-data-table">
+                          <thead>
+                            <tr>
+                              {Object.keys(adminDatabaseQueryResult.rows[0] || {}).map((columnName) => (
+                                <th key={columnName}>
+                                  <span>{prettifyKey(columnName)}</span>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adminDatabaseQueryResult.rows.map((row, index) => (
+                              <tr key={`admin-query-row-${index}`}>
+                                {Object.keys(adminDatabaseQueryResult.rows[0] || {}).map((columnName) => (
+                                  <td key={`admin-query-row-${index}-${columnName}`}>
+                                    {renderDatabaseCell(columnName, row[columnName])}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : adminDatabaseQueryResult ? (
+                      <p className="tool-copy">No rows were returned for that query.</p>
                     ) : null}
                   </div>
                 ) : null}
@@ -4147,14 +4205,43 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
 
               <div className="admin-user-history-panel">
                 <h4>User Timeline</h4>
-                <div className="admin-user-history-list">
-                  {selectedAdminUserDetails.timelineItems.map((item, index) => (
-                    <div key={`${item.title}-${index}`} className="admin-user-history-item">
-                      <strong>{item.title}</strong>
-                      <p>{item.text}</p>
-                    </div>
-                  ))}
-                </div>
+                {selectedAdminUserDetails.timelineItems.length > 0 ? (
+                  (() => {
+                    const timelineItems = selectedAdminUserDetails.timelineItems;
+                    const timelineFocusKey = `${selectedAdminUserDetails.userRow.id}`;
+                    const selectedTimelineIndex = Number(adminUserTimelineFocusById[timelineFocusKey] ?? 0);
+                    const selectedTimelineItem = timelineItems[selectedTimelineIndex] || timelineItems[0] || null;
+
+                    return (
+                      <>
+                        <select
+                          className="auth-input workspace-static-input admin-dropdown-select"
+                          value={String(selectedTimelineIndex)}
+                          onChange={(event) =>
+                            setAdminUserTimelineFocusById((current) => ({
+                              ...current,
+                              [timelineFocusKey]: Number(event.target.value),
+                            }))
+                          }
+                        >
+                          {timelineItems.map((item, index) => (
+                            <option key={`${timelineFocusKey}-${item.title}-${index}`} value={String(index)}>
+                              {item.title}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedTimelineItem ? (
+                          <article className="admin-user-history-item">
+                            <strong>{selectedTimelineItem.title}</strong>
+                            <p>{selectedTimelineItem.text}</p>
+                          </article>
+                        ) : null}
+                      </>
+                    );
+                  })()
+                ) : (
+                  <p>No timeline entries available.</p>
+                )}
               </div>
 
               {selectedAdminUserDetails.handledRequests.length > 0 ? (
