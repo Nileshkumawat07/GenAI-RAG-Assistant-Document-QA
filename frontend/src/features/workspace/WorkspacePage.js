@@ -487,6 +487,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [adminSupportSearch, setAdminSupportSearch] = useState("");
   const [adminDatabaseSearch, setAdminDatabaseSearch] = useState("");
   const [adminAuditSearch, setAdminAuditSearch] = useState("");
+  const [adminUserSearch, setAdminUserSearch] = useState("");
   const [adminExportLoading, setAdminExportLoading] = useState("");
   const [activeAdminRequestSection, setActiveAdminRequestSection] = useState("In Progress");
   const [activeAdminDatabaseSection, setActiveAdminDatabaseSection] = useState("accounts");
@@ -522,6 +523,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [adminCenterData, setAdminCenterData] = useState(null);
   const [adminDatabaseQuery, setAdminDatabaseQuery] = useState("SELECT id, full_name, email FROM users");
   const [adminDatabaseQueryResult, setAdminDatabaseQueryResult] = useState(null);
+  const [adminAuditFocusId, setAdminAuditFocusId] = useState("");
+  const [managementAuditFocusId, setManagementAuditFocusId] = useState("");
   const [adminContentDraft, setAdminContentDraft] = useState({
     pageKey: "about",
     sectionKey: "company",
@@ -905,6 +908,49 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const adminAutomationPanel = adminCenterPanels.workflowAutomation || { rules: [] };
   const adminNotificationsPanel = adminCenterPanels.adminNotifications || { items: [], unreadCount: 0 };
   const adminReportsPanel = adminCenterPanels.reportBuilder || { presets: [], formats: [] };
+  const filteredAdminAuditLogs = adminAuditLogs.filter((item) =>
+    matchesAdminSearch(
+      {
+        adminName: item.adminName,
+        adminEmail: item.adminEmail,
+        actionType: item.actionType,
+        targetType: item.targetType,
+        targetLabel: item.targetLabel,
+        detail: item.detail,
+      },
+      adminAuditSearch
+    )
+  );
+  const adminCenterUsers = adminUsersPanel.users || [];
+  const filteredAdminCenterUsers = adminCenterUsers.filter((user) =>
+    matchesAdminSearch(
+      {
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        mobile: user.mobile,
+        roles: (user.roles || []).join(" "),
+      },
+      adminUserSearch
+    )
+  );
+  const managementTableUsers = ((adminTables.find((table) => table.tableName === "users")?.rows || []))
+    .filter((row) => !row.is_admin && !row.is_management);
+  const filteredManagementTableUsers = managementTableUsers.filter((row) =>
+    matchesAdminSearch(
+      {
+        fullName: row.full_name,
+        username: row.username,
+        email: row.email,
+        mobile: row.mobile,
+        publicUserCode: row.public_user_code,
+      },
+      managementUserSearch
+    )
+  );
+  const selectedAdminAuditLog = filteredAdminAuditLogs.find((item) => item.id === adminAuditFocusId) || filteredAdminAuditLogs[0] || null;
+  const selectedManagementAction =
+    recentManagementActions.find((item) => item.id === managementAuditFocusId) || recentManagementActions[0] || null;
 
   const hasQuestion = question.trim().length > 0;
 
@@ -1645,19 +1691,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       const statusChoices = adminStatusOptions.length > 0
         ? adminStatusOptions
         : ["In Progress", "In Review", "Completed"];
-      const filteredAuditLogs = adminAuditLogs.filter((item) =>
-        matchesAdminSearch(
-          {
-            adminName: item.adminName,
-            adminEmail: item.adminEmail,
-            actionType: item.actionType,
-            targetType: item.targetType,
-            targetLabel: item.targetLabel,
-            detail: item.detail,
-          },
-          adminAuditSearch
-        )
-      );
+      const filteredAuditLogs = filteredAdminAuditLogs;
       const accessLabel = selectedInfoPage === "management" ? "management" : "administration";
 
       if ((selectedInfoPage === "administration" && !isAdmin) || (selectedInfoPage === "management" && !canAccessManagement)) {
@@ -1842,42 +1876,66 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                       ) : null}
                     </div>
                     {selectedInfoPage === "management" ? (
-                      <div className="admin-audit-list">
-                        {recentManagementActions.slice(0, 8).map((item) => (
-                          <article key={item.id} className="admin-audit-card">
+                      <>
+                        <select
+                          className="auth-input workspace-static-input admin-dropdown-select"
+                          value={selectedManagementAction?.id || ""}
+                          onChange={(event) => setManagementAuditFocusId(event.target.value)}
+                        >
+                          <option value="">Pick an action</option>
+                          {recentManagementActions.slice(0, 12).map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {prettifyKey(item.actionType)} | {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Unknown time"}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedManagementAction ? (
+                          <article className="admin-audit-card">
                             <div className="admin-audit-card-head">
-                              <strong>{prettifyKey(item.actionType)}</strong>
-                              <span>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Unknown time"}</span>
+                              <strong>{prettifyKey(selectedManagementAction.actionType)}</strong>
+                              <span>{selectedManagementAction.createdAt ? new Date(selectedManagementAction.createdAt).toLocaleString("en-GB") : "Unknown time"}</span>
                             </div>
-                            <p>{item.detail || "No additional details provided."}</p>
+                            <p>{selectedManagementAction.detail || "No additional details provided."}</p>
                             <div className="admin-audit-meta">
-                              <span>{item.actorName || item.actorEmail || "Unknown user"}</span>
-                              <span>{prettifyKey(item.targetType)}: {item.targetLabel || item.targetId || "Not available"}</span>
+                              <span>{selectedManagementAction.actorName || selectedManagementAction.actorEmail || "Unknown user"}</span>
+                              <span>{prettifyKey(selectedManagementAction.targetType)}: {selectedManagementAction.targetLabel || selectedManagementAction.targetId || "Not available"}</span>
                             </div>
                           </article>
-                        ))}
-                      </div>
+                        ) : null}
+                      </>
                     ) : adminLoading ? null : filteredAuditLogs.length === 0 ? (
                       <div className="admin-empty-state">
                         <h4>No audit entries found</h4>
                         <p>Admin actions will appear here after moderation or export events are recorded.</p>
                       </div>
                     ) : (
-                      <div className="admin-audit-list">
-                        {filteredAuditLogs.slice(0, 8).map((item) => (
-                          <article key={item.id} className="admin-audit-card">
+                      <>
+                        <select
+                          className="auth-input workspace-static-input admin-dropdown-select"
+                          value={selectedAdminAuditLog?.id || ""}
+                          onChange={(event) => setAdminAuditFocusId(event.target.value)}
+                        >
+                          <option value="">Pick an audit entry</option>
+                          {filteredAuditLogs.slice(0, 20).map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {prettifyKey(item.actionType)} | {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Unknown time"}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedAdminAuditLog ? (
+                          <article className="admin-audit-card">
                             <div className="admin-audit-card-head">
-                              <strong>{prettifyKey(item.actionType)}</strong>
-                              <span>{item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Unknown time"}</span>
+                              <strong>{prettifyKey(selectedAdminAuditLog.actionType)}</strong>
+                              <span>{selectedAdminAuditLog.createdAt ? new Date(selectedAdminAuditLog.createdAt).toLocaleString("en-GB") : "Unknown time"}</span>
                             </div>
-                            <p>{item.detail || "No additional details provided."}</p>
+                            <p>{selectedAdminAuditLog.detail || "No additional details provided."}</p>
                             <div className="admin-audit-meta">
-                              <span>{item.adminName || item.adminEmail || "Unknown admin"}</span>
-                              <span>{prettifyKey(item.targetType)}: {item.targetLabel || item.targetId || "Not available"}</span>
+                              <span>{selectedAdminAuditLog.adminName || selectedAdminAuditLog.adminEmail || "Unknown admin"}</span>
+                              <span>{prettifyKey(selectedAdminAuditLog.targetType)}: {selectedAdminAuditLog.targetLabel || selectedAdminAuditLog.targetId || "Not available"}</span>
                             </div>
                           </article>
-                        ))}
-                      </div>
+                        ) : null}
+                      </>
                     )}
                   </section>
                 </div>
@@ -2434,8 +2492,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             </div>
             <div className="content-grid single-column">
               <article className="tool-card workspace-copy-card">
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Users</h4>
+                    <p>Search the full user base, including admin and management accounts.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <input
+                      className="auth-input workspace-static-input admin-search-input"
+                      type="search"
+                      placeholder="Search users"
+                      value={adminUserSearch}
+                      onChange={(event) => setAdminUserSearch(event.target.value)}
+                    />
+                  </div>
+                </div>
                 <div className="admin-request-grid">
-                  {adminUsersPanel.users.map((user) => (
+                  {filteredAdminCenterUsers.map((user) => (
                     <article key={user.id} className="admin-request-card">
                       <div className="admin-request-card-header">
                         <div>
@@ -2473,6 +2546,12 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     </article>
                   ))}
                 </div>
+                {filteredAdminCenterUsers.length === 0 ? (
+                  <div className="admin-empty-state">
+                    <h4>No users matched the current search</h4>
+                    <p>Try a different name, email, role, or mobile number.</p>
+                  </div>
+                ) : null}
               </article>
             </div>
           </>
@@ -2742,10 +2821,116 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         );
       }
 
-      if (
-        (activeInfoTab === "management" && selectedInfoPage === "administration") ||
-        (activeInfoTab === "users" && selectedInfoPage === "management")
-      ) {
+      if (activeInfoTab === "users" && selectedInfoPage === "management") {
+        const requestTable = adminTables.find((table) => table.tableName === "users");
+        const tableRows = (requestTable?.rows || []).filter((row) => !row.is_admin && !row.is_management);
+        const filteredRows = tableRows.filter((row) =>
+          matchesAdminSearch(
+            {
+              publicUserCode: row.public_user_code,
+              fullName: row.full_name,
+              username: row.username,
+              email: row.email,
+              mobile: row.mobile,
+              subscriptionPlanName: row.subscription_plan_name,
+            },
+            managementUserSearch
+          )
+        );
+        const tableColumns = [
+          "public_user_code",
+          "full_name",
+          "username",
+          "email",
+          "mobile",
+          "created_at",
+          "__management_actions__",
+        ];
+
+        return (
+          <>
+            <div className="insight-section">
+              <div className="insight-card">
+                <h3 className="tool-title">{activeInfoContent.heading}</h3>
+                <p className="tool-copy">Search all regular members. Admin and management accounts are hidden from this view.</p>
+              </div>
+            </div>
+            <div className="content-grid single-column">
+              <article className="tool-card workspace-copy-card">
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Member Directory</h4>
+                    <p>Use the search box to find users by name, email, username, or member code.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <input
+                      className="auth-input workspace-static-input admin-search-input"
+                      type="search"
+                      placeholder="Search members"
+                      value={managementUserSearch}
+                      onChange={(event) => setManagementUserSearch(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <section className="admin-table-section">
+                  <div className="admin-table-header">
+                    <div>
+                      <h4>Users</h4>
+                      <p>{filteredRows.length} rows</p>
+                    </div>
+                  </div>
+                  <div className="admin-table-scroll">
+                    <table className="admin-data-table">
+                      <thead>
+                        <tr>
+                          {tableColumns.map((columnName) => (
+                            <th key={columnName}>
+                              <span>{columnName === "__management_actions__" ? "Action" : prettifyKey(columnName)}</span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRows.length > 0 ? (
+                          filteredRows.map((row, index) => (
+                            <tr key={`management-member-${index}`}>
+                              {tableColumns.map((columnName) => (
+                                <td key={`management-member-${index}-${columnName}`}>
+                                  {columnName === "__management_actions__" ? (
+                                    <div className="admin-table-action-group">
+                                      <button
+                                        type="button"
+                                        className="admin-table-action-button"
+                                        onClick={() => setSelectedAdminUserId(row.id)}
+                                      >
+                                        View Profile
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    renderDatabaseCell(columnName, row[columnName])
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={tableColumns.length} className="admin-table-empty-row">
+                              No members matched the current search.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </article>
+            </div>
+          </>
+        );
+      }
+
+      if (activeInfoTab === "management" && selectedInfoPage === "administration") {
         const tableColumns = [
           "publicUserCode",
           "fullName",

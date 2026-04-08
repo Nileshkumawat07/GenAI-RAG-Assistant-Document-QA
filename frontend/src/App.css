@@ -1199,6 +1199,7 @@ button {
   display: flex;
   border-radius: 28px;
   overflow: hidden;
+  min-height: 0;
   box-shadow: var(--shadow-soft);
   border: 1px solid rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(18px);
@@ -1227,8 +1228,13 @@ button {
 
 .sidebar-tabs {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
 }
 
 .sidebar-tab {
@@ -2230,6 +2236,7 @@ body.workspace-body-mode .workspace-shell {
   display: flex;
   border-radius: 0;
   overflow: hidden;
+  min-height: 0;
   box-shadow: 0 18px 50px rgba(25, 49, 94, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(18px);
@@ -2240,6 +2247,10 @@ body.workspace-body-mode .workspace-sidebar {
   background: linear-gradient(180deg, rgba(237, 243, 255, 0.98), rgba(230, 239, 252, 0.9));
   padding: 30px;
   border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 body.workspace-body-mode .sidebar-title {
@@ -2296,6 +2307,19 @@ body.workspace-body-mode .sidebar-status h4 {
   background: rgba(255, 255, 255, 0.84);
   border: 1px solid var(--border);
   border-radius: 4px;
+}
+
+body.workspace-body-mode .sidebar-tabs::-webkit-scrollbar,
+body.workspace-body-mode .admin-dropdown-select::-webkit-scrollbar,
+body.workspace-body-mode .admin-audit-feed::-webkit-scrollbar {
+  width: 10px;
+}
+
+body.workspace-body-mode .sidebar-tabs::-webkit-scrollbar-thumb,
+body.workspace-body-mode .admin-dropdown-select::-webkit-scrollbar-thumb,
+body.workspace-body-mode .admin-audit-feed::-webkit-scrollbar-thumb {
+  background: rgba(18, 61, 122, 0.22);
+  border-radius: 999px;
 }
 
 body.workspace-body-mode .status-feed p {

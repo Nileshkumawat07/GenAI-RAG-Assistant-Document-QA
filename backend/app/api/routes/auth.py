@@ -473,6 +473,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                         "linked_user_name": serialize_scalar(row["full_name"]),
                         "linked_user_username": serialize_scalar(row["username"]),
                         "linked_user_email": serialize_scalar(row["email"]),
+                        "is_admin": auth_service.is_admin_email(serialize_scalar(row["email"])),
                     }
                     for row in raw_users
                 }
@@ -516,6 +517,17 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                         linked_user_id = serialize_scalar(row.get("user_id"))
                         user_details = users_lookup.get(linked_user_id, {})
                         row.update(user_details)
+                if table_name == "users":
+                    append_virtual_columns(
+                        columns,
+                        [
+                            ("is_admin", "BOOLEAN"),
+                            ("account_type", "VARCHAR"),
+                        ],
+                    )
+                    for row in rows:
+                        row["is_admin"] = auth_service.is_admin_email(serialize_scalar(row.get("email")))
+                        row["account_type"] = "admin" if row["is_admin"] else "management" if row.get("is_management") else "member"
 
                 tables.append(
                     {
