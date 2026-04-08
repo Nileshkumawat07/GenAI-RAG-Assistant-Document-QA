@@ -403,6 +403,7 @@ const INFO_PAGE_CONFIG = {
     statusItems: ["Admin session active", "Request moderation enabled", "Database overview ready"],
     tabs: [
       { id: "overview", label: "Overview", heading: "Administration Overview" },
+      { id: "management", label: "Management", heading: "Management Users" },
       { id: "database", label: "Database", heading: "MySQL Table Overview" },
     ],
   },
@@ -584,14 +585,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         copy: "Premium plan status and verified payment transactions.",
         tableNames: ["users", "subscription_transactions"],
         columns: null,
-      },
-      {
-        id: "management",
-        title: "Management",
-        copy: "Users who currently have management access.",
-        tableNames: ["users"],
-        columns: ["public_user_code", "full_name", "username", "email", "mobile", "is_management", "created_at"],
-        rowFilter: (row) => !!row.is_management,
       },
       {
         id: "provider-config",
@@ -1893,6 +1886,117 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     </div>
                   </section>
                 </div>
+              </article>
+            </div>
+          </>
+        );
+      }
+
+      if (activeInfoTab === "management" && selectedInfoPage === "administration") {
+        const usersTable = getAdminTableByName("users");
+        const managementRows = (usersTable?.rows || []).filter((row) => !!row.is_management);
+        const filteredManagementRows = managementRows.filter((row) => matchesAdminSearch(row, adminDatabaseSearch));
+        const tableColumns = [
+          "public_user_code",
+          "full_name",
+          "username",
+          "email",
+          "mobile",
+          "created_at",
+          "__view_user__",
+          "__remove_management__",
+        ];
+
+        return (
+          <>
+            <div className="insight-section">
+              <div className="insight-card">
+                <h3 className="tool-title">{activeInfoContent.heading}</h3>
+                <p className="tool-copy">Review users with management access and remove that access directly from this list.</p>
+              </div>
+            </div>
+            <div className="content-grid single-column">
+              <article className="tool-card workspace-copy-card">
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Management User List</h4>
+                    <p>Open the user profile or remove management access from the table.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <input
+                      className="auth-input workspace-static-input admin-search-input"
+                      type="search"
+                      placeholder="Search management users"
+                      value={adminDatabaseSearch}
+                      onChange={(event) => setAdminDatabaseSearch(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <section className="admin-table-section">
+                  <div className="admin-table-header">
+                    <div>
+                      <h4>Users</h4>
+                      <p>{filteredManagementRows.length} rows</p>
+                    </div>
+                  </div>
+                  <div className="admin-table-scroll">
+                    <table className="admin-data-table">
+                      <thead>
+                        <tr>
+                          {tableColumns.map((columnName) => (
+                            <th key={columnName}>
+                              <span>
+                                {columnName === "__view_user__"
+                                  ? "View Profile"
+                                  : columnName === "__remove_management__"
+                                    ? "Remove"
+                                    : prettifyKey(columnName)}
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredManagementRows.length > 0 ? (
+                          filteredManagementRows.map((row, index) => (
+                            <tr key={`management-user-${index}`}>
+                              {tableColumns.map((columnName) => (
+                                <td key={`management-user-${index}-${columnName}`}>
+                                  {columnName === "__view_user__" ? (
+                                    <button
+                                      type="button"
+                                      className="admin-table-action-button"
+                                      onClick={() => setSelectedAdminUserId(row.id)}
+                                    >
+                                      View Profile
+                                    </button>
+                                  ) : columnName === "__remove_management__" ? (
+                                    <button
+                                      type="button"
+                                      className="admin-table-action-button danger-tone"
+                                      onClick={() => handleManagementAccessToggle(row.id, false)}
+                                      disabled={managementToggleUserId === row.id}
+                                    >
+                                      {managementToggleUserId === row.id ? "Removing..." : "Remove"}
+                                    </button>
+                                  ) : (
+                                    renderDatabaseCell(columnName, row[columnName])
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={tableColumns.length} className="admin-table-empty-row">
+                              No management users matched the current search.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </article>
             </div>
           </>
