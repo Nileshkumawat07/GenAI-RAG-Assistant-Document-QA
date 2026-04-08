@@ -44,6 +44,7 @@ class UserPayload:
     management_granted_by_user_id: str | None
     management_suspended_at: str | None
     management_suspended_by_user_id: str | None
+    force_password_reset: bool
     email_verified: bool
     mobile_verified: bool
     subscription_plan_id: str | None
@@ -67,6 +68,7 @@ class AuthService:
         if not user:
             raise AuthServiceError("User account was not found.")
 
+        self.ensure_user_is_active(user)
         self.sync_user_subscription(db, user)
         return self._serialize_user(user)
 
@@ -89,6 +91,10 @@ class AuthService:
     def user_has_management_access(self, db: Session, *, user_id: str) -> bool:
         user = self._get_user_model_by_id(db, user_id)
         return self.is_admin_email(user.email) or (bool(user.is_management) and not bool(user.management_access_suspended))
+
+    def ensure_user_is_active(self, user: User) -> None:
+        if bool(getattr(user, "account_locked", False)):
+            raise AuthServiceError("This account is locked. Contact support or an administrator.")
 
     def verify_access_token(self, token: str) -> str:
         try:
@@ -177,8 +183,7 @@ class AuthService:
 
         if not user or not self._verify_password(password, user.password_hash):
             raise AuthServiceError("Invalid email/username or password.")
-        if bool(getattr(user, "account_locked", False)):
-            raise AuthServiceError("This account is locked. Contact support or an administrator.")
+        self.ensure_user_is_active(user)
 
         user.last_login_at = datetime.now(timezone.utc)
         db.commit()
@@ -262,6 +267,7 @@ class AuthService:
             raise AuthServiceError("Choose a new password that is different from the current one.")
 
         user.password_hash = self._hash_password(new_password)
+        user.force_password_reset = False
         db.commit()
 
     def verify_account_password(self, db: Session, *, user_id: str, password: str) -> User:
@@ -334,6 +340,7 @@ class AuthService:
         if not user:
             raise AuthServiceError("User account was not found.")
 
+        self.ensure_user_is_active(user)
         self.sync_user_subscription(db, user)
         return user
 
@@ -399,6 +406,7 @@ class AuthService:
             management_granted_by_user_id=user.management_granted_by_user_id,
             management_suspended_at=user.management_suspended_at.isoformat() if user.management_suspended_at else None,
             management_suspended_by_user_id=user.management_suspended_by_user_id,
+            force_password_reset=bool(user.force_password_reset),
             email_verified=user.email_verified,
             mobile_verified=user.mobile_verified,
             subscription_plan_id=user.subscription_plan_id,

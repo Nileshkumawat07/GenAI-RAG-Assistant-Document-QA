@@ -21,18 +21,27 @@ def build_admin_center_router(admin_center_service: AdminCenterService, auth_ser
     router = APIRouter(prefix="/admin-center", tags=["admin-center"])
     admin_audit_service = AdminAuditService()
 
-    def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
+    def require_authenticated_user_id(
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ) -> str:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing authorization token.")
         token = authorization.split(" ", 1)[1].strip()
         try:
-            return auth_service.verify_access_token(token)
+            user_id = auth_service.verify_access_token(token)
+            auth_service.get_user_by_id(db, user_id=user_id)
+            return user_id
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     def require_admin(db: Session, user_id: str) -> None:
         if not auth_service.user_is_admin(db, user_id=user_id):
             raise HTTPException(status_code=403, detail="Admin access is required.")
+
+    def require_admin_or_management(db: Session, user_id: str) -> None:
+        if not (auth_service.user_is_admin(db, user_id=user_id) or auth_service.user_has_management_access(db, user_id=user_id)):
+            raise HTTPException(status_code=403, detail="Admin or management access is required.")
 
     @router.get("/overview")
     def get_admin_center_overview(
@@ -73,9 +82,20 @@ def build_admin_center_router(admin_center_service: AdminCenterService, auth_ser
 
     @router.post("/users/{user_id}/force-password-reset")
     def admin_force_password_reset(user_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
-        require_admin(db, authenticated_user_id)
+        require_admin_or_management(db, authenticated_user_id)
+        target_user = admin_center_service._require_user(db, user_id)
+        if not auth_service.user_is_admin(db, user_id=authenticated_user_id) and auth_service.user_is_admin(db, user_id=target_user.id):
+            raise HTTPException(status_code=403, detail="Management users cannot update admin accounts.")
         user = admin_center_service.force_password_reset(db, target_user_id=user_id)
-        admin_audit_service.log_action(db, admin_user_id=authenticated_user_id, action_type="force_password_reset", target_type="user", target_id=user.id, target_label=user.username, detail="Admin flagged the account for password reset.")
+        admin_audit_service.log_action(
+            db,
+            admin_user_id=authenticated_user_id,
+            action_type="force_password_reset",
+            target_type="user",
+            target_id=user.id,
+            target_label=user.username,
+            detail="Admin or management flagged the account for password reset.",
+        )
         return {"message": "Password reset required on next login."}
 
     @router.post("/users/{user_id}/archive")
@@ -97,10 +117,20 @@ def build_admin_center_router(admin_center_service: AdminCenterService, auth_ser
 
     @router.post("/roles/assign")
     def assign_admin_role(payload: AdminRoleAssignmentRequest, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
-        require_admin(db, authenticated_user_id)
+        require_admin_or_management(db, authenticated_user_id)
         try:
+            if not auth_service.user_is_admin(db, user_id=authenticated_user_id) and payload.roleName.strip().lower() != "support":
+                raise HTTPException(status_code=403, detail="Management users can only assign the support role.")
             item = admin_center_service.assign_role(db, user_id=payload.userId, role_name=payload.roleName, actor_user_id=authenticated_user_id)
-            admin_audit_service.log_action(db, admin_user_id=authenticated_user_id, action_type="role_assigned", target_type="user_role", target_id=item.id, target_label=payload.roleName, detail=f"Assigned role {payload.roleName} to user {payload.userId}.")
+            admin_audit_service.log_action(
+                db,
+                admin_user_id=authenticated_user_id,
+                action_type="role_assigned",
+                target_type="user_role",
+                target_id=item.id,
+                target_label=payload.roleName,
+                detail=f"Assigned role {payload.roleName} to user {payload.userId}.",
+            )
             return {"message": "Role assigned."}
         except AdminCenterServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -88,6 +88,7 @@ class AuthUserResponse(BaseModel):
     managementGrantedByUserId: str | None = None
     managementSuspendedAt: str | None = None
     managementSuspendedByUserId: str | None = None
+    forcePasswordReset: bool = False
     emailVerified: bool
     mobileVerified: bool
     subscriptionPlanId: str | None = None

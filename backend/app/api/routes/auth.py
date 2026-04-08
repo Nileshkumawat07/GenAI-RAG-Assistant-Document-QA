@@ -256,7 +256,10 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             headers={"Content-Disposition": f'attachment; filename="admin-{section}.csv"'},
         )
 
-    def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
+    def require_authenticated_user_id(
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ) -> str:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing authorization token.")
 
@@ -265,7 +268,9 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             raise HTTPException(status_code=401, detail="Missing authorization token.")
 
         try:
-            return auth_service.verify_access_token(token)
+            user_id = auth_service.verify_access_token(token)
+            auth_service.get_user_by_id(db, user_id=user_id)
+            return user_id
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
@@ -291,6 +296,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             managementGrantedByUserId=getattr(user, "management_granted_by_user_id", None),
             managementSuspendedAt=getattr(user, "management_suspended_at", None),
             managementSuspendedByUserId=getattr(user, "management_suspended_by_user_id", None),
+            forcePasswordReset=bool(getattr(user, "force_password_reset", False)),
             emailVerified=user.email_verified,
             mobileVerified=user.mobile_verified,
             subscriptionPlanId=user.subscription_plan_id,

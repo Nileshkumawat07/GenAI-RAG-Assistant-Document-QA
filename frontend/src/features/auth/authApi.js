@@ -22,6 +22,7 @@ export function normalizeAuthUser(user) {
     managementGrantedByUserId: user.managementGrantedByUserId || null,
     managementSuspendedAt: user.managementSuspendedAt || null,
     managementSuspendedByUserId: user.managementSuspendedByUserId || null,
+    forcePasswordReset: !!user.forcePasswordReset,
     emailVerified: user.emailVerified,
     mobileVerified: user.mobileVerified,
     subscriptionPlanId: user.subscriptionPlanId || null,

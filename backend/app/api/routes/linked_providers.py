@@ -22,7 +22,10 @@ def build_linked_provider_router(
 ) -> APIRouter:
     router = APIRouter(tags=["linked-providers"])
 
-    def require_authenticated_user_id(authorization: str | None = Header(default=None)) -> str:
+    def require_authenticated_user_id(
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ) -> str:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing authorization token.")
 
@@ -31,7 +34,9 @@ def build_linked_provider_router(
             raise HTTPException(status_code=401, detail="Missing authorization token.")
 
         try:
-            return auth_service.verify_access_token(token)
+            user_id = auth_service.verify_access_token(token)
+            auth_service.get_user_by_id(db, user_id=user_id)
+            return user_id
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
