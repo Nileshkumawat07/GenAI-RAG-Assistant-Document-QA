@@ -7,7 +7,6 @@ import SettingsPanel from "./SettingsPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
 import ChatHistoryPanel from "./ChatHistoryPanel";
 import DashboardPanel from "./DashboardPanel";
-import NotificationsPanel from "./NotificationsPanel";
 import TeamManagementPanel from "./TeamManagementPanel";
 import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser, updateManagementAccess } from "../auth/authApi";
 import {
@@ -47,11 +46,8 @@ import {
   getWorkspaceChatMessages,
   getWorkspaceChats,
   getWorkspaceDashboard,
-  getWorkspaceNotifications,
   getWorkspaceTeams,
   getWorkspaceUsers,
-  markAllWorkspaceNotificationsRead,
-  markWorkspaceNotificationRead,
   updateWorkspaceTeamMember,
 } from "./workspaceHubApi";
 
@@ -549,7 +545,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     requiresApproval: false,
   });
   const [workspaceDashboard, setWorkspaceDashboard] = useState(null);
-  const [workspaceNotifications, setWorkspaceNotifications] = useState([]);
   const [workspaceAnalytics, setWorkspaceAnalytics] = useState(null);
   const [workspaceThreads, setWorkspaceThreads] = useState([]);
   const [workspaceMessages, setWorkspaceMessages] = useState([]);
@@ -557,6 +552,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [workspaceUsers, setWorkspaceUsers] = useState([]);
   const [workspaceHubLoading, setWorkspaceHubLoading] = useState(false);
   const [workspaceHubError, setWorkspaceHubError] = useState("");
+  const [workspaceDashboardError, setWorkspaceDashboardError] = useState("");
+  const [workspaceAnalyticsError, setWorkspaceAnalyticsError] = useState("");
   const [activeWorkspaceThreadId, setActiveWorkspaceThreadId] = useState("");
   const [workspaceThreadTitle, setWorkspaceThreadTitle] = useState("");
   const [workspaceThreadMessage, setWorkspaceThreadMessage] = useState("");
@@ -1198,35 +1195,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }
   };
 
-  const handleWorkspaceNotificationRead = async (notificationId) => {
-    try {
-      await markWorkspaceNotificationRead(notificationId);
-      setWorkspaceNotifications((current) =>
-        current.map((item) => (item.id === notificationId ? { ...item, isRead: true, readAt: new Date().toISOString() } : item))
-      );
-      setWorkspaceDashboard((current) =>
-        current
-          ? {
-              ...current,
-              unreadNotifications: Math.max((current.unreadNotifications || 0) - 1, 0),
-            }
-          : current
-      );
-    } catch (error) {
-      setWorkspaceHubError(error.message || "Failed to update notification.");
-    }
-  };
-
-  const handleWorkspaceNotificationsReadAll = async () => {
-    try {
-      await markAllWorkspaceNotificationsRead();
-      setWorkspaceNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
-      setWorkspaceDashboard((current) => (current ? { ...current, unreadNotifications: 0 } : current));
-    } catch (error) {
-      setWorkspaceHubError(error.message || "Failed to update notifications.");
-    }
-  };
-
   useEffect(() => {
     if (!selectedInfoPage) {
       loadWorkspaceHubData();
@@ -1456,7 +1424,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     try {
       setWorkspaceHubLoading(true);
       setWorkspaceHubError("");
-      const [dashboard, notifications, analytics, chats, teams, users] = await Promise.all([
+      const results = await Promise.allSettled([
         getWorkspaceDashboard(),
         getWorkspaceNotifications(),
         getWorkspaceAnalytics(),
@@ -1464,14 +1432,35 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         getWorkspaceTeams(),
         getWorkspaceUsers(),
       ]);
-      setWorkspaceDashboard(dashboard);
-      setWorkspaceNotifications(notifications || []);
-      setWorkspaceAnalytics(analytics);
-      setWorkspaceThreads(chats || []);
-      setWorkspaceTeams(teams || []);
-      setWorkspaceUsers(users || []);
-      setActiveWorkspaceThreadId((current) => current || chats?.[0]?.id || "");
-      setSelectedWorkspaceTeamId((current) => current || teams?.[0]?.id || "");
+      const [dashboardResult, , analyticsResult, chatsResult, teamsResult, usersResult] = results;
+
+      if (dashboardResult.status === "fulfilled") {
+        setWorkspaceDashboard(dashboardResult.value);
+        setWorkspaceDashboardError("");
+      } else {
+        setWorkspaceDashboardError(dashboardResult.reason?.message || "Failed to load dashboard.");
+      }
+      if (analyticsResult.status === "fulfilled") {
+        setWorkspaceAnalytics(analyticsResult.value);
+        setWorkspaceAnalyticsError("");
+      } else {
+        setWorkspaceAnalyticsError(analyticsResult.reason?.message || "Failed to load analytics.");
+      }
+      if (chatsResult.status === "fulfilled") {
+        const chats = chatsResult.value || [];
+        setWorkspaceThreads(chats);
+        setActiveWorkspaceThreadId((current) => current || chats[0]?.id || "");
+      }
+      if (teamsResult.status === "fulfilled") {
+        const teams = teamsResult.value || [];
+        setWorkspaceTeams(teams);
+        setSelectedWorkspaceTeamId((current) => current || teams[0]?.id || "");
+      }
+      if (usersResult.status === "fulfilled") {
+        setWorkspaceUsers(usersResult.value || []);
+      }
+
+      setWorkspaceHubError("");
     } catch (loadError) {
       setWorkspaceHubError(loadError.message || "Failed to load workspace data.");
     } finally {
@@ -1756,13 +1745,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           ? "Generate images from prompts with an SDXL Lightning pipeline that can use cached model files or download them on first use."
           : activeSection === "dashboard"
             ? "Open a concise command center for saved activity, unread work, and quick workspace signals."
-            : activeSection === "notifications"
-              ? "Review alerts, product updates, and team events in one structured notification feed."
-              : activeSection === "analytics"
-                ? "Track usage patterns across chats, notifications, and workspace teams."
-                : activeSection === "chat-history"
-                  ? "Save prompt threads and assistant notes so the workspace keeps context over time."
-                  : "Create and manage shared team workspaces with role-based member access.";
+            : activeSection === "analytics"
+              ? "Track usage patterns across chats, notifications, and workspace teams."
+              : activeSection === "chat-history"
+                ? "Save prompt threads and assistant notes so the workspace keeps context over time."
+                : "Create and manage shared team workspaces with role-based member access.";
 
   const statusContent =
     activeSection === "document-retrieval" ? (
@@ -1785,11 +1772,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       <>
         <p className="status-item status-info">Workspace dashboard ready.</p>
         <p className="status-item status-info">Refresh to pull the latest notifications, chats, and team counts.</p>
-      </>
-    ) : activeSection === "notifications" ? (
-      <>
-        <p className="status-item status-info">Notification center ready.</p>
-        <p className="status-item status-info">Mark individual alerts or clear all unread items.</p>
       </>
     ) : activeSection === "analytics" ? (
       <>
@@ -4283,9 +4265,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <button className={`sidebar-tab ${activeSection === "image-generation" ? "active" : ""}`} onClick={() => setActiveSection("image-generation")} type="button">
                     Image Generation
                   </button>
-                  <button className={`sidebar-tab ${activeSection === "notifications" ? "active" : ""}`} onClick={() => setActiveSection("notifications")} type="button">
-                    Notifications
-                  </button>
                   <button className={`sidebar-tab ${activeSection === "analytics" ? "active" : ""}`} onClick={() => setActiveSection("analytics")} type="button">
                     Analytics
                   </button>
@@ -4302,7 +4281,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           {selectedInfoPage !== "settings" ? (
             <div className="sidebar-boost-card">
               <div className="sidebar-status">
-                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "notifications" ? "Notification Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
+                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
                 {selectedInfoPage === "contact" ? (
                   <div className="workspace-form-stack">
                     <div className="status-feed">
@@ -4348,7 +4327,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
               <DashboardPanel
                 data={workspaceDashboard}
                 loading={workspaceHubLoading}
-                error={workspaceHubError}
+                error={workspaceDashboardError}
                 onRefresh={loadWorkspaceHubData}
               />
             ) : activeSection === "document-retrieval" ? (
@@ -4368,20 +4347,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
               />
             ) : activeSection === "object-detection" ? (
               <ObjectDetectionPanel />
-            ) : activeSection === "notifications" ? (
-              <NotificationsPanel
-                notifications={workspaceNotifications}
-                loading={workspaceHubLoading}
-                error={workspaceHubError}
-                onMarkRead={handleWorkspaceNotificationRead}
-                onMarkAllRead={handleWorkspaceNotificationsReadAll}
-                onRefresh={loadWorkspaceHubData}
-              />
             ) : activeSection === "analytics" ? (
               <AnalyticsPanel
                 data={workspaceAnalytics}
                 loading={workspaceHubLoading}
-                error={workspaceHubError}
+                error={workspaceAnalyticsError}
                 onRefresh={loadWorkspaceHubData}
               />
             ) : activeSection === "chat-history" ? (

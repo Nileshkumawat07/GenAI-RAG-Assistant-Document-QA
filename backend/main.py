@@ -246,6 +246,28 @@ def ensure_management_support_schema() -> None:
             )
 
 
+def ensure_workspace_hub_schema() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    required_tables = {
+        "workspace_notifications",
+        "workspace_chat_threads",
+        "workspace_chat_messages",
+        "team_workspaces",
+        "team_members",
+    }
+    if required_tables.issubset(table_names):
+        return
+
+    tables_to_create = [
+        table
+        for table in Base.metadata.sorted_tables
+        if table.name in required_tables and table.name not in table_names
+    ]
+    if tables_to_create:
+        Base.metadata.create_all(bind=engine, tables=tables_to_create)
+
+
 def ensure_reply_template_seed(management_service: ManagementService) -> None:
     with Session(engine) as db:
         management_service.ensure_default_reply_templates(db)
@@ -428,6 +450,7 @@ def create_app() -> FastAPI:
     ensure_user_settings_schema()
     ensure_user_login_sessions_schema()
     ensure_subscription_transaction_schema()
+    ensure_workspace_hub_schema()
     ensure_public_codes()
     ensure_contact_request_code_schema()
     rag_service = RAGService()

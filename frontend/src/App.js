@@ -12,6 +12,11 @@ import {
   setCurrentUser,
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
+import {
+  getWorkspaceNotifications,
+  markAllWorkspaceNotificationsRead,
+  markWorkspaceNotificationRead,
+} from "./features/workspace/workspaceHubApi";
 
 function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
@@ -19,7 +24,10 @@ function App() {
   const [authNotice, setAuthNotice] = useState(() => getAuthNotice());
   const [showInfoMenu, setShowInfoMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
+  const [headerNotifications, setHeaderNotifications] = useState([]);
+  const [headerNotificationsLoading, setHeaderNotificationsLoading] = useState(false);
 
   const buildRouteHash = (nextScreen, nextInfoPage = null) => {
     if (nextScreen !== "workspace") {
@@ -57,6 +65,7 @@ function App() {
     setSelectedInfoPage(nextInfoPage);
     setShowInfoMenu(false);
     setShowProfileMenu(false);
+    setShowNotificationMenu(false);
   };
 
   const navigateTo = (nextScreen, nextInfoPage = null, mode = "push") => {
@@ -176,7 +185,8 @@ function App() {
   ];
   const isAdmin = !!currentUser?.isAdmin;
   const isManagement = !!currentUser?.isManagement;
-  const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
+  const profileDisplayName = currentUser?.fullName || currentUser?.name || "Profile";
+  const profileInitial = profileDisplayName ? profileDisplayName.trim().charAt(0).toUpperCase() : "P";
   const userPlanName = currentUser?.subscriptionPlanName || "Free Member";
   const userPlanStatus = currentUser?.subscriptionStatus === "premium"
     ? "Premium Active"
@@ -188,6 +198,46 @@ function App() {
           ? "Management Access"
         : "Active";
   const isPremiumMember = currentUser?.subscriptionStatus === "premium";
+  const unreadHeaderNotifications = headerNotifications.filter((item) => !item.isRead).length;
+
+  const loadHeaderNotifications = async () => {
+    if (!currentUser || screen !== "workspace") {
+      return;
+    }
+    try {
+      setHeaderNotificationsLoading(true);
+      const items = await getWorkspaceNotifications();
+      setHeaderNotifications(items || []);
+    } catch {
+      setHeaderNotifications([]);
+    } finally {
+      setHeaderNotificationsLoading(false);
+    }
+  };
+
+  const handleHeaderNotificationRead = async (notificationId) => {
+    try {
+      await markWorkspaceNotificationRead(notificationId);
+      setHeaderNotifications((current) =>
+        current.map((item) => (
+          item.id === notificationId
+            ? { ...item, isRead: true, readAt: new Date().toISOString() }
+            : item
+        ))
+      );
+    } catch {
+      // Keep the existing list if marking fails.
+    }
+  };
+
+  const handleHeaderNotificationsReadAll = async () => {
+    try {
+      await markAllWorkspaceNotificationsRead();
+      setHeaderNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+    } catch {
+      // Ignore header mark-all failure silently here.
+    }
+  };
 
   useEffect(() => {
     document.body.classList.toggle("workspace-body-mode", isWorkspace);
@@ -221,6 +271,15 @@ function App() {
       navigateTo("home", null, "replace");
     }
   }, [screen, currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || screen !== "workspace") {
+      setHeaderNotifications([]);
+      return;
+    }
+
+    loadHeaderNotifications();
+  }, [currentUser?.id, screen]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {
@@ -348,16 +407,79 @@ function App() {
                 </div>
                 {currentUser ? (
                   <div className="header-user-block">
+                    <div className="header-menu-shell">
+                      <button
+                        className="header-notification-button"
+                        type="button"
+                        aria-label="Notifications"
+                        onClick={() => {
+                          setShowInfoMenu(false);
+                          setShowProfileMenu(false);
+                          setShowNotificationMenu((current) => !current);
+                          if (!showNotificationMenu) {
+                            loadHeaderNotifications();
+                          }
+                        }}
+                      >
+                        <span className="header-notification-bell" aria-hidden="true">
+                          <span className="header-notification-bell-body" />
+                          <span className="header-notification-bell-clapper" />
+                        </span>
+                        {unreadHeaderNotifications > 0 ? (
+                          <span className="header-notification-badge">
+                            {unreadHeaderNotifications > 9 ? "9+" : unreadHeaderNotifications}
+                          </span>
+                        ) : null}
+                      </button>
+                      {showNotificationMenu ? (
+                        <div className="header-dropdown-menu header-notification-menu">
+                          <div className="header-notification-menu-head">
+                            <div>
+                              <strong>Notifications</strong>
+                              <span>{unreadHeaderNotifications} unread</span>
+                            </div>
+                            <button
+                              className="header-notification-link"
+                              type="button"
+                              onClick={handleHeaderNotificationsReadAll}
+                              disabled={headerNotificationsLoading || headerNotifications.length === 0}
+                            >
+                              Mark all read
+                            </button>
+                          </div>
+                          <div className="header-notification-list">
+                            {headerNotificationsLoading ? (
+                              <p className="header-dropdown-copy">Loading notifications...</p>
+                            ) : headerNotifications.length > 0 ? (
+                              headerNotifications.slice(0, 6).map((item) => (
+                                <button
+                                  key={item.id}
+                                  className={`header-dropdown-item header-notification-item ${item.isRead ? "is-read" : ""}`}
+                                  type="button"
+                                  onClick={() => handleHeaderNotificationRead(item.id)}
+                                >
+                                  <span className="header-dropdown-title">{item.title}</span>
+                                  <span className="header-dropdown-copy">{item.message}</span>
+                                </button>
+                              ))
+                            ) : (
+                              <p className="header-dropdown-copy">No notifications yet.</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                     <button
                       className="profile-button"
                       type="button"
                       onClick={() => {
                         setShowInfoMenu(false);
+                        setShowNotificationMenu(false);
                         setShowProfileMenu((current) => !current);
                       }}
                     >
                       <span className="profile-button-avatar">{profileInitial}</span>
-                      <span className="profile-button-text">{currentUser.name}</span>
+                      <span className="profile-button-text">{profileDisplayName}</span>
                       {isPremiumMember ? <span className="profile-plan-badge">Premium</span> : null}
                     </button>
                     {showProfileMenu ? (
@@ -365,7 +487,7 @@ function App() {
                         <div className="profile-dropdown-head">
                           <div className="profile-dropdown-avatar">{profileInitial}</div>
                           <div className="profile-dropdown-meta">
-                            <strong>{currentUser.name}</strong>
+                            <strong>{profileDisplayName}</strong>
                             <span>{currentUser.email}</span>
                             {isPremiumMember ? <span className="profile-dropdown-badge">Premium Member</span> : null}
                           </div>
