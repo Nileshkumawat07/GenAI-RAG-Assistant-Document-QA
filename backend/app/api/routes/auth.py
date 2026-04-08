@@ -147,7 +147,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             )
         return device_rows
 
-    def create_login_session(db: Session, user_id: str, request: Request) -> UserLoginSession:
+    def create_login_session(db: Session, user_id: str, request: Request) -> UserLoginSession | None:
         token_id = secrets.token_hex(24)
         user_agent = request.headers.get("user-agent")
         browser_name = extract_browser_name(user_agent)
@@ -167,10 +167,14 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             remember_device=False,
             trusted=False,
         )
-        db.add(session)
-        db.commit()
-        db.refresh(session)
-        return session
+        try:
+            db.add(session)
+            db.commit()
+            db.refresh(session)
+            return session
+        except Exception:
+            db.rollback()
+            return None
 
     def quote_identifier(identifier: str) -> str:
         return f"`{identifier.replace('`', '``')}`"
@@ -494,7 +498,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 mobile_verified=payload.mobileVerified,
             )
             login_session = create_login_session(db, user.id, request)
-            return serialize_user(user, token_id=login_session.token_id)
+            return serialize_user(user, token_id=login_session.token_id if login_session else None)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -507,7 +511,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 password=payload.password,
             )
             login_session = create_login_session(db, user.id, request)
-            return serialize_user(user, token_id=login_session.token_id)
+            return serialize_user(user, token_id=login_session.token_id if login_session else None)
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 

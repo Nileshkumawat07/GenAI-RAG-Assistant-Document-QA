@@ -4,11 +4,13 @@ import {
   changePassword,
   deleteAccount,
   downloadAccountDataPdf,
+  fetchSettingsCategory,
   listUserDevices,
   listUserSessions,
   removeUserDevice,
   revokeAllOtherSessions,
   revokeUserSession,
+  saveSettingsCategory,
   updateProfile,
   updateEmail,
   updateMobile,
@@ -228,6 +230,167 @@ function formatSettingsRelativeTime(value) {
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 }
 
+function slugifySettingLabel(label) {
+  return (label || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function createSelectOptions(values) {
+  return values.map((value) => ({
+    value,
+    label: value
+      .split("-")
+      .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+      .join(" "),
+  }));
+}
+
+function createSettingDefinition(categoryId, featureLabel) {
+  const key = slugifySettingLabel(featureLabel);
+  const normalized = (featureLabel || "").toLowerCase();
+  const description = `Saved for ${categoryId.replace(/-/g, " ")} preferences.`;
+
+  if (normalized.includes("color")) {
+    return { key, label: featureLabel, type: "color", defaultValue: "#2d6bc0", description };
+  }
+  if (normalized.includes("bio") || normalized.includes("notes") || normalized.includes("text")) {
+    return { key, label: featureLabel, type: "textarea", defaultValue: "", placeholder: "Enter details", description };
+  }
+  if (normalized.includes("email") || normalized.includes("contact info")) {
+    return { key, label: featureLabel, type: "text", defaultValue: "", placeholder: "Enter email or contact detail", description };
+  }
+  if (normalized.includes("url") || normalized.includes("webhook") || normalized.includes("favicon")) {
+    return { key, label: featureLabel, type: "text", defaultValue: "", placeholder: "Enter URL or endpoint", description };
+  }
+  if (normalized.includes("frequency")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["instant", "daily", "weekly"]), defaultValue: "instant", description };
+  }
+  if (normalized.includes("channel")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["email", "in-app", "sms"]), defaultValue: "email", description };
+  }
+  if (normalized.includes("theme")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["light", "dark", "system"]), defaultValue: "light", description };
+  }
+  if (normalized.includes("density")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["comfortable", "compact", "spacious"]), defaultValue: "comfortable", description };
+  }
+  if (normalized.includes("language")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["english", "hindi", "system"]), defaultValue: "english", description };
+  }
+  if (normalized.includes("format")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["standard", "compact", "detailed"]), defaultValue: "standard", description };
+  }
+  if (normalized.includes("tone")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["professional", "friendly", "concise"]), defaultValue: "professional", description };
+  }
+  if (normalized.includes("model")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["auto", "balanced", "quality"]), defaultValue: "auto", description };
+  }
+  if (normalized.includes("strictness")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["standard", "strict", "relaxed"]), defaultValue: "standard", description };
+  }
+  if (normalized.includes("level")) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["low", "medium", "high"]), defaultValue: "medium", description };
+  }
+  if (normalized.includes("schedule") || normalized.includes("hours") || normalized.includes("window") || normalized.includes("time")) {
+    return { key, label: featureLabel, type: "text", defaultValue: "", placeholder: "Example: 22:00 - 07:00", description };
+  }
+  if (
+    normalized.includes("history")
+    || normalized.includes("logs")
+    || normalized.includes("list")
+    || normalized.includes("status")
+    || normalized.includes("summary")
+    || normalized.includes("preview")
+    || normalized.includes("badge")
+    || normalized.includes("metrics")
+    || normalized.includes("version")
+  ) {
+    return { key, label: featureLabel, type: "select", options: createSelectOptions(["hidden", "summary", "detailed"]), defaultValue: "summary", description };
+  }
+  if (
+    normalized.includes("visibility")
+    || normalized.includes("alerts")
+    || normalized.includes("reminders")
+    || normalized.includes("consent")
+    || normalized.includes("training")
+    || normalized.includes("sharing")
+    || normalized.includes("renewal")
+    || normalized.includes("beta")
+    || normalized.includes("experimental")
+    || normalized.includes("toggle")
+    || normalized.includes("indicator")
+    || normalized.includes("sync")
+    || normalized.includes("creation")
+    || normalized.includes("download")
+    || normalized.includes("export")
+    || normalized.includes("upload")
+    || normalized.includes("revoke")
+    || normalized.includes("remove")
+    || normalized.includes("link")
+    || normalized.includes("unlink")
+    || normalized.includes("archive")
+    || normalized.includes("delete")
+    || normalized.includes("opt-in")
+  ) {
+    return { key, label: featureLabel, type: "boolean", defaultValue: false, description };
+  }
+  return { key, label: featureLabel, type: "text", defaultValue: "", placeholder: "Enter a value", description };
+}
+
+function buildCategoryDefinitions(categoryId) {
+  return (CATEGORY_FEATURES[categoryId] || []).map((featureLabel) => createSettingDefinition(categoryId, featureLabel));
+}
+
+function normalizeSettingValue(definition, rawValue) {
+  if (definition.type === "boolean") {
+    return rawValue === true || rawValue === "true";
+  }
+  if (definition.type === "color") {
+    return typeof rawValue === "string" && rawValue.trim() ? rawValue : definition.defaultValue;
+  }
+  if (definition.type === "select") {
+    const allowed = new Set((definition.options || []).map((option) => option.value));
+    return allowed.has(rawValue) ? rawValue : definition.defaultValue;
+  }
+  return typeof rawValue === "string" ? rawValue : definition.defaultValue;
+}
+
+function createDefaultCategoryValues(categoryId) {
+  return buildCategoryDefinitions(categoryId).reduce((accumulator, definition) => {
+    accumulator[definition.key] = definition.defaultValue;
+    return accumulator;
+  }, {});
+}
+
+function normalizeCategorySettings(categoryId, rawPayload) {
+  const definitions = buildCategoryDefinitions(categoryId);
+  const fallbackValues = createDefaultCategoryValues(categoryId);
+  const rawValues = rawPayload?.values || rawPayload || {};
+  const legacyItems = rawPayload?.items || {};
+  const nextValues = { ...fallbackValues };
+
+  definitions.forEach((definition) => {
+    const legacyItem = legacyItems[definition.key];
+    const candidateValue =
+      rawValues[definition.key] !== undefined
+        ? rawValues[definition.key]
+        : legacyItem?.value !== undefined
+          ? legacyItem.value
+          : legacyItem?.mode === "enabled" || legacyItem?.mode === "required"
+            ? true
+            : legacyItem?.mode === "disabled" || legacyItem?.mode === "hidden"
+              ? false
+              : undefined;
+    nextValues[definition.key] = normalizeSettingValue(definition, candidateValue);
+  });
+
+  return { values: nextValues };
+}
+
 function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted }) {
   const normalizedActiveTab = activeTab === "linked-accounts" ? "linked" : activeTab;
   const [accountTab, setAccountTab] = useState("personalInfo");
@@ -238,6 +401,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     text: "",
   });
   const [storedSettings, setStoredSettings] = useState(createDefaultStoredSettings);
+  const [categoryPayloads, setCategoryPayloads] = useState({});
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categorySaving, setCategorySaving] = useState(false);
   const [profileEditMode, setProfileEditMode] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileForm, setProfileForm] = useState({
@@ -379,6 +545,19 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const trustedDeviceCount = userDevices.filter((device) => device.trusted).length;
   const currentDevice = userDevices.find((device) => device.isCurrent) || null;
 
+  const updateCategoryValue = (categoryId, key, value) => {
+    setCategoryPayloads((current) => ({
+      ...current,
+      [categoryId]: {
+        values: {
+          ...createDefaultCategoryValues(categoryId),
+          ...(current[categoryId]?.values || {}),
+          [key]: value,
+        },
+      },
+    }));
+  };
+
   useEffect(() => {
     if (!storageKey) {
       setStoredSettings(normalizeStoredSettings(null, currentUser));
@@ -413,6 +592,41 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
     }
   }, [storageKey, storedSettings]);
+
+  useEffect(() => {
+    if (!currentUser?.id || !CATEGORY_FEATURES[activeTab]) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadCategoryPayload = async () => {
+      try {
+        setCategoryLoading(true);
+        const response = await fetchSettingsCategory(activeTab);
+        if (!ignore) {
+          setCategoryPayloads((current) => ({
+            ...current,
+            [activeTab]: normalizeCategorySettings(activeTab, response?.payload || {}),
+          }));
+        }
+      } catch (error) {
+        if (!ignore) {
+          setFeedback({ type: "error", text: error.message || `Failed to load ${activeTab} settings.` });
+        }
+      } finally {
+        if (!ignore) {
+          setCategoryLoading(false);
+        }
+      }
+    };
+
+    loadCategoryPayload();
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, currentUser?.id]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--workspace-font-scale", String(preferenceFontScale));
@@ -1026,6 +1240,120 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     } finally {
       setDeviceActionLoading("");
     }
+  };
+
+  const handleSaveCategorySettings = async (categoryId, successText = "Settings saved successfully.") => {
+    try {
+      setCategorySaving(true);
+      const payload = categoryPayloads[categoryId] || { values: createDefaultCategoryValues(categoryId) };
+      await saveSettingsCategory(categoryId, payload);
+      setFeedback({ type: "success", text: successText });
+      pushActivity(`${categoryId.replace(/-/g, " ")} settings were saved.`);
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to save settings." });
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  const renderGenericCategorySection = (categoryId, title, description) => {
+    const definitions = buildCategoryDefinitions(categoryId);
+    if (definitions.length === 0) {
+      return null;
+    }
+
+    const payload = categoryPayloads[categoryId] || { values: createDefaultCategoryValues(categoryId) };
+
+    return (
+      <div className="workspace-form-stack">
+        <div className="workspace-mini-card settings-section-hero">
+          <div>
+            <p className="settings-section-kicker">Saved Settings</p>
+            <h4>{title}</h4>
+            <p>{description}</p>
+          </div>
+        </div>
+        {categoryLoading ? <p className="tool-copy">Loading saved settings...</p> : null}
+        <div className="settings-field-list">
+          {definitions.map((definition) => {
+            const value = payload.values?.[definition.key];
+
+            return (
+              <div key={`${categoryId}-${definition.key}`} className="workspace-mini-card settings-field-row">
+                <div className="settings-field-copy">
+                  <h4>{definition.label}</h4>
+                  <p>{definition.description}</p>
+                </div>
+                <div className="settings-field-control">
+                  {definition.type === "boolean" ? (
+                    <label className="settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(value)}
+                        onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.checked)}
+                      />
+                      <span className="settings-toggle-track">
+                        <span className="settings-toggle-thumb" />
+                      </span>
+                      <span className="settings-toggle-label">{value ? "Enabled" : "Disabled"}</span>
+                    </label>
+                  ) : null}
+                  {definition.type === "select" ? (
+                    <select
+                      className="auth-input workspace-static-input settings-control-input"
+                      value={value || definition.defaultValue}
+                      onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+                    >
+                      {(definition.options || []).map((option) => (
+                        <option key={`${definition.key}-${option.value}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {definition.type === "text" ? (
+                    <input
+                      className="auth-input workspace-static-input settings-control-input"
+                      value={value || ""}
+                      placeholder={definition.placeholder || "Enter a value"}
+                      onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+                    />
+                  ) : null}
+                  {definition.type === "textarea" ? (
+                    <textarea
+                      className="auth-input workspace-static-input settings-control-input settings-control-textarea"
+                      rows={3}
+                      value={value || ""}
+                      placeholder={definition.placeholder || "Enter details"}
+                      onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+                    />
+                  ) : null}
+                  {definition.type === "color" ? (
+                    <div className="settings-color-row">
+                      <input
+                        type="color"
+                        className="settings-color-input"
+                        value={value || definition.defaultValue}
+                        onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+                      />
+                      <span className="tool-copy">{value || definition.defaultValue}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => handleSaveCategorySettings(categoryId, `${title} saved successfully.`)}
+          disabled={categorySaving}
+        >
+          {categorySaving ? "Saving..." : `Save ${title}`}
+        </button>
+      </div>
+    );
   };
 
   const renderAccount = () => {
@@ -1941,6 +2269,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           ) : null}
           {renderAccount()}
         </div>
+        {renderGenericCategorySection("account", "Additional Account Settings", "These account preferences are saved to your backend settings store.")}
       </>
     );
   }
@@ -1956,6 +2285,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           ) : null}
           {renderSecurity()}
         </div>
+        {renderGenericCategorySection("security", "Additional Security Settings", "Security preferences here are saved per account and can be updated any time.")}
       </>
     );
   }
@@ -2096,6 +2426,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           ) : null}
         </div>
+        {renderGenericCategorySection("privacy", "Privacy Controls", "Choose how your data, visibility, and consent preferences should behave.")}
       </>
     );
   }
@@ -2157,6 +2488,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             Clear Activity Log
           </button>
         </div>
+        {renderGenericCategorySection("activity", "Activity Preferences", "Control how activity history and related summaries are shown in your workspace.")}
       </>
     );
   }
@@ -2332,6 +2664,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           })}
         </div>
       </div>
+      {renderGenericCategorySection("linked-accounts", "Linked Account Preferences", "Save preferences related to account linking, sync, and provider behavior.")}
       </>
     );
   }
@@ -2381,6 +2714,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </label>
         <button className="primary-button" type="button" onClick={saveNotifications}>Save Preferences</button>
       </div>
+      {renderGenericCategorySection("notifications", "Advanced Notification Settings", "Manage saved notification preferences across email, billing, product, and security updates.")}
       </>
     );
   }
@@ -2574,6 +2908,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
         ) : null}
       </div>
+      {renderGenericCategorySection("billing", "Billing Preferences", "Save backend billing preferences such as contact details, reminders, and payment behavior.")}
       </>
     );
   }
@@ -2631,6 +2966,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </select>
         <button className="primary-button" type="button" onClick={saveRegion}>Save Region & Language</button>
       </div>
+      {renderGenericCategorySection("region", "Region Preferences", "Store region, locale, and formatting preferences for this account.")}
       </>
     );
   }
@@ -2647,6 +2983,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
         <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Support center is not enabled in this build." })}>Open Support Center</button>
       </div>
+      {renderGenericCategorySection("support", "Support Preferences", "Save support-related preferences such as routing, availability, and self-service helpers.")}
       </>
     );
   }
@@ -2870,6 +3207,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             {privacyActionLoading === "download" ? "Downloading..." : "Download Account Data PDF"}
           </button>
         </div>
+        {renderGenericCategorySection("data-export", "Export Preferences", "Choose which exports should be available and how export settings should behave.")}
       </>
     );
   }
@@ -2929,6 +3267,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           ) : null}
         </div>
+        {renderGenericCategorySection("danger-zone", "Danger Zone Preferences", "Save safeguard preferences for destructive or account-sensitive actions.")}
       </>
     );
   }
@@ -2943,27 +3282,10 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }
 
   if (CATEGORY_FEATURES[activeTab]) {
-    return (
-      <div className="workspace-form-stack">
-        <div className="workspace-mini-card settings-section-hero">
-          <div>
-            <p className="settings-section-kicker">Settings Section</p>
-            <h4>{activeTab.replace(/-/g, " ")} is being upgraded</h4>
-            <p>
-              This area is reserved for real backend-powered controls. Placeholder edit fields have been removed so only
-              working settings appear here.
-            </p>
-          </div>
-        </div>
-        <div className="workspace-info-grid privacy-capability-grid">
-          {(CATEGORY_FEATURES[activeTab] || []).slice(0, 10).map((featureLabel) => (
-            <div key={featureLabel} className="workspace-mini-card">
-              <h4>{featureLabel}</h4>
-              <p>This setting will appear here once the related backend workflow is enabled.</p>
-            </div>
-          ))}
-        </div>
-      </div>
+    return renderGenericCategorySection(
+      activeTab,
+      `${activeTab.replace(/-/g, " ")} Settings`,
+      "These settings are saved to the backend and reload with your account."
     );
   }
 
