@@ -1,5 +1,6 @@
 const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
 const AUTH_TOKEN_STORAGE_KEY = "genai_assistant_auth_token";
+const AUTH_NOTICE_STORAGE_KEY = "genai_assistant_auth_notice";
 
 export function apiUrl(path) {
   return `${API_BASE}${path}`;
@@ -54,6 +55,25 @@ export async function requestJson(path, options, fallbackMessage) {
     const data = await readJson(response);
 
     if (!response.ok) {
+      if (response.status === 401 && authToken) {
+        const detailMessage = extractErrorMessage(data.detail, fallbackMessage);
+        const sessionExpiredMessage =
+          /session|token|signed out|revoked|authorization|authentication/i.test(detailMessage)
+            ? "Your session ended because this device was signed out. Please log in again."
+            : "Your session expired. Please log in again.";
+        try {
+          window.sessionStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+          window.sessionStorage.removeItem("genai_assistant_current_user");
+          window.sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, sessionExpiredMessage);
+          window.dispatchEvent(
+            new CustomEvent("genai-auth-invalidated", {
+              detail: { message: sessionExpiredMessage, status: response.status, path },
+            })
+          );
+        } catch {
+          // Ignore storage/event errors.
+        }
+      }
       throw new Error(extractErrorMessage(data.detail, fallbackMessage));
     }
 

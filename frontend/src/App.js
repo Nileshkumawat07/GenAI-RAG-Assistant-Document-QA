@@ -5,7 +5,9 @@ import LoginPage from "./features/auth/LoginPage";
 import SignupPage from "./features/auth/SignupPage";
 import { fetchCurrentSessionUser, loginUser, signupUser } from "./features/auth/authApi";
 import {
+  clearAuthNotice,
   clearCurrentUser,
+  getAuthNotice,
   getCurrentUser,
   setCurrentUser,
 } from "./features/auth/authStorage";
@@ -14,6 +16,7 @@ import WorkspacePage from "./features/workspace/WorkspacePage";
 function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
   const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
+  const [authNotice, setAuthNotice] = useState(() => getAuthNotice());
   const [showInfoMenu, setShowInfoMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
@@ -68,6 +71,8 @@ function App() {
   };
 
   const moveToWorkspace = (user) => {
+    clearAuthNotice();
+    setAuthNotice("");
     setCurrentUser(user);
     setCurrentUserState(user);
     navigateTo("workspace", null);
@@ -91,13 +96,24 @@ function App() {
   const handleLogout = () => {
     clearCurrentUser();
     setCurrentUserState(null);
+    clearAuthNotice();
+    setAuthNotice("");
     navigateTo("home", null);
   };
 
   const handleAccountDeleted = () => {
     clearCurrentUser();
     setCurrentUserState(null);
+    clearAuthNotice();
+    setAuthNotice("");
     navigateTo("home", null);
+  };
+
+  const handleForcedLogout = (message = "Your session expired. Please log in again.") => {
+    clearCurrentUser();
+    setCurrentUserState(null);
+    setAuthNotice(message);
+    navigateTo("login", null, "replace");
   };
 
   const renderScreen = () => {
@@ -106,6 +122,7 @@ function App() {
         <LoginPage
           onBack={() => navigateTo("home")}
           onShowSignup={() => navigateTo("signup")}
+          initialError={authNotice}
           onSubmit={handleLogin}
         />
       );
@@ -193,6 +210,13 @@ function App() {
   }, [screen, currentUser]);
 
   useEffect(() => {
+    if (screen !== "login" || !authNotice) {
+      return;
+    }
+    clearAuthNotice();
+  }, [screen, authNotice]);
+
+  useEffect(() => {
     if (screen === "workspace" && !currentUser) {
       navigateTo("home", null, "replace");
     }
@@ -230,18 +254,36 @@ function App() {
         if (active) {
           handleUserUpdate(latestUser);
         }
-      } catch {
-        // Keep the current session state if refresh fails.
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        if (/session|token|authorization|authentication|signed out|expired/i.test(error.message || "")) {
+          handleForcedLogout("Your session ended because this device was signed out. Please log in again.");
+        }
       }
     };
 
     refreshCurrentUser();
     window.addEventListener("focus", refreshCurrentUser);
+    const intervalId = window.setInterval(refreshCurrentUser, 15000);
     return () => {
       active = false;
+      window.clearInterval(intervalId);
       window.removeEventListener("focus", refreshCurrentUser);
     };
   }, [currentUser, screen]);
+
+  useEffect(() => {
+    const handleInvalidated = (event) => {
+      handleForcedLogout(event?.detail?.message || "Your session expired. Please log in again.");
+    };
+
+    window.addEventListener("genai-auth-invalidated", handleInvalidated);
+    return () => {
+      window.removeEventListener("genai-auth-invalidated", handleInvalidated);
+    };
+  }, []);
 
   return (
     <main

@@ -1,5 +1,6 @@
 const CURRENT_USER_STORAGE_KEY = "genai_assistant_current_user";
 const AUTH_TOKEN_STORAGE_KEY = "genai_assistant_auth_token";
+const AUTH_NOTICE_STORAGE_KEY = "genai_assistant_auth_notice";
 
 export function getCurrentUser() {
   try {
@@ -32,5 +33,33 @@ export function getAuthToken() {
     return window.sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
   } catch {
     return "";
+  }
+}
+
+export function setAuthNotice(message) {
+  try {
+    if (message) {
+      window.sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message);
+    } else {
+      window.sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+export function getAuthNotice() {
+  try {
+    return window.sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function clearAuthNotice() {
+  try {
+    window.sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors.
   }
 }
