@@ -22,6 +22,7 @@ class User(Base):
     referral_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     public_user_code: Mapped[str | None] = mapped_column(String(6), nullable=True, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_management: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     mobile_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     subscription_plan_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

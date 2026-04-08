@@ -158,6 +158,7 @@ function App() {
     { id: "pricing", label: "Pricing", copy: "Plans, tiers, notes, and subscription options" },
   ];
   const isAdmin = !!currentUser?.isAdmin;
+  const isManagement = !!currentUser?.isManagement;
   const profileInitial = currentUser?.name ? currentUser.name.trim().charAt(0).toUpperCase() : "P";
   const userPlanName = currentUser?.subscriptionPlanName || "Free Member";
   const userPlanStatus = currentUser?.subscriptionStatus === "premium"
@@ -166,6 +167,8 @@ function App() {
       ? "Expired"
       : isAdmin
         ? "Admin Access"
+        : isManagement
+          ? "Management Access"
         : "Active";
   const isPremiumMember = currentUser?.subscriptionStatus === "premium";
 
@@ -321,6 +324,15 @@ function App() {
                             onClick={() => navigateTo("workspace", "administration")}
                           >
                             Administration
+                          </button>
+                        ) : null}
+                        {(isAdmin || isManagement) ? (
+                          <button
+                            className="header-dropdown-item"
+                            type="button"
+                            onClick={() => navigateTo("workspace", "management")}
+                          >
+                            Management
                           </button>
                         ) : null}
                         <div className="profile-dropdown-summary">

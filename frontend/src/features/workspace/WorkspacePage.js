@@ -4,7 +4,7 @@ import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import SettingsPanel from "./SettingsPanel";
-import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser } from "../auth/authApi";
+import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser, updateManagementAccess } from "../auth/authApi";
 import {
   adminDeleteContactRequest,
   adminUpdateContactRequestStatus,
@@ -403,9 +403,19 @@ const INFO_PAGE_CONFIG = {
     statusItems: ["Admin session active", "Request moderation enabled", "Database overview ready"],
     tabs: [
       { id: "overview", label: "Overview", heading: "Administration Overview" },
+      { id: "database", label: "Database", heading: "MySQL Table Overview" },
+    ],
+  },
+  management: {
+    title: "Management",
+    description: "Review request operations and support handling",
+    message: "Manage submitted requests through the same workspace layout used for administration, without database access.",
+    statusTitle: "Management Controls",
+    statusItems: ["Management session active", "Request moderation enabled", "Support queue ready"],
+    tabs: [
+      { id: "overview", label: "Overview", heading: "Management Overview" },
       { id: "requests", label: "Contact Requests", heading: "Contact Request Queue" },
       { id: "support", label: "Support", heading: "Support Request Table" },
-      { id: "database", label: "Database", heading: "MySQL Table Overview" },
     ],
   },
 };
@@ -451,6 +461,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const [activeAdminDatabaseRequestCategory, setActiveAdminDatabaseRequestCategory] = useState("All");
   const [focusedContactRequestId, setFocusedContactRequestId] = useState("");
   const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
+  const [managementToggleUserId, setManagementToggleUserId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState({});
   const [activePlanPurchaseId, setActivePlanPurchaseId] = useState("");
 
@@ -522,6 +533,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const activePricingPlans = PRICING_PLAN_DETAILS.filter((plan) => plan.category === activeInfoTab);
   const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
   const isAdmin = !!currentUser?.isAdmin;
+  const isManagement = !!currentUser?.isManagement;
+  const isManagementPage = selectedInfoPage === "management";
+  const canAccessManagement = isAdmin || isManagement;
   const formatRequestStatusClass = (status) =>
     (status || "")
       .toLowerCase()
@@ -783,7 +797,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   };
 
   const loadAdministrationData = async () => {
-    if (!isAdmin) {
+    if (!canAccessManagement) {
       return;
     }
 
@@ -812,9 +826,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   };
 
   const openContactRequestFromAdmin = (requestRow) => {
+    const accessPage = selectedInfoPage === "management" ? "management" : "administration";
     setInfoTabs((current) => ({
       ...current,
-      administration: "requests",
+      [accessPage]: "requests",
     }));
     setActiveAdminRequestSection(requestRow.status || "In Progress");
     setFocusedContactRequestId(requestRow.id);
@@ -836,6 +851,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     setActiveAdminDatabaseRequestCategory("All");
     setFocusedContactRequestId("");
     setSelectedAdminUserId("");
+    setManagementToggleUserId("");
   };
 
   const handleAdminExport = async (section, format = "csv", searchOverride = null) => {
@@ -862,7 +878,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   }, [selectedInfoPage, currentUser?.id]);
 
   useEffect(() => {
-    if (selectedInfoPage !== "administration" || activeInfoTab !== "requests" || !focusedContactRequestId) {
+    if (!["administration", "management"].includes(selectedInfoPage || "") || activeInfoTab !== "requests" || !focusedContactRequestId) {
       return;
     }
 
@@ -873,10 +889,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   }, [selectedInfoPage, activeInfoTab, focusedContactRequestId, adminRequests, activeAdminRequestSection]);
 
   useEffect(() => {
-    if (selectedInfoPage === "administration" && isAdmin) {
+    if ((selectedInfoPage === "administration" && isAdmin) || (selectedInfoPage === "management" && canAccessManagement)) {
       loadAdministrationData();
     }
-  }, [selectedInfoPage, isAdmin]);
+  }, [selectedInfoPage, isAdmin, canAccessManagement]);
 
   const getContactFieldKey = (tabId, field) => {
     const keyMap = {
@@ -1064,6 +1080,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       setAdminError(deleteError.message || "Failed to delete admin request.");
     } finally {
       setAdminActionRequestId("");
+    }
+  };
+
+  const handleManagementAccessToggle = async (userId, nextIsManagement) => {
+    try {
+      setManagementToggleUserId(userId);
+      setAdminError("");
+      const updatedUser = await updateManagementAccess({
+        userId,
+        isManagement: nextIsManagement,
+      });
+      await loadAdministrationData();
+      setSelectedAdminUserId(updatedUser.id);
+    } catch (toggleError) {
+      setAdminError(toggleError.message || "Failed to update management access.");
+    } finally {
+      setManagementToggleUserId("");
     }
   };
 
@@ -1272,7 +1305,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const renderInfoContent = () => {
     if (!activeInfoContent) return null;
 
-    if (selectedInfoPage === "administration") {
+    if (selectedInfoPage === "administration" || selectedInfoPage === "management") {
       const totalRows = adminTables.reduce((sum, table) => sum + (table.rowCount || 0), 0);
       const userTable = adminTables.find((table) => table.tableName === "users");
       const requestTable = adminTables.find((table) => table.tableName === "contact_requests");
@@ -1292,14 +1325,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           adminAuditSearch
         )
       );
+      const accessLabel = selectedInfoPage === "management" ? "management" : "administration";
 
-      if (!isAdmin) {
+      if ((selectedInfoPage === "administration" && !isAdmin) || (selectedInfoPage === "management" && !canAccessManagement)) {
         return (
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
               <div className="workspace-mini-card">
-                <h4>Admin access required</h4>
-                <p>This page is only available for accounts with administration privileges.</p>
+                <h4>{selectedInfoPage === "management" ? "Management access required" : "Admin access required"}</h4>
+                <p>
+                  {selectedInfoPage === "management"
+                    ? "This page is only available for accounts with management privileges."
+                    : "This page is only available for accounts with administration privileges."}
+                </p>
               </div>
             </article>
           </div>
@@ -1328,10 +1366,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
               <article className="tool-card workspace-copy-card">
                 <div className="admin-toolbar">
                   <div className="admin-toolbar-copy">
-                    <h4>Administration Snapshot</h4>
-                    <p>Live admin data, renewal watchlist, and the latest audit activity.</p>
+                    <h4>{selectedInfoPage === "management" ? "Management Snapshot" : "Administration Snapshot"}</h4>
+                    <p>
+                      {selectedInfoPage === "management"
+                        ? "Live request moderation counts and the latest support-facing data."
+                        : "Live admin data, renewal watchlist, and the latest audit activity."}
+                    </p>
                   </div>
-                  <div className="admin-toolbar-actions">
+                  {selectedInfoPage === "administration" ? (
+                    <div className="admin-toolbar-actions">
                     <button
                       className="admin-table-action-button"
                       type="button"
@@ -1348,12 +1391,13 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     >
                       {adminExportLoading === "audit-csv" ? "Exporting..." : "Export Audit"}
                     </button>
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
                 {adminLoading ? (
                   <div className="admin-empty-state admin-loading-state">
-                    <h4>Loading administration data</h4>
-                    <p>Fetching requests, renewal reminders, audit logs, and database snapshots.</p>
+                    <h4>Loading {accessLabel} data</h4>
+                    <p>Fetching requests, moderation details, and the latest workspace snapshots.</p>
                   </div>
                 ) : null}
                 {adminError ? <p className="error-text">{adminError}</p> : null}
@@ -1369,11 +1413,30 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <section className="workspace-mini-card admin-overview-panel">
                     <div className="admin-section-header">
                       <div>
-                        <h4>Subscription Renewal Reminders</h4>
-                        <p>Members whose premium access expires within the next 14 days.</p>
+                        <h4>{selectedInfoPage === "management" ? "Request Status Overview" : "Subscription Renewal Reminders"}</h4>
+                        <p>
+                          {selectedInfoPage === "management"
+                            ? "A quick summary of request volume available to management users."
+                            : "Members whose premium access expires within the next 14 days."}
+                        </p>
                       </div>
                     </div>
-                    {adminLoading ? null : adminRenewalReminders.length === 0 ? (
+                    {selectedInfoPage === "management" ? (
+                      <div className="admin-reminder-list">
+                        {statusChoices.map((status) => (
+                          <article key={status} className="admin-reminder-card">
+                            <div className="admin-reminder-copy">
+                              <strong>{status}</strong>
+                              <span>Requests currently in this queue</span>
+                            </div>
+                            <div className="admin-reminder-meta">
+                              <strong>{adminRequests.filter((item) => (item.status || statusChoices[0]) === status).length}</strong>
+                              <span>{requestTable?.rowCount || adminRequests.length} total requests</span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : adminLoading ? null : adminRenewalReminders.length === 0 ? (
                       <div className="admin-empty-state">
                         <h4>No renewal reminders</h4>
                         <p>No active premium memberships are close to expiry right now.</p>
@@ -1400,18 +1463,41 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <section className="workspace-mini-card admin-overview-panel">
                     <div className="admin-section-header">
                       <div>
-                        <h4>Recent Audit Trail</h4>
-                        <p>Real backend log entries recorded for admin actions.</p>
+                        <h4>{selectedInfoPage === "management" ? "Management Queue Notes" : "Recent Audit Trail"}</h4>
+                        <p>
+                          {selectedInfoPage === "management"
+                            ? "Use the request and support tabs to open, update, and close submitted items."
+                            : "Real backend log entries recorded for admin actions."}
+                        </p>
                       </div>
-                      <input
+                      {selectedInfoPage === "administration" ? (
+                        <input
                         className="auth-input workspace-static-input admin-search-input"
                         type="search"
                         placeholder="Search audit logs"
                         value={adminAuditSearch}
                         onChange={(event) => setAdminAuditSearch(event.target.value)}
                       />
+                      ) : null}
                     </div>
-                    {adminLoading ? null : filteredAuditLogs.length === 0 ? (
+                    {selectedInfoPage === "management" ? (
+                      <div className="admin-audit-list">
+                        <article className="admin-audit-card">
+                          <div className="admin-audit-card-head">
+                            <strong>Contact Requests</strong>
+                            <span>{adminRequests.length} items</span>
+                          </div>
+                          <p>Review submitted requests, reply to users, and update request status from one queue.</p>
+                        </article>
+                        <article className="admin-audit-card">
+                          <div className="admin-audit-card-head">
+                            <strong>Support Table</strong>
+                            <span>{requestTable?.rowCount || 0} rows</span>
+                          </div>
+                          <p>Filter support data by status or category and open the matching request instantly.</p>
+                        </article>
+                      </div>
+                    ) : adminLoading ? null : filteredAuditLogs.length === 0 ? (
                       <div className="admin-empty-state">
                         <h4>No audit entries found</h4>
                         <p>Admin actions will appear here after moderation or export events are recorded.</p>
@@ -1657,7 +1743,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             <div className="insight-section">
               <div className="insight-card">
                 <h3 className="tool-title">{activeInfoContent.heading}</h3>
-                <p className="tool-copy">Browse support requests with status and category filters in one dedicated admin section.</p>
+                <p className="tool-copy">Browse support requests with status and category filters in one dedicated management section.</p>
               </div>
             </div>
             <div className="content-grid single-column">
@@ -2599,6 +2685,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         { title: "Gender", text: selectedAdminUserDetails.userRow.gender || "Not available" },
         { title: "Date Of Birth", text: selectedAdminUserDetails.userRow.date_of_birth || "Not available" },
         { title: "Referral Code", text: selectedAdminUserDetails.userRow.referral_code || "Not available" },
+        { title: "Management Access", text: selectedAdminUserDetails.userRow.is_management ? "Enabled" : "Disabled" },
         { title: "Email Verified", text: selectedAdminUserDetails.userRow.email_verified ? "Yes" : "No" },
         { title: "Mobile Verified", text: selectedAdminUserDetails.userRow.mobile_verified ? "Yes" : "No" },
         { title: "Security Question", text: selectedAdminUserDetails.userRow.security_question || "Not available" },
@@ -2621,7 +2708,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                     key={tab.id}
                     className={`sidebar-tab ${activeInfoTab === tab.id ? "active" : ""}`}
                     onClick={() => {
-                      if (selectedInfoPage === "administration") {
+                      if (selectedInfoPage === "administration" || selectedInfoPage === "management") {
                         resetAdministrationPanelState();
                       }
                       setInfoTabs((current) => ({
@@ -2756,6 +2843,34 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   </div>
                 ))}
               </div>
+
+              {isAdmin && selectedAdminUserDetails.userRow.id !== currentUser?.id ? (
+                <div className="admin-toolbar">
+                  <div className="admin-toolbar-copy">
+                    <h4>Management Permission</h4>
+                    <p>Use this control to decide whether this user can open the management workspace.</p>
+                  </div>
+                  <div className="admin-toolbar-actions">
+                    <button
+                      type="button"
+                      className="admin-table-action-button"
+                      onClick={() =>
+                        handleManagementAccessToggle(
+                          selectedAdminUserDetails.userRow.id,
+                          !selectedAdminUserDetails.userRow.is_management
+                        )
+                      }
+                      disabled={managementToggleUserId === selectedAdminUserDetails.userRow.id}
+                    >
+                      {managementToggleUserId === selectedAdminUserDetails.userRow.id
+                        ? "Updating..."
+                        : selectedAdminUserDetails.userRow.is_management
+                          ? "Remove Management"
+                          : "Give Management"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="admin-user-summary-grid">
                 <div className="admin-user-summary-card">

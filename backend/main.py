@@ -80,6 +80,7 @@ def ensure_user_subscription_schema() -> None:
     existing_columns = {column["name"] for column in inspector.get_columns("users")}
     required_statements = {
         "public_user_code": "ALTER TABLE users ADD COLUMN public_user_code VARCHAR(6) NULL",
+        "is_management": "ALTER TABLE users ADD COLUMN is_management BOOLEAN NOT NULL DEFAULT FALSE",
         "subscription_plan_id": "ALTER TABLE users ADD COLUMN subscription_plan_id VARCHAR(100) NULL",
         "subscription_plan_name": "ALTER TABLE users ADD COLUMN subscription_plan_name VARCHAR(255) NULL",
         "subscription_status": "ALTER TABLE users ADD COLUMN subscription_status VARCHAR(50) NOT NULL DEFAULT 'free'",

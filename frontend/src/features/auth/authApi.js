@@ -16,6 +16,7 @@ export function normalizeAuthUser(user) {
     securityAnswer: user.securityAnswer,
     referralCode: user.referralCode,
     publicUserCode: user.publicUserCode || null,
+    isManagement: !!user.isManagement,
     emailVerified: user.emailVerified,
     mobileVerified: user.mobileVerified,
     subscriptionPlanId: user.subscriptionPlanId || null,
@@ -29,7 +30,7 @@ export function normalizeAuthUser(user) {
     createdAt: user.createdAt,
     authToken: user.authToken,
     isAdmin: !!user.isAdmin,
-    mode: user.mode || (user.isAdmin ? "admin" : "member"),
+    mode: user.mode || (user.isAdmin ? "admin" : user.isManagement ? "management" : "member"),
   };
 }
 
@@ -125,6 +126,22 @@ export async function changePassword(payload) {
     },
     "Failed to update password."
   );
+}
+
+export async function updateManagementAccess(payload) {
+  const data = await requestJson(
+    "/auth/settings/admin/management",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update management access."
+  );
+
+  return normalizeAuthUser(data);
 }
 
 export async function getAdminMysqlOverview() {

@@ -29,6 +29,7 @@ from app.schemas.auth import (
     LoginRequest,
     SendEmailVerificationRequest,
     SignupRequest,
+    UpdateManagementAccessRequest,
     UpdateEmailRequest,
     UpdateMobileRequest,
     UpdateUsernameRequest,
@@ -269,6 +270,8 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     def serialize_user(user):
+        is_admin = auth_service.is_admin_email(user.email)
+        is_management = bool(getattr(user, "is_management", False))
         return AuthUserResponse(
             id=user.id,
             fullName=user.full_name,
@@ -282,6 +285,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             securityAnswer=user.security_answer,
             referralCode=user.referral_code,
             publicUserCode=user.public_user_code,
+            isManagement=is_management,
             emailVerified=user.email_verified,
             mobileVerified=user.mobile_verified,
             subscriptionPlanId=user.subscription_plan_id,
@@ -293,8 +297,8 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             subscriptionActivatedAt=user.subscription_activated_at,
             subscriptionExpiresAt=user.subscription_expires_at,
             createdAt=user.created_at,
-            isAdmin=auth_service.is_admin_email(user.email),
-            mode="admin" if auth_service.is_admin_email(user.email) else "member",
+            isAdmin=is_admin,
+            mode="admin" if is_admin else "management" if is_management else "member",
             authToken=auth_service.create_access_token(user_id=user.id),
         )
 
@@ -394,13 +398,45 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.post("/settings/admin/management", response_model=AuthUserResponse)
+    def update_management_access(
+        payload: UpdateManagementAccessRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
+                raise HTTPException(status_code=403, detail="Admin access is required.")
+            user = auth_service.update_management_access(
+                db,
+                user_id=payload.userId,
+                is_management=payload.isManagement,
+            )
+            admin_audit_service.log_action(
+                db,
+                admin_user_id=authenticated_user_id,
+                action_type="management_access_updated",
+                target_type="user",
+                target_id=user.id,
+                target_label=user.public_user_code or user.username,
+                detail=(
+                    f"Management access {'enabled' if user.is_management else 'disabled'} "
+                    f"for {user.full_name} ({user.email})."
+                ),
+            )
+            return serialize_user(user)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.get("/settings/admin/mysql-overview")
     def admin_mysql_overview(
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
-        if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
-            raise HTTPException(status_code=403, detail="Admin access is required.")
+        is_admin = auth_service.user_is_admin(db, user_id=authenticated_user_id)
+        is_management = auth_service.user_is_management(db, user_id=authenticated_user_id)
+        if not (is_admin or is_management):
+            raise HTTPException(status_code=403, detail="Management access is required.")
         auth_service.sync_all_user_subscriptions(db)
 
         inspector = inspect(engine)
@@ -422,7 +458,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     for row in raw_users
                 }
 
-            for table_name in sorted(inspector.get_table_names()):
+            allowed_table_names = set(inspector.get_table_names())
+            if not is_admin:
+                allowed_table_names &= {"users", "contact_requests", "user_social_links"}
+
+            for table_name in sorted(allowed_table_names):
                 quoted_table = quote_identifier(table_name)
                 columns = [
                     {
@@ -473,10 +513,10 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         ]
 
         return {
-            "tables": tables,
-            "statusOptions": list(contact_request_service.STATUS_OPTIONS),
-            "auditLogs": audit_logs,
-            "renewalReminders": build_admin_renewal_reminders(db),
+                    "tables": tables,
+                    "statusOptions": list(contact_request_service.STATUS_OPTIONS),
+            "auditLogs": audit_logs if is_admin else [],
+            "renewalReminders": build_admin_renewal_reminders(db) if is_admin else [],
             "generatedAt": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -488,24 +528,30 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
-        if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
-            raise HTTPException(status_code=403, detail="Admin access is required.")
+        is_admin = auth_service.user_is_admin(db, user_id=authenticated_user_id)
+        is_management = auth_service.user_is_management(db, user_id=authenticated_user_id)
+        if not (is_admin or is_management):
+            raise HTTPException(status_code=403, detail="Management access is required.")
 
-        export_rows = build_admin_export_rows(db, section, search)
+        normalized_section = (section or "").strip().lower()
+        if not is_admin and normalized_section != "requests":
+            raise HTTPException(status_code=403, detail="Management can only export contact requests.")
+
+        export_rows = build_admin_export_rows(db, normalized_section, search)
         admin_audit_service.log_action(
             db,
             admin_user_id=authenticated_user_id,
             action_type="admin_export_generated",
             target_type="admin_panel",
-            target_id=section,
-            target_label=section,
+            target_id=normalized_section,
+            target_label=normalized_section,
             detail=(
-                f"Exported administration section '{section}' as {format.lower()}."
+                f"Exported administration section '{normalized_section}' as {format.lower()}."
                 if not (search or "").strip()
-                else f"Exported administration section '{section}' as {format.lower()} with search '{search.strip()}'."
+                else f"Exported administration section '{normalized_section}' as {format.lower()} with search '{search.strip()}'."
             ),
         )
-        return stream_admin_export(export_rows, section=section, export_format=format)
+        return stream_admin_export(export_rows, section=normalized_section, export_format=format)
 
     @router.post("/email/send-verification")
     def send_email_verification(payload: SendEmailVerificationRequest):

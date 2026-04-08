@@ -88,8 +88,8 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
-            if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
-                raise HTTPException(status_code=403, detail="Admin access is required.")
+            if not auth_service.user_has_management_access(db, user_id=authenticated_user_id):
+                raise HTTPException(status_code=403, detail="Management access is required.")
             items = contact_request_service.list_all_requests(db)
             return [serialize_contact_request(item) for item in items]
         except ContactRequestServiceError as exc:
@@ -123,8 +123,8 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
-            if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
-                raise HTTPException(status_code=403, detail="Admin access is required.")
+            if not auth_service.user_has_management_access(db, user_id=authenticated_user_id):
+                raise HTTPException(status_code=403, detail="Management access is required.")
             item = contact_request_service.admin_update_status(
                 db,
                 request_id=request_id,
@@ -166,8 +166,8 @@ def build_contact_request_router(contact_request_service: ContactRequestService,
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
-            if not auth_service.user_is_admin(db, user_id=authenticated_user_id):
-                raise HTTPException(status_code=403, detail="Admin access is required.")
+            if not auth_service.user_has_management_access(db, user_id=authenticated_user_id):
+                raise HTTPException(status_code=403, detail="Management access is required.")
             existing_item = db.execute(
                 select(ContactRequest).where(ContactRequest.id == request_id)
             ).scalar_one_or_none()

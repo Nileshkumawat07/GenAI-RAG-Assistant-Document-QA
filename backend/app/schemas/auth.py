@@ -63,6 +63,11 @@ class DeleteAccountRequest(BaseModel):
     confirmationText: str
 
 
+class UpdateManagementAccessRequest(BaseModel):
+    userId: str
+    isManagement: bool
+
+
 class AuthUserResponse(BaseModel):
     id: str
     fullName: str
@@ -75,6 +80,8 @@ class AuthUserResponse(BaseModel):
     securityQuestion: str
     securityAnswer: str
     referralCode: str | None = None
+    publicUserCode: str | None = None
+    isManagement: bool = False
     emailVerified: bool
     mobileVerified: bool
     subscriptionPlanId: str | None = None

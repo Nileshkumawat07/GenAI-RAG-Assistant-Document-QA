@@ -38,6 +38,7 @@ class UserPayload:
     security_answer: str
     referral_code: str | None
     public_user_code: str | None
+    is_management: bool
     email_verified: bool
     mobile_verified: bool
     subscription_plan_id: str | None
@@ -75,6 +76,14 @@ class AuthService:
     def user_is_admin(self, db: Session, *, user_id: str) -> bool:
         user = self._get_user_model_by_id(db, user_id)
         return self.is_admin_email(user.email)
+
+    def user_is_management(self, db: Session, *, user_id: str) -> bool:
+        user = self._get_user_model_by_id(db, user_id)
+        return bool(user.is_management)
+
+    def user_has_management_access(self, db: Session, *, user_id: str) -> bool:
+        user = self._get_user_model_by_id(db, user_id)
+        return self.is_admin_email(user.email) or bool(user.is_management)
 
     def verify_access_token(self, token: str) -> str:
         try:
@@ -275,6 +284,16 @@ class AuthService:
         db.delete(user)
         db.commit()
 
+    def update_management_access(self, db: Session, *, user_id: str, is_management: bool) -> UserPayload:
+        user = self._get_user_model_by_id(db, user_id)
+        if self.is_admin_email(user.email):
+            raise AuthServiceError("Admin accounts already have administration access.")
+
+        user.is_management = is_management
+        db.commit()
+        db.refresh(user)
+        return self._serialize_user(user)
+
     def _get_user_model_by_id(self, db: Session, user_id: str) -> User:
         user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
         if not user:
@@ -339,6 +358,7 @@ class AuthService:
             security_answer=user.security_answer,
             referral_code=user.referral_code,
             public_user_code=user.public_user_code,
+            is_management=bool(user.is_management),
             email_verified=user.email_verified,
             mobile_verified=user.mobile_verified,
             subscription_plan_id=user.subscription_plan_id,
