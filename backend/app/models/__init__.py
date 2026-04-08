@@ -16,6 +16,7 @@ from app.models.social_oauth_config import SocialOAuthConfig
 from app.models.subscription_transaction import SubscriptionTransaction
 from app.models.user import User
 from app.models.user_archive import UserArchive
+from app.models.user_setting import UserSetting
 
 __all__ = [
     "User",
@@ -40,4 +41,5 @@ __all__ = [
     "ReplyTemplate",
     "SecurityEvent",
     "UserArchive",
+    "UserSetting",
 ]

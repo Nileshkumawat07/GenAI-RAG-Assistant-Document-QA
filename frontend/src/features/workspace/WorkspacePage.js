@@ -32,6 +32,7 @@ import {
 } from "./adminCenterApi";
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
+import { SETTINGS_TABS } from "./settingsCatalog";
 
 const PRICING_PLAN_DETAILS = [
   {
@@ -395,22 +396,8 @@ const INFO_PAGE_CONFIG = {
     description: "Select a category to update",
     message: "Manage the same settings content inside the current assistant workspace layout.",
     statusTitle: "Settings Categories",
-    statusItems: ["Account", "Security", "Preferences", "Privacy", "Platform", "Billing"],
-    tabs: [
-      { id: "account", label: "Account", heading: "Account" },
-      { id: "security", label: "Security", heading: "Security" },
-      { id: "preferences", label: "Preferences", heading: "Preferences" },
-      { id: "privacy", label: "Privacy", heading: "Privacy" },
-      { id: "platform", label: "Platform", heading: "Platform" },
-      { id: "activity", label: "Activity", heading: "Activity" },
-      { id: "linked", label: "Linked", heading: "Linked" },
-      { id: "notifications", label: "Notifications", heading: "Notifications" },
-      { id: "billing", label: "Billing", heading: "Billing" },
-      { id: "region", label: "Region", heading: "Region" },
-      { id: "support", label: "Support", heading: "Support" },
-      { id: "terms", label: "Terms", heading: "Terms" },
-      { id: "reset", label: "Reset", heading: "Reset" },
-    ],
+    statusItems: SETTINGS_TABS.slice(0, 6).map((item) => item.label),
+    tabs: SETTINGS_TABS,
   },
   administration: {
     title: "Administration",

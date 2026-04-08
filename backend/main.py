@@ -139,6 +139,26 @@ def ensure_user_subscription_schema() -> None:
             connection.execute(text(statement))
 
 
+def ensure_user_settings_schema() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "user_settings" in table_names:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE user_settings ("
+                "id VARCHAR(36) PRIMARY KEY, "
+                "user_id VARCHAR(36) NOT NULL, "
+                "category VARCHAR(80) NOT NULL, "
+                "payload_json TEXT NOT NULL, "
+                "created_at DATETIME NOT NULL, "
+                "updated_at DATETIME NOT NULL)"
+            )
+        )
+
+
 def ensure_management_support_schema() -> None:
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
@@ -351,6 +371,7 @@ def create_app() -> FastAPI:
     ensure_user_social_link_schema()
     ensure_contact_request_schema()
     ensure_user_subscription_schema()
+    ensure_user_settings_schema()
     ensure_subscription_transaction_schema()
     ensure_public_codes()
     ensure_contact_request_code_schema()

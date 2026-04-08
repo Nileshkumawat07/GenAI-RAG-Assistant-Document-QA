@@ -4,6 +4,8 @@ import {
   changePassword,
   deleteAccount,
   downloadAccountDataPdf,
+  fetchSettingsCategory,
+  saveSettingsCategory,
   updateEmail,
   updateMobile,
   updateUsername,
@@ -22,6 +24,7 @@ import {
   sendFirebaseOtp,
   verifyFirebaseOtp,
 } from "../../shared/firebase/phoneAuth";
+import { CATEGORY_FEATURES } from "./settingsCatalog";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_PATTERN = /^\d{10}$/;
@@ -192,7 +195,49 @@ function createActivityEntry(text) {
   };
 }
 
+function slugifySettingLabel(label) {
+  return (label || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function createDefaultCategoryPayload(categoryId) {
+  const features = CATEGORY_FEATURES[categoryId] || [];
+  return {
+    items: features.reduce((accumulator, featureLabel) => {
+      accumulator[slugifySettingLabel(featureLabel)] = {
+        label: featureLabel,
+        enabled: false,
+        notes: "",
+      };
+      return accumulator;
+    }, {}),
+  };
+}
+
+function normalizeCategoryPayload(categoryId, rawPayload) {
+  const defaults = createDefaultCategoryPayload(categoryId);
+  const nextItems = { ...defaults.items };
+  const rawItems = rawPayload?.items || {};
+
+  Object.entries(nextItems).forEach(([itemKey, itemValue]) => {
+    const rawItem = rawItems[itemKey];
+    nextItems[itemKey] = {
+      ...itemValue,
+      ...(rawItem || {}),
+      label: itemValue.label,
+      enabled: !!rawItem?.enabled,
+      notes: rawItem?.notes || "",
+    };
+  });
+
+  return { items: nextItems };
+}
+
 function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted }) {
+  const normalizedActiveTab = activeTab === "linked-accounts" ? "linked" : activeTab;
   const [accountTab, setAccountTab] = useState("personalInfo");
   const [securityTab, setSecurityTab] = useState("password");
   const [preferencesTab, setPreferencesTab] = useState("theme");
@@ -201,6 +246,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     text: "",
   });
   const [storedSettings, setStoredSettings] = useState(createDefaultStoredSettings);
+  const [categoryPayloads, setCategoryPayloads] = useState({});
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categorySaving, setCategorySaving] = useState(false);
 
   const [usernameForm, setUsernameForm] = useState({ newUsername: "", otp: "", captchaInput: "" });
   const [usernameCaptcha, setUsernameCaptcha] = useState(() => buildCaptcha());
@@ -322,6 +370,18 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const activityEntries = storedSettings.activity || [];
   const preferenceFontSizeLabel = storedSettings.preferences.fontSize || "Medium";
   const preferenceFontScale = preferenceFontSizeLabel === "Small" ? 0.94 : preferenceFontSizeLabel === "Large" ? 1.08 : 1;
+  const currentCategoryPayload = categoryPayloads[activeTab] || createDefaultCategoryPayload(activeTab);
+
+  const updateCategoryPayload = (categoryId, updater) => {
+    setCategoryPayloads((current) => {
+      const currentPayload = current[categoryId] || createDefaultCategoryPayload(categoryId);
+      const nextPayload = typeof updater === "function" ? updater(currentPayload) : updater;
+      return {
+        ...current,
+        [categoryId]: nextPayload,
+      };
+    });
+  };
 
   useEffect(() => {
     if (!storageKey) {
@@ -347,6 +407,41 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
     }
   }, [storageKey, storedSettings]);
+
+  useEffect(() => {
+    if (!currentUser?.id || !CATEGORY_FEATURES[activeTab]) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadCategoryPayload = async () => {
+      try {
+        setCategoryLoading(true);
+        const response = await fetchSettingsCategory(activeTab);
+        if (!ignore) {
+          setCategoryPayloads((current) => ({
+            ...current,
+            [activeTab]: normalizeCategoryPayload(activeTab, response?.payload || {}),
+          }));
+        }
+      } catch (error) {
+        if (!ignore) {
+          setFeedback({ type: "error", text: error.message || `Failed to load ${activeTab} settings.` });
+        }
+      } finally {
+        if (!ignore) {
+          setCategoryLoading(false);
+        }
+      }
+    };
+
+    loadCategoryPayload();
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, currentUser?.id]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--workspace-font-scale", String(preferenceFontScale));
@@ -812,6 +907,98 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     setResetPassword("");
     setFeedback({ type: "success", text: "Local settings were reset to defaults." });
     pushActivity("Local settings were reset.");
+  };
+
+  const handleSaveCategoryFeatures = async (categoryId, successText = "Settings saved successfully.") => {
+    try {
+      setCategorySaving(true);
+      await saveSettingsCategory(categoryId, categoryPayloads[categoryId] || createDefaultCategoryPayload(categoryId));
+      setFeedback({ type: "success", text: successText });
+      pushActivity(`${categoryId.replace(/-/g, " ")} settings were updated.`);
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to save settings." });
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  const renderCategoryFeatureSection = (categoryId, title) => {
+    const features = CATEGORY_FEATURES[categoryId];
+    if (!features || features.length === 0) {
+      return null;
+    }
+
+    const payload = categoryPayloads[categoryId] || createDefaultCategoryPayload(categoryId);
+
+    return (
+      <div className="workspace-form-stack">
+        <div className="workspace-mini-card">
+          <h4>{title || "Feature Roadmap Settings"}</h4>
+          <p>These category controls now save through the backend settings store for this account.</p>
+        </div>
+        {categoryLoading ? <p className="tool-copy">Loading category settings...</p> : null}
+        <div className="workspace-info-grid">
+          {features.map((featureLabel) => {
+            const itemKey = slugifySettingLabel(featureLabel);
+            const item = payload.items?.[itemKey] || { label: featureLabel, enabled: false, notes: "" };
+
+            return (
+              <div key={`${categoryId}-${itemKey}`} className="workspace-mini-card">
+                <label className="terms-check">
+                  <input
+                    type="checkbox"
+                    checked={!!item.enabled}
+                    onChange={(event) =>
+                      updateCategoryPayload(categoryId, (current) => ({
+                        ...current,
+                        items: {
+                          ...current.items,
+                          [itemKey]: {
+                            ...(current.items?.[itemKey] || {}),
+                            label: featureLabel,
+                            enabled: event.target.checked,
+                            notes: current.items?.[itemKey]?.notes || "",
+                          },
+                        },
+                      }))
+                    }
+                  />
+                  <span>{featureLabel}</span>
+                </label>
+                <textarea
+                  className="question-input workspace-static-textarea"
+                  rows={3}
+                  placeholder="Implementation notes, preferences, or backend details"
+                  value={item.notes || ""}
+                  onChange={(event) =>
+                    updateCategoryPayload(categoryId, (current) => ({
+                      ...current,
+                      items: {
+                        ...current.items,
+                        [itemKey]: {
+                          ...(current.items?.[itemKey] || {}),
+                          label: featureLabel,
+                          enabled: !!(current.items?.[itemKey]?.enabled),
+                          notes: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                />
+              </div>
+            );
+          })}
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => handleSaveCategoryFeatures(categoryId, `${title || "Category"} saved successfully.`)}
+          disabled={categorySaving}
+        >
+          {categorySaving ? "Saving..." : "Save Category Settings"}
+        </button>
+      </div>
+    );
   };
 
   const renderAccount = () => {
@@ -1658,29 +1845,35 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     );
   };
 
-  if (activeTab === "account") {
+  if (normalizedActiveTab === "account") {
     return (
-      <div className="workspace-form-stack">
-        {feedback.text ? (
-          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-            <p>{feedback.text}</p>
-          </div>
-        ) : null}
-        {renderAccount()}
-      </div>
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          {renderAccount()}
+        </div>
+        {renderCategoryFeatureSection("account", "Account Extensions")}
+      </>
     );
   }
 
-  if (activeTab === "security") {
+  if (normalizedActiveTab === "security") {
     return (
-      <div className="workspace-form-stack">
-        {feedback.text ? (
-          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-            <p>{feedback.text}</p>
-          </div>
-        ) : null}
-        {renderSecurity()}
-      </div>
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          {renderSecurity()}
+        </div>
+        {renderCategoryFeatureSection("security", "Security Extensions")}
+      </>
     );
   }
 
@@ -1697,16 +1890,17 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     );
   }
 
-  if (activeTab === "privacy") {
+  if (normalizedActiveTab === "privacy") {
     return (
-      <div className="workspace-form-stack">
-        {feedback.text ? (
-          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-            <p>{feedback.text}</p>
-          </div>
-        ) : null}
-        <p className="tool-copy workspace-copy-paragraph">Manage your data preferences below:</p>
-        <div className="billing-action-row privacy-action-row">
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          <p className="tool-copy workspace-copy-paragraph">Manage your data preferences below:</p>
+          <div className="billing-action-row privacy-action-row">
           <button
             className="primary-button"
             type="button"
@@ -1756,8 +1950,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           </div>
         ) : null}
-        {showDeletePanel ? (
-          <div className="workspace-mini-card privacy-delete-card">
+          {showDeletePanel ? (
+            <div className="workspace-mini-card privacy-delete-card">
             <div className="billing-payment-card-head">
               <div>
                 <h4>Delete Account Confirmation</h4>
@@ -1816,9 +2010,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 {privacyActionLoading === "delete" ? "Deleting..." : "Confirm Delete Account"}
               </button>
             </div>
-          </div>
-        ) : null}
-      </div>
+            </div>
+          ) : null}
+        </div>
+        {renderCategoryFeatureSection("privacy", "Privacy Extensions")}
+      </>
     );
   }
 
@@ -1860,28 +2056,31 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     );
   }
 
-  if (activeTab === "activity") {
+  if (normalizedActiveTab === "activity") {
     return (
-      <div className="workspace-form-stack">
-        <p className="tool-copy workspace-copy-paragraph">Recent account activities:</p>
-        {activityEntries.length > 0 ? activityEntries.map((entry) => (
-          <div key={entry.id} className="workspace-mini-card"><p>{entry.text}</p></div>
-        )) : <div className="workspace-mini-card"><p>No activity recorded yet.</p></div>}
-        <button
-          className="primary-button"
-          type="button"
-          onClick={() => {
-            updateStoredSettings((current) => ({ ...current, activity: [] }));
-            setFeedback({ type: "success", text: "Activity log cleared." });
-          }}
-        >
-          Clear Activity Log
-        </button>
-      </div>
+      <>
+        <div className="workspace-form-stack">
+          <p className="tool-copy workspace-copy-paragraph">Recent account activities:</p>
+          {activityEntries.length > 0 ? activityEntries.map((entry) => (
+            <div key={entry.id} className="workspace-mini-card"><p>{entry.text}</p></div>
+          )) : <div className="workspace-mini-card"><p>No activity recorded yet.</p></div>}
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => {
+              updateStoredSettings((current) => ({ ...current, activity: [] }));
+              setFeedback({ type: "success", text: "Activity log cleared." });
+            }}
+          >
+            Clear Activity Log
+          </button>
+        </div>
+        {renderCategoryFeatureSection("activity", "Activity Extensions")}
+      </>
     );
   }
 
-  if (activeTab === "linked") {
+  if (normalizedActiveTab === "linked") {
     const providers = [
       {
         key: "google",
@@ -1902,6 +2101,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       },
     ];
     return (
+      <>
       <div className="workspace-form-stack">
         {feedback.text ? (
           <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
@@ -2051,11 +2251,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           })}
         </div>
       </div>
+      {renderCategoryFeatureSection("linked-accounts", "Linked Account Extensions")}
+      </>
     );
   }
 
-  if (activeTab === "notifications") {
+  if (normalizedActiveTab === "notifications") {
     return (
+      <>
       <div className="workspace-form-stack">
         <label className="terms-check">
           <input
@@ -2098,11 +2301,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </label>
         <button className="primary-button" type="button" onClick={saveNotifications}>Save Preferences</button>
       </div>
+      {renderCategoryFeatureSection("notifications", "Notification Extensions")}
+      </>
     );
   }
 
-  if (activeTab === "billing") {
+  if (normalizedActiveTab === "billing") {
     return (
+      <>
       <div className="workspace-form-stack">
         {feedback.text ? (
           <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
@@ -2289,11 +2495,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
         ) : null}
       </div>
+      {renderCategoryFeatureSection("billing", "Billing Extensions")}
+      </>
     );
   }
 
-  if (activeTab === "region") {
+  if (normalizedActiveTab === "region") {
     return (
+      <>
       <div className="workspace-form-stack">
         <label className="auth-label">Select Timezone</label>
         <select
@@ -2344,11 +2553,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </select>
         <button className="primary-button" type="button" onClick={saveRegion}>Save Region & Language</button>
       </div>
+      {renderCategoryFeatureSection("region", "Region Extensions")}
+      </>
     );
   }
 
-  if (activeTab === "support") {
+  if (normalizedActiveTab === "support") {
     return (
+      <>
       <div className="workspace-form-stack">
         <div className="workspace-info-grid">
           <div className="workspace-mini-card"><h4>Help Center</h4><p>Browse guides, onboarding help, and workspace how-to articles.</p></div>
@@ -2358,16 +2570,111 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
         <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Support center is not enabled in this build." })}>Open Support Center</button>
       </div>
+      {renderCategoryFeatureSection("support", "Support Extensions")}
+      </>
     );
   }
 
-  if (activeTab === "terms") {
+  if (activeTab === "data-export") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          <div className="workspace-mini-card">
+            <h4>Portable Data Export</h4>
+            <p>Use your current password to generate the backend PDF export for your account snapshot.</p>
+          </div>
+          <input
+            className="auth-input workspace-static-input"
+            type="password"
+            placeholder="Enter current password for export"
+            value={privacyExportPassword}
+            onChange={(event) => setPrivacyExportPassword(event.target.value)}
+          />
+          <button className="primary-button" type="button" onClick={downloadMyData} disabled={privacyActionLoading === "download"}>
+            {privacyActionLoading === "download" ? "Downloading..." : "Download Account Data PDF"}
+          </button>
+        </div>
+        {renderCategoryFeatureSection("data-export", "Data Export Extensions")}
+      </>
+    );
+  }
+
+  if (activeTab === "danger-zone") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          <div className="workspace-mini-card">
+            <h4>Danger Zone</h4>
+            <p>Use these actions carefully. They affect local settings and permanent account state.</p>
+          </div>
+          <input
+            className="auth-input workspace-static-input"
+            placeholder="Enter your password to reset local settings"
+            type="password"
+            value={resetPassword}
+            onChange={(event) => setResetPassword(event.target.value)}
+          />
+          <button className="primary-button secondary-tone" type="button" onClick={resetAllSettings}>Reset Local Settings</button>
+          <button
+            className="primary-button danger-tone"
+            type="button"
+            onClick={() => setShowDeletePanel((current) => !current)}
+          >
+            {showDeletePanel ? "Hide Delete Account" : "Open Delete Account"}
+          </button>
+          {showDeletePanel ? (
+            <div className="workspace-mini-card privacy-delete-card">
+              <input
+                className="auth-input workspace-static-input"
+                type="password"
+                placeholder="Enter current password to delete account"
+                value={deleteAccountPassword}
+                onChange={(event) => setDeleteAccountPassword(event.target.value)}
+              />
+              <input
+                className="auth-input workspace-static-input"
+                type="text"
+                placeholder='Type DELETE to confirm permanent removal'
+                value={deleteConfirmationText}
+                onChange={(event) => setDeleteConfirmationText(event.target.value)}
+              />
+              <button
+                className="primary-button danger-tone"
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={privacyActionLoading === "delete"}
+              >
+                {privacyActionLoading === "delete" ? "Deleting..." : "Delete Account Permanently"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {renderCategoryFeatureSection("danger-zone", "Danger Zone Extensions")}
+      </>
+    );
+  }
+
+  if (normalizedActiveTab === "terms") {
     return (
       <div className="workspace-form-stack">
         <p className="tool-copy workspace-copy-paragraph">Please review the Terms and Conditions and Privacy Policy. Continuing usage means acceptance of all conditions.</p>
         <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Full terms document is not enabled in this build." })}>Read Full Terms</button>
       </div>
     );
+  }
+
+  if (CATEGORY_FEATURES[activeTab]) {
+    return renderCategoryFeatureSection(activeTab, `${activeTab.replace(/-/g, " ")} Settings`);
   }
 
   return (

@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class SendEmailVerificationRequest(BaseModel):
@@ -67,6 +67,16 @@ class UpdateManagementAccessRequest(BaseModel):
     userId: str
     isManagement: bool
     suspended: bool = False
+
+
+class UpdateSettingsCategoryRequest(BaseModel):
+    payload: dict = Field(default_factory=dict)
+
+
+class SettingsCategoryResponse(BaseModel):
+    category: str
+    payload: dict = Field(default_factory=dict)
+    updatedAt: str | None = None
 
 
 class AuthUserResponse(BaseModel):

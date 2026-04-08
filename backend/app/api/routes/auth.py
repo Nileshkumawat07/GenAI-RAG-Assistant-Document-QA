@@ -1,5 +1,6 @@
 import csv
 import json
+import secrets
 from io import BytesIO, StringIO
 
 from datetime import datetime, timezone
@@ -20,6 +21,7 @@ from app.models.contact_request import ContactRequest
 from app.models.linked_provider import UserSocialLink
 from app.models.subscription_transaction import SubscriptionTransaction
 from app.models.user import User
+from app.models.user_setting import UserSetting
 from app.schemas.auth import (
     AuthUserResponse,
     ChangePasswordRequest,
@@ -29,9 +31,11 @@ from app.schemas.auth import (
     LoginRequest,
     SendEmailVerificationRequest,
     SignupRequest,
+    SettingsCategoryResponse,
     UpdateManagementAccessRequest,
     UpdateEmailRequest,
     UpdateMobileRequest,
+    UpdateSettingsCategoryRequest,
     UpdateUsernameRequest,
 )
 from app.services.admin_audit_service import AdminAuditService
@@ -313,6 +317,17 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             authToken=auth_service.create_access_token(user_id=user.id),
         )
 
+    def serialize_settings_category(item: UserSetting | None, category: str) -> SettingsCategoryResponse:
+        payload = {}
+        updated_at = None
+        if item:
+            try:
+                payload = json.loads(item.payload_json or "{}")
+            except json.JSONDecodeError:
+                payload = {}
+            updated_at = item.updated_at.isoformat() if item.updated_at else None
+        return SettingsCategoryResponse(category=category, payload=payload, updatedAt=updated_at)
+
     @router.post("/signup", response_model=AuthUserResponse)
     def signup(payload: SignupRequest, db: Session = Depends(get_db)):
         try:
@@ -452,6 +467,51 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/settings/categories/{category}", response_model=SettingsCategoryResponse)
+    def get_settings_category(
+        category: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        item = db.execute(
+            select(UserSetting).where(
+                UserSetting.user_id == authenticated_user_id,
+                UserSetting.category == category.strip().lower(),
+            )
+        ).scalar_one_or_none()
+        return serialize_settings_category(item, category.strip().lower())
+
+    @router.post("/settings/categories/{category}", response_model=SettingsCategoryResponse)
+    def save_settings_category(
+        category: str,
+        payload: UpdateSettingsCategoryRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        normalized_category = category.strip().lower()
+        if not normalized_category:
+            raise HTTPException(status_code=400, detail="Settings category is required.")
+
+        item = db.execute(
+            select(UserSetting).where(
+                UserSetting.user_id == authenticated_user_id,
+                UserSetting.category == normalized_category,
+            )
+        ).scalar_one_or_none()
+        if not item:
+            item = UserSetting(
+                id=secrets.token_hex(18),
+                user_id=authenticated_user_id,
+                category=normalized_category,
+            )
+            db.add(item)
+
+        item.payload_json = json.dumps(payload.payload or {}, ensure_ascii=True)
+        item.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(item)
+        return serialize_settings_category(item, normalized_category)
 
     @router.get("/settings/admin/mysql-overview")
     def admin_mysql_overview(

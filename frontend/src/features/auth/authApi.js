@@ -276,3 +276,27 @@ export async function deleteAccount(payload) {
     "Failed to delete account."
   );
 }
+
+export async function fetchSettingsCategory(category) {
+  return requestJson(
+    `/auth/settings/categories/${encodeURIComponent(category)}`,
+    {
+      method: "GET",
+    },
+    `Failed to load ${category} settings.`
+  );
+}
+
+export async function saveSettingsCategory(category, payload) {
+  return requestJson(
+    `/auth/settings/categories/${encodeURIComponent(category)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ payload }),
+    },
+    `Failed to save ${category} settings.`
+  );
+}
