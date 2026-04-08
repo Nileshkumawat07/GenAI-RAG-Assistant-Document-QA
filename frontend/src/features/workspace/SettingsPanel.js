@@ -204,7 +204,11 @@ function createActivityEntry(text) {
 function formatSettingsDateTime(value) {
   if (!value) return "Not available";
   try {
-    return new Date(value).toLocaleString("en-GB", {
+    const normalizedValue =
+      typeof value === "string" && !/[zZ]|[+-]\d{2}:\d{2}$/.test(value)
+        ? `${value}Z`
+        : value;
+    return new Date(normalizedValue).toLocaleString("en-GB", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -218,9 +222,22 @@ function formatSettingsDateTime(value) {
 
 function formatSettingsRelativeTime(value) {
   if (!value) return "No recent activity";
-  const timestamp = new Date(value).getTime();
+  const normalizedValue =
+    typeof value === "string" && !/[zZ]|[+-]\d{2}:\d{2}$/.test(value)
+      ? `${value}Z`
+      : value;
+  const timestamp = new Date(normalizedValue).getTime();
   if (Number.isNaN(timestamp)) return "No recent activity";
   const diffMs = Date.now() - timestamp;
+  if (Math.abs(diffMs) < 60000) return "Just now";
+  if (diffMs < 0) {
+    const futureMinutes = Math.max(1, Math.round(Math.abs(diffMs) / 60000));
+    if (futureMinutes < 60) return `In ${futureMinutes} min`;
+    const futureHours = Math.round(futureMinutes / 60);
+    if (futureHours < 24) return `In ${futureHours} hr`;
+    const futureDays = Math.round(futureHours / 24);
+    return `In ${futureDays} day${futureDays === 1 ? "" : "s"}`;
+  }
   const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
 
   if (diffMinutes < 60) return `${diffMinutes} min ago`;

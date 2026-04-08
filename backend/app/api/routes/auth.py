@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 import secrets
 from io import BytesIO, StringIO
@@ -103,6 +104,31 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             return " on ".join(parts[:2])
         return "Mobile device" if device_type == "mobile" else "Desktop device"
 
+    def build_device_group_key(
+        device_label: str | None,
+        device_type: str | None,
+        browser_name: str | None,
+        os_name: str | None,
+    ) -> str:
+        raw = "|".join(
+            [
+                (device_label or "").strip().lower(),
+                (device_type or "").strip().lower(),
+                (browser_name or "").strip().lower(),
+                (os_name or "").strip().lower(),
+            ]
+        )
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+    def serialize_datetime_utc(value: datetime | None) -> str | None:
+        if not value:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        else:
+            value = value.astimezone(timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
+
     def serialize_session_item(item: UserLoginSession, current_token_id: str | None = None) -> SessionItemResponse:
         return SessionItemResponse(
             id=item.id,
@@ -116,23 +142,24 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             trusted=bool(item.trusted),
             isCurrent=bool(current_token_id and item.token_id == current_token_id and not item.is_revoked),
             isRevoked=bool(item.is_revoked),
-            createdAt=item.created_at.isoformat() if item.created_at else None,
-            lastSeenAt=item.last_seen_at.isoformat() if item.last_seen_at else None,
-            revokedAt=item.revoked_at.isoformat() if item.revoked_at else None,
+            createdAt=serialize_datetime_utc(item.created_at),
+            lastSeenAt=serialize_datetime_utc(item.last_seen_at),
+            revokedAt=serialize_datetime_utc(item.revoked_at),
         )
 
     def serialize_device_items(items: list[UserLoginSession], current_token_id: str | None = None) -> list[DeviceItemResponse]:
         grouped: dict[str, list[UserLoginSession]] = {}
         for item in items:
-            grouped.setdefault(item.device_label, []).append(item)
+            device_key = build_device_group_key(item.device_label, item.device_type, item.browser_name, item.os_name)
+            grouped.setdefault(device_key, []).append(item)
 
         device_rows = []
-        for _, sessions in grouped.items():
+        for device_key, sessions in grouped.items():
             ordered = sorted(sessions, key=lambda entry: entry.last_seen_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
             latest = ordered[0]
             device_rows.append(
                 DeviceItemResponse(
-                    id=latest.id,
+                    id=device_key,
                     deviceLabel=latest.device_label,
                     deviceType=latest.device_type,
                     browserName=latest.browser_name,
@@ -140,7 +167,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     trusted=any(bool(entry.trusted) for entry in sessions),
                     isCurrent=bool(current_token_id and latest.token_id == current_token_id and not latest.is_revoked),
                     sessionCount=len([entry for entry in sessions if not entry.is_revoked]),
-                    lastSeenAt=latest.last_seen_at.isoformat() if latest.last_seen_at else None,
+                    lastSeenAt=serialize_datetime_utc(latest.last_seen_at),
                     ipAddress=latest.ip_address,
                     locationLabel=latest.location_label,
                 )
@@ -777,24 +804,21 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         db: Session = Depends(get_db),
     ):
         user_id, current_token_id = get_authenticated_session_context(authorization, db)
-        session_row = db.execute(
-            select(UserLoginSession).where(
-                UserLoginSession.id == session_id,
-                UserLoginSession.user_id == user_id,
-            )
-        ).scalar_one_or_none()
-        if not session_row:
-            raise HTTPException(status_code=404, detail="Device was not found.")
-        if current_token_id and session_row.token_id == current_token_id:
-            raise HTTPException(status_code=400, detail="The current device cannot be removed from the active session.")
-
-        matching_sessions = db.execute(
+        rows = db.execute(
             select(UserLoginSession).where(
                 UserLoginSession.user_id == user_id,
-                UserLoginSession.device_label == session_row.device_label,
                 UserLoginSession.is_revoked.is_(False),
             )
         ).scalars().all()
+        matching_sessions = [
+            item
+            for item in rows
+            if build_device_group_key(item.device_label, item.device_type, item.browser_name, item.os_name) == session_id
+        ]
+        if not matching_sessions:
+            raise HTTPException(status_code=404, detail="Device was not found.")
+        if current_token_id and any(item.token_id == current_token_id for item in matching_sessions):
+            raise HTTPException(status_code=400, detail="The current device cannot be removed from the active session.")
         now = datetime.now(timezone.utc)
         for item in matching_sessions:
             item.is_revoked = True
