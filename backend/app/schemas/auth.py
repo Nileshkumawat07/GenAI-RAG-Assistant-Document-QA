@@ -116,10 +116,22 @@ class DeviceItemResponse(BaseModel):
     osName: str | None = None
     trusted: bool = False
     isCurrent: bool = False
+    isRemoved: bool = False
     sessionCount: int = 0
     lastSeenAt: str | None = None
+    removedAt: str | None = None
     ipAddress: str | None = None
     locationLabel: str | None = None
+
+
+class SecurityEventResponse(BaseModel):
+    id: str
+    eventType: str
+    severity: str
+    ipAddress: str | None = None
+    deviceLabel: str | None = None
+    detail: str | None = None
+    createdAt: str | None = None
 
 
 class AuthUserResponse(BaseModel):

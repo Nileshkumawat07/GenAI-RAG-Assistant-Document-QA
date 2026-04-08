@@ -17,9 +17,16 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from app.core.database import engine, get_db
+from app.core.settings_registry import (
+    SENSITIVE_SETTINGS_CATEGORIES,
+    build_default_settings_payload,
+    normalize_settings_category_payload,
+    summarize_settings_payload,
+)
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.contact_request import ContactRequest
 from app.models.linked_provider import UserSocialLink
+from app.models.security_event import SecurityEvent
 from app.models.subscription_transaction import SubscriptionTransaction
 from app.models.user import User
 from app.models.user_login_session import UserLoginSession
@@ -34,6 +41,7 @@ from app.schemas.auth import (
     LoginRequest,
     ResetSettingsRequest,
     SendEmailVerificationRequest,
+    SecurityEventResponse,
     SessionItemResponse,
     SignupRequest,
     SettingsCategoryResponse,
@@ -148,7 +156,23 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             revokedAt=serialize_datetime_utc(item.revoked_at),
         )
 
-    def serialize_device_items(items: list[UserLoginSession], current_token_id: str | None = None) -> list[DeviceItemResponse]:
+    def serialize_security_event(item: SecurityEvent) -> SecurityEventResponse:
+        return SecurityEventResponse(
+            id=item.id,
+            eventType=item.event_type,
+            severity=item.severity,
+            ipAddress=item.ip_address,
+            deviceLabel=item.device_label,
+            detail=item.detail,
+            createdAt=serialize_datetime_utc(item.created_at),
+        )
+
+    def serialize_device_items(
+        items: list[UserLoginSession],
+        current_token_id: str | None = None,
+        *,
+        include_removed: bool = False,
+    ) -> list[DeviceItemResponse]:
         grouped: dict[str, list[UserLoginSession]] = {}
         for item in items:
             device_key = build_device_group_key(item.device_label, item.device_type, item.browser_name, item.os_name)
@@ -157,42 +181,82 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         device_rows = []
         for device_key, sessions in grouped.items():
             active_sessions = [entry for entry in sessions if not entry.is_revoked]
-            if not active_sessions:
+            revoked_sessions = [entry for entry in sessions if entry.is_revoked]
+            if not active_sessions and not (include_removed and revoked_sessions):
                 continue
 
-            ordered = sorted(
-                active_sessions,
-                key=lambda entry: entry.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
-                reverse=True,
-            )
-            current_session = next(
-                (
-                    entry
-                    for entry in ordered
-                    if current_token_id and entry.token_id == current_token_id and not entry.is_revoked
-                ),
-                None,
-            )
-            latest = current_session or ordered[0]
-            device_rows.append(
-                DeviceItemResponse(
-                    id=device_key,
-                    deviceLabel=latest.device_label,
-                    deviceType=latest.device_type,
-                    browserName=latest.browser_name,
-                    osName=latest.os_name,
-                    trusted=any(bool(entry.trusted) for entry in active_sessions),
-                    isCurrent=any(bool(current_token_id and entry.token_id == current_token_id and not entry.is_revoked) for entry in active_sessions),
-                    sessionCount=len(active_sessions),
-                    lastSeenAt=serialize_datetime_utc(latest.last_seen_at),
-                    ipAddress=latest.ip_address,
-                    locationLabel=latest.location_label,
+            if active_sessions:
+                ordered = sorted(
+                    active_sessions,
+                    key=lambda entry: entry.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
+                    reverse=True,
                 )
-            )
+                current_session = next(
+                    (
+                        entry
+                        for entry in ordered
+                        if current_token_id and entry.token_id == current_token_id and not entry.is_revoked
+                    ),
+                    None,
+                )
+                latest = current_session or ordered[0]
+                device_rows.append(
+                    DeviceItemResponse(
+                        id=device_key,
+                        deviceLabel=latest.device_label,
+                        deviceType=latest.device_type,
+                        browserName=latest.browser_name,
+                        osName=latest.os_name,
+                        trusted=any(bool(entry.trusted) for entry in active_sessions),
+                        isCurrent=any(bool(current_token_id and entry.token_id == current_token_id and not entry.is_revoked) for entry in active_sessions),
+                        isRemoved=False,
+                        sessionCount=len(active_sessions),
+                        lastSeenAt=serialize_datetime_utc(latest.last_seen_at),
+                        removedAt=None,
+                        ipAddress=latest.ip_address,
+                        locationLabel=latest.location_label,
+                    )
+                )
+
+            elif include_removed:
+                ordered_removed = sorted(
+                    revoked_sessions,
+                    key=lambda entry: (
+                        entry.revoked_at or entry.last_seen_at or entry.created_at or datetime.min.replace(tzinfo=timezone.utc)
+                    ),
+                    reverse=True,
+                )
+                latest_removed = ordered_removed[0]
+                device_rows.append(
+                    DeviceItemResponse(
+                        id=device_key,
+                        deviceLabel=latest_removed.device_label,
+                        deviceType=latest_removed.device_type,
+                        browserName=latest_removed.browser_name,
+                        osName=latest_removed.os_name,
+                        trusted=False,
+                        isCurrent=False,
+                        isRemoved=True,
+                        sessionCount=len(revoked_sessions),
+                        lastSeenAt=serialize_datetime_utc(latest_removed.last_seen_at),
+                        removedAt=serialize_datetime_utc(latest_removed.revoked_at or latest_removed.last_seen_at),
+                        ipAddress=latest_removed.ip_address,
+                        locationLabel=latest_removed.location_label,
+                    )
+                )
+        def sortable_row_timestamp(row: DeviceItemResponse) -> datetime:
+            raw_value = row.removedAt or row.lastSeenAt
+            if not raw_value:
+                return datetime(1970, 1, 1, tzinfo=timezone.utc)
+            try:
+                return datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+            except ValueError:
+                return datetime(1970, 1, 1, tzinfo=timezone.utc)
+
         device_rows.sort(
             key=lambda row: (
-                0 if row.isCurrent else 1,
-                row.lastSeenAt or "",
+                0 if row.isCurrent else 1 if not row.isRemoved else 2,
+                -(sortable_row_timestamp(row).timestamp()),
             )
         )
         return device_rows
@@ -250,6 +314,67 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     continue
                 connection.execute(text(statement))
 
+    def ensure_runtime_security_event_schema(db: Session) -> None:
+        bind = db.get_bind()
+        inspector = inspect(bind)
+        table_names = set(inspector.get_table_names())
+
+        with bind.begin() as connection:
+            if "security_events" not in table_names:
+                connection.execute(
+                    text(
+                        "CREATE TABLE security_events ("
+                        "id VARCHAR(36) PRIMARY KEY, "
+                        "event_type VARCHAR(60) NOT NULL, "
+                        "severity VARCHAR(20) NOT NULL, "
+                        "actor_user_id VARCHAR(36) NULL, "
+                        "ip_address VARCHAR(80) NULL, "
+                        "device_label VARCHAR(160) NULL, "
+                        "detail TEXT NULL, "
+                        "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+                    )
+                )
+                return
+
+            existing_columns = {column["name"] for column in inspector.get_columns("security_events")}
+            required_statements = {
+                "event_type": "ALTER TABLE security_events ADD COLUMN event_type VARCHAR(60) NOT NULL DEFAULT 'settings_update'",
+                "severity": "ALTER TABLE security_events ADD COLUMN severity VARCHAR(20) NOT NULL DEFAULT 'info'",
+                "actor_user_id": "ALTER TABLE security_events ADD COLUMN actor_user_id VARCHAR(36) NULL",
+                "ip_address": "ALTER TABLE security_events ADD COLUMN ip_address VARCHAR(80) NULL",
+                "device_label": "ALTER TABLE security_events ADD COLUMN device_label VARCHAR(160) NULL",
+                "detail": "ALTER TABLE security_events ADD COLUMN detail TEXT NULL",
+                "created_at": "ALTER TABLE security_events ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            }
+            for column_name, statement in required_statements.items():
+                if column_name in existing_columns:
+                    continue
+                connection.execute(text(statement))
+
+    def log_security_event(
+        db: Session,
+        *,
+        event_type: str,
+        severity: str = "info",
+        actor_user_id: str | None = None,
+        request: Request | None = None,
+        detail: str | None = None,
+        device_label: str | None = None,
+    ) -> None:
+        ensure_runtime_security_event_schema(db)
+        user_agent = request.headers.get("user-agent") if request else None
+        db.add(
+            SecurityEvent(
+                id=secrets.token_hex(18),
+                event_type=(event_type or "settings_update")[:60],
+                severity=(severity or "info")[:20],
+                actor_user_id=actor_user_id,
+                ip_address=extract_client_ip(request) if request else None,
+                device_label=device_label or build_device_label(extract_browser_name(user_agent), extract_os_name(user_agent), extract_device_type(user_agent)),
+                detail=(detail or "")[:1000] or None,
+            )
+        )
+
     def create_login_session(db: Session, user_id: str, request: Request) -> UserLoginSession | None:
         token_id = secrets.token_hex(24)
         user_agent = request.headers.get("user-agent")
@@ -274,6 +399,18 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             db.add(session)
             db.commit()
             db.refresh(session)
+            try:
+                log_security_event(
+                    db,
+                    event_type="session_created",
+                    actor_user_id=user_id,
+                    request=request,
+                    detail=f"Signed in from {session.device_label}.",
+                    device_label=session.device_label,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
             return session
         except Exception:
             db.rollback()
@@ -282,6 +419,18 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 db.add(session)
                 db.commit()
                 db.refresh(session)
+                try:
+                    log_security_event(
+                        db,
+                        event_type="session_created",
+                        actor_user_id=user_id,
+                        request=request,
+                        detail=f"Signed in from {session.device_label}.",
+                        device_label=session.device_label,
+                    )
+                    db.commit()
+                except Exception:
+                    db.rollback()
                 return session
             except Exception:
                 db.rollback()
@@ -645,13 +794,13 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         )
 
     def serialize_settings_category(item: UserSetting | None, category: str) -> SettingsCategoryResponse:
-        payload = {}
+        payload = build_default_settings_payload(category)
         updated_at = None
         if item:
             try:
-                payload = json.loads(item.payload_json or "{}")
-            except json.JSONDecodeError:
-                payload = {}
+                payload = normalize_settings_category_payload(category, json.loads(item.payload_json or "{}"))
+            except (json.JSONDecodeError, ValueError):
+                payload = build_default_settings_payload(category)
             updated_at = item.updated_at.isoformat() if item.updated_at else None
         return SettingsCategoryResponse(category=category, payload=payload, updatedAt=updated_at)
 
@@ -717,6 +866,14 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_username(db, user_id=authenticated_user_id, new_username=payload.newUsername)
+            log_security_event(
+                db,
+                event_type="username_updated",
+                actor_user_id=authenticated_user_id,
+                request=request,
+                detail=f"Username changed to {user.username}.",
+            )
+            db.commit()
             return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -733,6 +890,15 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_email(db, user_id=authenticated_user_id, new_email=payload.newEmail)
+            log_security_event(
+                db,
+                event_type="email_updated",
+                severity="warning",
+                actor_user_id=authenticated_user_id,
+                request=request,
+                detail=f"Primary email changed to {user.email}.",
+            )
+            db.commit()
             return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -756,6 +922,14 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 gender=payload.gender,
                 alternate_email=payload.alternateEmail,
             )
+            log_security_event(
+                db,
+                event_type="profile_updated",
+                actor_user_id=authenticated_user_id,
+                request=request,
+                detail="Personal profile details were updated.",
+            )
+            db.commit()
             return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -772,6 +946,15 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_mobile(db, user_id=authenticated_user_id, new_mobile=payload.newMobile)
+            log_security_event(
+                db,
+                event_type="mobile_updated",
+                severity="warning",
+                actor_user_id=authenticated_user_id,
+                request=request,
+                detail=f"Primary mobile number changed to {user.mobile}.",
+            )
+            db.commit()
             return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -779,6 +962,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     @router.post("/settings/password")
     def change_password(
         payload: ChangePasswordRequest,
+        request: Request,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
@@ -791,6 +975,15 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 current_password=payload.currentPassword,
                 new_password=payload.newPassword,
             )
+            log_security_event(
+                db,
+                event_type="password_changed",
+                severity="warning",
+                actor_user_id=authenticated_user_id,
+                request=request,
+                detail="Password was updated successfully.",
+            )
+            db.commit()
             return {"message": "Password updated successfully."}
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -862,6 +1055,15 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             raise HTTPException(status_code=400, detail="Use sign out all from the current session, or keep the current session active.")
         session_row.is_revoked = True
         session_row.revoked_at = datetime.now(timezone.utc)
+        log_security_event(
+            db,
+            event_type="session_revoked",
+            severity="warning",
+            actor_user_id=user_id,
+            request=request,
+            detail=f"Signed out session for {session_row.device_label}.",
+            device_label=session_row.device_label,
+        )
         db.commit()
         return {"message": "Session signed out successfully."}
 
@@ -883,6 +1085,14 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         for item in rows:
             item.is_revoked = True
             item.revoked_at = now
+        log_security_event(
+            db,
+            event_type="all_other_sessions_revoked",
+            severity="warning",
+            actor_user_id=user_id,
+            request=request,
+            detail=f"Signed out {len(rows)} other active session{'s' if len(rows) != 1 else ''}.",
+        )
         db.commit()
         return {"message": "Signed out all other sessions successfully."}
 
@@ -899,6 +1109,36 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             .order_by(UserLoginSession.last_seen_at.desc(), UserLoginSession.created_at.desc())
         ).scalars().all()
         return serialize_device_items(rows, current_token_id=current_token_id)
+
+    @router.get("/settings/devices/history", response_model=list[DeviceItemResponse])
+    def list_user_device_history(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ):
+        user_id, current_token_id = get_authenticated_session_context(authorization, db, request)
+        rows = db.execute(
+            select(UserLoginSession)
+            .where(UserLoginSession.user_id == user_id)
+            .order_by(UserLoginSession.last_seen_at.desc(), UserLoginSession.created_at.desc())
+        ).scalars().all()
+        return [item for item in serialize_device_items(rows, current_token_id=current_token_id, include_removed=True) if item.isRemoved]
+
+    @router.get("/settings/security-events", response_model=list[SecurityEventResponse])
+    def list_user_security_events(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ):
+        user_id, _ = get_authenticated_session_context(authorization, db, request)
+        ensure_runtime_security_event_schema(db)
+        rows = db.execute(
+            select(SecurityEvent)
+            .where(SecurityEvent.actor_user_id == user_id)
+            .order_by(SecurityEvent.created_at.desc())
+            .limit(80)
+        ).scalars().all()
+        return [serialize_security_event(item) for item in rows]
 
     @router.post("/settings/devices/{session_id}/remove")
     def remove_user_device(
@@ -928,6 +1168,15 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             item.is_revoked = True
             item.revoked_at = now
             item.trusted = False
+        log_security_event(
+            db,
+            event_type="device_removed",
+            severity="warning",
+            actor_user_id=user_id,
+            request=request,
+            detail=f"Removed device {matching_sessions[0].device_label} and signed out {len(matching_sessions)} session{'s' if len(matching_sessions) != 1 else ''}.",
+            device_label=matching_sessions[0].device_label,
+        )
         db.commit()
         return {"message": "Device removed successfully."}
 
@@ -937,24 +1186,34 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
+        normalized_category = category.strip().lower()
+        try:
+            build_default_settings_payload(normalized_category)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         item = db.execute(
             select(UserSetting).where(
                 UserSetting.user_id == authenticated_user_id,
-                UserSetting.category == category.strip().lower(),
+                UserSetting.category == normalized_category,
             )
         ).scalar_one_or_none()
-        return serialize_settings_category(item, category.strip().lower())
+        return serialize_settings_category(item, normalized_category)
 
     @router.post("/settings/categories/{category}", response_model=SettingsCategoryResponse)
     def save_settings_category(
         category: str,
         payload: UpdateSettingsCategoryRequest,
+        request: Request,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         normalized_category = category.strip().lower()
         if not normalized_category:
             raise HTTPException(status_code=400, detail="Settings category is required.")
+        try:
+            normalized_payload = normalize_settings_category_payload(normalized_category, payload.payload or {})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         item = db.execute(
             select(UserSetting).where(
@@ -970,8 +1229,16 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             )
             db.add(item)
 
-        item.payload_json = json.dumps(payload.payload or {}, ensure_ascii=True)
+        item.payload_json = json.dumps(normalized_payload, ensure_ascii=True)
         item.updated_at = datetime.now(timezone.utc)
+        log_security_event(
+            db,
+            event_type="settings_category_saved",
+            severity="warning" if normalized_category in SENSITIVE_SETTINGS_CATEGORIES else "info",
+            actor_user_id=authenticated_user_id,
+            request=request,
+            detail=f"Updated {normalized_category} settings with {summarize_settings_payload(normalized_payload)}.",
+        )
         db.commit()
         db.refresh(item)
         return serialize_settings_category(item, normalized_category)
@@ -1356,12 +1623,21 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     @router.post("/settings/reset")
     def reset_settings(
         payload: ResetSettingsRequest,
+        request: Request,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
             auth_service.verify_account_password(db, user_id=authenticated_user_id, password=payload.password)
             db.execute(delete(UserSetting).where(UserSetting.user_id == authenticated_user_id))
+            log_security_event(
+                db,
+                event_type="settings_reset",
+                severity="warning",
+                actor_user_id=authenticated_user_id,
+                request=request,
+                detail="All saved settings categories were reset to their defaults.",
+            )
             db.commit()
             return {"message": "Saved settings reset successfully."}
         except AuthServiceError as exc:

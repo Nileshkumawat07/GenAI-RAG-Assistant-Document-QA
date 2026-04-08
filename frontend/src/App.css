@@ -3266,6 +3266,47 @@ body.workspace-body-mode .settings-empty-state p {
   margin: 0;
 }
 
+body.workspace-body-mode .settings-history-panel {
+  display: grid;
+  gap: 0;
+}
+
+body.workspace-body-mode .settings-history-summary {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+}
+
+body.workspace-body-mode .settings-history-summary::-webkit-details-marker {
+  display: none;
+}
+
+body.workspace-body-mode .settings-history-copy {
+  display: grid;
+  gap: 4px;
+}
+
+body.workspace-body-mode .settings-history-copy strong {
+  color: var(--primary-deep);
+  font-size: 15px;
+}
+
+body.workspace-body-mode .settings-history-copy span {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+body.workspace-body-mode .settings-history-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(42, 75, 140, 0.12);
+}
+
 body.workspace-body-mode .settings-field-list {
   display: grid;
   gap: 12px;
@@ -4684,5 +4725,9 @@ body.workspace-body-mode .contact-request-empty-card p {
   body.workspace-body-mode .workspace-form-stack .workspace-mini-card,
   body.workspace-body-mode .workspace-form-stack .settings-field-row {
     padding: 14px;
+  }
+
+  body.workspace-body-mode .settings-history-summary {
+    flex-direction: column;
   }
 }

@@ -5,6 +5,8 @@ import {
   deleteAccount,
   downloadAccountDataPdf,
   fetchSettingsCategory,
+  listSecurityEvents,
+  listUserDeviceHistory,
   listUserDevices,
   listUserSessions,
   resetAccountSettings,
@@ -1104,7 +1106,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [sessionActionLoading, setSessionActionLoading] = useState("");
   const [userDevices, setUserDevices] = useState([]);
   const [devicesLoading, setDevicesLoading] = useState(false);
+  const [removedDeviceHistory, setRemovedDeviceHistory] = useState([]);
+  const [deviceHistoryLoading, setDeviceHistoryLoading] = useState(false);
   const [deviceActionLoading, setDeviceActionLoading] = useState("");
+  const [securityEvents, setSecurityEvents] = useState([]);
+  const [securityEventsLoading, setSecurityEventsLoading] = useState(false);
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [showInvoicesPanel, setShowInvoicesPanel] = useState(false);
   const [showCancelSubscriptionPanel, setShowCancelSubscriptionPanel] = useState(false);
@@ -1150,11 +1156,21 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const activityEntries = storedSettings.activity || [];
   const preferenceFontSizeLabel = storedSettings.preferences.fontSize || "Medium";
   const preferenceFontScale = preferenceFontSizeLabel === "Small" ? 0.94 : preferenceFontSizeLabel === "Large" ? 1.08 : 1;
-  const activeSessionCount = userSessions.filter((session) => !session.isRevoked).length;
-  const signedOutSessionCount = userSessions.filter((session) => session.isRevoked).length;
-  const currentSession = userSessions.find((session) => session.isCurrent) || null;
+  const activeSessions = [...userSessions.filter((session) => !session.isRevoked)].sort((left, right) => {
+    if (left.isCurrent && !right.isCurrent) return -1;
+    if (!left.isCurrent && right.isCurrent) return 1;
+    return new Date(right.lastSeenAt || right.createdAt || 0).getTime() - new Date(left.lastSeenAt || left.createdAt || 0).getTime();
+  });
+  const signedOutSessions = [...userSessions.filter((session) => session.isRevoked)].sort(
+    (left, right) => new Date(right.revokedAt || right.lastSeenAt || 0).getTime() - new Date(left.revokedAt || left.lastSeenAt || 0).getTime()
+  );
+  const activeSessionCount = activeSessions.length;
+  const signedOutSessionCount = signedOutSessions.length;
+  const currentSession = activeSessions.find((session) => session.isCurrent) || null;
   const trustedDeviceCount = userDevices.filter((device) => device.trusted).length;
   const currentDevice = userDevices.find((device) => device.isCurrent) || null;
+  const removedDeviceCount = removedDeviceHistory.length;
+  const latestSecurityEvent = securityEvents[0] || null;
   const sortedSupportTickets = [...userSupportTickets].sort((left, right) => {
     const leftTime = new Date(left?.createdAt || 0).getTime();
     const rightTime = new Date(right?.createdAt || 0).getTime();
@@ -1410,9 +1426,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     const loadDevices = async () => {
       try {
         setDevicesLoading(true);
-        const rows = await listUserDevices();
+        setDeviceHistoryLoading(true);
+        const [rows, historyRows] = await Promise.all([
+          listUserDevices(),
+          listUserDeviceHistory(),
+        ]);
         if (!ignore) {
           setUserDevices(rows || []);
+          setRemovedDeviceHistory(historyRows || []);
         }
       } catch (error) {
         if (!ignore) {
@@ -1421,6 +1442,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       } finally {
         if (!ignore) {
           setDevicesLoading(false);
+          setDeviceHistoryLoading(false);
         }
       }
     };
@@ -1457,6 +1479,37 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     };
 
     loadSupportTickets();
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, currentUser?.id]);
+
+  useEffect(() => {
+    if (!["security", "security-logs", "system-status", "sessions", "devices"].includes(activeTab) || !currentUser?.id) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadSecurityEvents = async () => {
+      try {
+        setSecurityEventsLoading(true);
+        const rows = await listSecurityEvents();
+        if (!ignore) {
+          setSecurityEvents(rows || []);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setFeedback({ type: "error", text: error.message || "Failed to load security activity." });
+        }
+      } finally {
+        if (!ignore) {
+          setSecurityEventsLoading(false);
+        }
+      }
+    };
+
+    loadSecurityEvents();
     return () => {
       ignore = true;
     };
@@ -1945,8 +1998,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       const response = await revokeUserSession(sessionId);
       setFeedback({ type: "success", text: response.message || "Session signed out successfully." });
       pushActivity("A session was signed out.");
-      setUserSessions(await listUserSessions());
-      setUserDevices(await listUserDevices());
+      const [sessions, devices, history, events] = await Promise.all([
+        listUserSessions(),
+        listUserDevices(),
+        listUserDeviceHistory(),
+        listSecurityEvents(),
+      ]);
+      setUserSessions(sessions || []);
+      setUserDevices(devices || []);
+      setRemovedDeviceHistory(history || []);
+      setSecurityEvents(events || []);
     } catch (error) {
       setFeedback({ type: "error", text: error.message || "Failed to sign out session." });
     } finally {
@@ -1960,8 +2021,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       const response = await revokeAllOtherSessions();
       setFeedback({ type: "success", text: response.message || "Signed out other sessions successfully." });
       pushActivity("Other sessions were signed out.");
-      setUserSessions(await listUserSessions());
-      setUserDevices(await listUserDevices());
+      const [sessions, devices, history, events] = await Promise.all([
+        listUserSessions(),
+        listUserDevices(),
+        listUserDeviceHistory(),
+        listSecurityEvents(),
+      ]);
+      setUserSessions(sessions || []);
+      setUserDevices(devices || []);
+      setRemovedDeviceHistory(history || []);
+      setSecurityEvents(events || []);
     } catch (error) {
       setFeedback({ type: "error", text: error.message || "Failed to sign out other sessions." });
     } finally {
@@ -1975,8 +2044,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       const response = await removeUserDevice(sessionId);
       setFeedback({ type: "success", text: response.message || "Device removed successfully." });
       pushActivity("A device was removed from trusted access.");
-      setUserDevices(await listUserDevices());
-      setUserSessions(await listUserSessions());
+      const [devices, sessions, history, events] = await Promise.all([
+        listUserDevices(),
+        listUserSessions(),
+        listUserDeviceHistory(),
+        listSecurityEvents(),
+      ]);
+      setUserDevices(devices || []);
+      setUserSessions(sessions || []);
+      setRemovedDeviceHistory(history || []);
+      setSecurityEvents(events || []);
     } catch (error) {
       setFeedback({ type: "error", text: error.message || "Failed to remove device." });
     } finally {
@@ -2121,9 +2198,9 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           copy: "Live sessions currently tracked for this account.",
         },
         {
-          title: "Known Devices",
-          value: String(userDevices.length),
-          copy: `${trustedDeviceCount} trusted device${trustedDeviceCount === 1 ? "" : "s"}`,
+          title: "Security Events",
+          value: String(securityEvents.length),
+          copy: latestSecurityEvent ? latestSecurityEvent.detail || latestSecurityEvent.eventType : "No recent security event.",
         },
         genericCards[2],
       ];
@@ -2141,7 +2218,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           value: String(openSupportTicketCount),
           copy: supportTicketsLoading ? "Checking support queue..." : "Open support items tied to this account.",
         },
-        genericCards[2],
+        {
+          title: "Latest Security Event",
+          value: latestSecurityEvent ? formatSettingsRelativeTime(latestSecurityEvent.createdAt) : "No recent event",
+          copy: latestSecurityEvent?.detail || "Security changes will appear here once recorded.",
+        },
       ];
     }
 
@@ -4241,8 +4322,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           <div className="workspace-mini-card settings-section-hero">
             <div>
               <p className="settings-section-kicker">Security Events</p>
-              <h4>Session and device activity for this account</h4>
-              <p>These records are based on real login sessions and known devices tied to your account.</p>
+              <h4>Session, device, and security change activity for this account</h4>
+              <p>These records come from real login sessions, removed devices, and backend security-event history.</p>
             </div>
             <div className="settings-overview-grid">
               <div className="settings-stat-card">
@@ -4251,16 +4332,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 <span className="settings-stat-meta">{signedOutSessionCount} signed out session records</span>
               </div>
               <div className="settings-stat-card">
-                <span className="settings-stat-label">Known devices</span>
-                <strong>{userDevices.length}</strong>
-                <span className="settings-stat-meta">{trustedDeviceCount} trusted device{trustedDeviceCount === 1 ? "" : "s"}</span>
+                <span className="settings-stat-label">Security events</span>
+                <strong>{securityEvents.length}</strong>
+                <span className="settings-stat-meta">{removedDeviceCount} removed device record{removedDeviceCount === 1 ? "" : "s"}</span>
               </div>
             </div>
           </div>
-          {sessionsLoading ? <p className="tool-copy">Loading security activity...</p> : null}
-          {!sessionsLoading && userSessions.length > 0 ? (
+          {sessionsLoading || securityEventsLoading ? <p className="tool-copy">Loading security activity...</p> : null}
+          {!sessionsLoading && activeSessions.length > 0 ? (
             <div className="settings-record-list">
-              {userSessions.slice(0, 8).map((session) => (
+              {activeSessions.slice(0, 6).map((session) => (
                 <div key={session.id} className="workspace-mini-card settings-record-card">
                   <div className="settings-card-head">
                     <div>
@@ -4293,6 +4374,52 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 </div>
               ))}
             </div>
+          ) : null}
+          {!securityEventsLoading && securityEvents.length > 0 ? (
+            <details className="workspace-mini-card settings-history-panel">
+              <summary className="settings-history-summary">
+                <div className="settings-history-copy">
+                  <strong>Security event history</strong>
+                  <span>Open the backend activity log for sign-ins, setting changes, password updates, and removals.</span>
+                </div>
+                <span className="billing-status-pill">View history</span>
+              </summary>
+              <div className="settings-history-body">
+                <div className="settings-record-list">
+                  {securityEvents.slice(0, 20).map((event) => (
+                    <div key={event.id} className="workspace-mini-card settings-record-card">
+                      <div className="settings-card-head">
+                        <div>
+                          <h4>{event.detail || event.eventType}</h4>
+                          <p>{event.deviceLabel || "Current device context"}</p>
+                        </div>
+                        <div className="settings-pill-row">
+                          <span className={`billing-status-pill ${event.severity === "warning" ? "danger-pill" : ""}`}>{event.severity}</span>
+                        </div>
+                      </div>
+                      <div className="settings-meta-grid">
+                        <div className="settings-meta-item">
+                          <span>Event type</span>
+                          <strong>{event.eventType}</strong>
+                        </div>
+                        <div className="settings-meta-item">
+                          <span>IP address</span>
+                          <strong>{event.ipAddress || "Not available"}</strong>
+                        </div>
+                        <div className="settings-meta-item">
+                          <span>Device</span>
+                          <strong>{event.deviceLabel || "Not available"}</strong>
+                        </div>
+                        <div className="settings-meta-item">
+                          <span>Recorded</span>
+                          <strong>{formatSettingsDateTime(event.createdAt)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
           ) : null}
         </div>
         {renderProfessionalCategorySection("security-logs")}
@@ -4375,15 +4502,15 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           <p className="tool-copy">Keep this device active and remove access everywhere else in one step.</p>
         </div>
         {sessionsLoading ? <p className="tool-copy">Loading sessions...</p> : null}
-        {!sessionsLoading && userSessions.length === 0 ? (
+        {!sessionsLoading && activeSessions.length === 0 && signedOutSessions.length === 0 ? (
           <div className="workspace-mini-card settings-empty-state">
             <h4>No session records yet</h4>
             <p>Your next sign-in will appear here with browser, device, IP address, and recent activity.</p>
           </div>
         ) : null}
-        {!sessionsLoading && userSessions.length > 0 ? (
+        {!sessionsLoading && activeSessions.length > 0 ? (
           <div className="settings-record-list">
-            {userSessions.map((session) => (
+            {activeSessions.map((session) => (
               <div key={session.id} className="workspace-mini-card settings-record-card">
                 <div className="settings-card-head">
                   <div>
@@ -4432,6 +4559,58 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             ))}
           </div>
         ) : null}
+        {!sessionsLoading && activeSessions.length === 0 && signedOutSessions.length > 0 ? (
+          <div className="workspace-mini-card settings-empty-state">
+            <h4>No active sessions outside this device</h4>
+            <p>All other sessions are already signed out. You can still review the history below.</p>
+          </div>
+        ) : null}
+        {!sessionsLoading && signedOutSessions.length > 0 ? (
+          <details className="workspace-mini-card settings-history-panel">
+            <summary className="settings-history-summary">
+              <div className="settings-history-copy">
+                <strong>Signed-out session history</strong>
+                <span>{signedOutSessionCount} historical session{signedOutSessionCount === 1 ? "" : "s"} are available for review.</span>
+              </div>
+              <span className="billing-status-pill">View history</span>
+            </summary>
+            <div className="settings-history-body">
+              <div className="settings-record-list">
+                {signedOutSessions.map((session) => (
+                  <div key={session.id} className="workspace-mini-card settings-record-card">
+                    <div className="settings-card-head">
+                      <div>
+                        <h4>{session.deviceLabel}</h4>
+                        <p>{session.browserName || "Unknown browser"} on {session.osName || "Unknown OS"} - {session.deviceType}</p>
+                      </div>
+                      <div className="settings-pill-row">
+                        <span className="billing-status-pill danger-pill">Signed out</span>
+                      </div>
+                    </div>
+                    <div className="settings-meta-grid">
+                      <div className="settings-meta-item">
+                        <span>IP address</span>
+                        <strong>{session.ipAddress || "Not available"}</strong>
+                      </div>
+                      <div className="settings-meta-item">
+                        <span>Signed in</span>
+                        <strong>{formatSettingsDateTime(session.createdAt)}</strong>
+                      </div>
+                      <div className="settings-meta-item">
+                        <span>Last activity</span>
+                        <strong>{formatSettingsRelativeTime(session.lastSeenAt)}</strong>
+                      </div>
+                      <div className="settings-meta-item">
+                        <span>Signed out at</span>
+                        <strong>{formatSettingsDateTime(session.revokedAt)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+        ) : null}
       </div>
     );
   }
@@ -4465,7 +4644,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           </div>
         </div>
-        {devicesLoading ? <p className="tool-copy">Loading devices...</p> : null}
+        {devicesLoading || deviceHistoryLoading ? <p className="tool-copy">Loading devices...</p> : null}
         {!devicesLoading && userDevices.length === 0 ? (
           <div className="workspace-mini-card settings-empty-state">
             <h4>No devices found yet</h4>
@@ -4522,6 +4701,55 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
               </div>
             ))}
           </div>
+        ) : null}
+        {!devicesLoading && !deviceHistoryLoading && removedDeviceHistory.length > 0 ? (
+          <details className="workspace-mini-card settings-history-panel">
+            <summary className="settings-history-summary">
+              <div className="settings-history-copy">
+                <strong>Removed device history</strong>
+                <span>{removedDeviceCount} removed device record{removedDeviceCount === 1 ? "" : "s"} are stored for audit review.</span>
+              </div>
+              <span className="billing-status-pill">View history</span>
+            </summary>
+            <div className="settings-history-body">
+              <div className="settings-record-list">
+                {removedDeviceHistory.map((device) => (
+                  <div key={device.id} className="workspace-mini-card settings-record-card">
+                    <div className="settings-card-head">
+                      <div>
+                        <h4>{device.deviceLabel}</h4>
+                        <p>{device.browserName || "Unknown browser"} on {device.osName || "Unknown OS"}</p>
+                      </div>
+                      <div className="settings-pill-row">
+                        <span className="billing-status-pill danger-pill">Removed</span>
+                      </div>
+                    </div>
+                    <div className="settings-meta-grid">
+                      <div className="settings-meta-item">
+                        <span>Device type</span>
+                        <strong>{device.deviceType}</strong>
+                      </div>
+                      <div className="settings-meta-item">
+                        <span>Removed sessions</span>
+                        <strong>{device.sessionCount}</strong>
+                      </div>
+                      <div className="settings-meta-item">
+                        <span>Last activity</span>
+                        <strong>{formatSettingsRelativeTime(device.lastSeenAt)}</strong>
+                      </div>
+                      <div className="settings-meta-item">
+                        <span>Removed at</span>
+                        <strong>{formatSettingsDateTime(device.removedAt)}</strong>
+                      </div>
+                    </div>
+                    <p className="tool-copy">
+                      {device.locationLabel || "Current network"} - last seen {formatSettingsDateTime(device.lastSeenAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
         ) : null}
       </div>
     );

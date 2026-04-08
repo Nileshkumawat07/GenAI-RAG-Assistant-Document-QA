@@ -371,6 +371,26 @@ export async function listUserDevices() {
   );
 }
 
+export async function listUserDeviceHistory() {
+  return requestJson(
+    "/auth/settings/devices/history",
+    {
+      method: "GET",
+    },
+    "Failed to load removed device history."
+  );
+}
+
+export async function listSecurityEvents() {
+  return requestJson(
+    "/auth/settings/security-events",
+    {
+      method: "GET",
+    },
+    "Failed to load security activity."
+  );
+}
+
 export async function removeUserDevice(sessionId) {
   return requestJson(
     `/auth/settings/devices/${encodeURIComponent(sessionId)}/remove`,
