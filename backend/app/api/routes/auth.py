@@ -147,6 +147,59 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             )
         return device_rows
 
+    def ensure_runtime_login_session_schema(db: Session) -> None:
+        bind = db.get_bind()
+        inspector = inspect(bind)
+        table_names = set(inspector.get_table_names())
+
+        with bind.begin() as connection:
+            if "user_login_sessions" not in table_names:
+                connection.execute(
+                    text(
+                        "CREATE TABLE user_login_sessions ("
+                        "id VARCHAR(36) PRIMARY KEY, "
+                        "user_id VARCHAR(36) NOT NULL, "
+                        "token_id VARCHAR(64) NOT NULL, "
+                        "device_label VARCHAR(160) NOT NULL, "
+                        "device_type VARCHAR(40) NOT NULL, "
+                        "browser_name VARCHAR(80) NULL, "
+                        "os_name VARCHAR(80) NULL, "
+                        "user_agent VARCHAR(500) NULL, "
+                        "ip_address VARCHAR(80) NULL, "
+                        "location_label VARCHAR(120) NULL, "
+                        "remember_device BOOLEAN NOT NULL DEFAULT FALSE, "
+                        "trusted BOOLEAN NOT NULL DEFAULT FALSE, "
+                        "is_revoked BOOLEAN NOT NULL DEFAULT FALSE, "
+                        "created_at DATETIME NOT NULL, "
+                        "last_seen_at DATETIME NOT NULL, "
+                        "revoked_at DATETIME NULL)"
+                    )
+                )
+                return
+
+            existing_columns = {column["name"] for column in inspector.get_columns("user_login_sessions")}
+            required_statements = {
+                "user_id": "ALTER TABLE user_login_sessions ADD COLUMN user_id VARCHAR(36) NOT NULL DEFAULT ''",
+                "token_id": "ALTER TABLE user_login_sessions ADD COLUMN token_id VARCHAR(64) NOT NULL DEFAULT ''",
+                "device_label": "ALTER TABLE user_login_sessions ADD COLUMN device_label VARCHAR(160) NOT NULL DEFAULT 'Unknown device'",
+                "device_type": "ALTER TABLE user_login_sessions ADD COLUMN device_type VARCHAR(40) NOT NULL DEFAULT 'desktop'",
+                "browser_name": "ALTER TABLE user_login_sessions ADD COLUMN browser_name VARCHAR(80) NULL",
+                "os_name": "ALTER TABLE user_login_sessions ADD COLUMN os_name VARCHAR(80) NULL",
+                "user_agent": "ALTER TABLE user_login_sessions ADD COLUMN user_agent VARCHAR(500) NULL",
+                "ip_address": "ALTER TABLE user_login_sessions ADD COLUMN ip_address VARCHAR(80) NULL",
+                "location_label": "ALTER TABLE user_login_sessions ADD COLUMN location_label VARCHAR(120) NULL",
+                "remember_device": "ALTER TABLE user_login_sessions ADD COLUMN remember_device BOOLEAN NOT NULL DEFAULT FALSE",
+                "trusted": "ALTER TABLE user_login_sessions ADD COLUMN trusted BOOLEAN NOT NULL DEFAULT FALSE",
+                "is_revoked": "ALTER TABLE user_login_sessions ADD COLUMN is_revoked BOOLEAN NOT NULL DEFAULT FALSE",
+                "created_at": "ALTER TABLE user_login_sessions ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                "last_seen_at": "ALTER TABLE user_login_sessions ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                "revoked_at": "ALTER TABLE user_login_sessions ADD COLUMN revoked_at DATETIME NULL",
+            }
+            for column_name, statement in required_statements.items():
+                if column_name in existing_columns:
+                    continue
+                connection.execute(text(statement))
+
     def create_login_session(db: Session, user_id: str, request: Request) -> UserLoginSession | None:
         token_id = secrets.token_hex(24)
         user_agent = request.headers.get("user-agent")
@@ -174,7 +227,15 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             return session
         except Exception:
             db.rollback()
-            return None
+            try:
+                ensure_runtime_login_session_schema(db)
+                db.add(session)
+                db.commit()
+                db.refresh(session)
+                return session
+            except Exception:
+                db.rollback()
+                return None
 
     def quote_identifier(identifier: str) -> str:
         return f"`{identifier.replace('`', '``')}`"
