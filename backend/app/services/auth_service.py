@@ -335,6 +335,41 @@ class AuthService:
         db.refresh(user)
         return self._serialize_user(user)
 
+    def update_profile(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        full_name: str,
+        date_of_birth,
+        gender: str,
+        alternate_email: str | None,
+    ) -> UserPayload:
+        user = self._get_user_model_by_id(db, user_id)
+        normalized_full_name = (full_name or "").strip()
+        normalized_gender = (gender or "").strip()
+        normalized_alternate_email = alternate_email.strip().lower() if alternate_email and alternate_email.strip() else None
+
+        if not normalized_full_name:
+            raise AuthServiceError("Full name is required.")
+        if not normalized_gender:
+            raise AuthServiceError("Gender is required.")
+
+        if normalized_alternate_email and normalized_alternate_email != user.alternate_email:
+            existing = db.execute(
+                select(User).where(User.email == normalized_alternate_email, User.id != user_id)
+            ).scalar_one_or_none()
+            if existing:
+                raise AuthServiceError("That alternate email is already in use.")
+
+        user.full_name = normalized_full_name
+        user.date_of_birth = date_of_birth
+        user.gender = normalized_gender
+        user.alternate_email = normalized_alternate_email
+        db.commit()
+        db.refresh(user)
+        return self._serialize_user(user)
+
     def _get_user_model_by_id(self, db: Session, user_id: str) -> User:
         user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
         if not user:

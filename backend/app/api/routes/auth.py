@@ -35,6 +35,7 @@ from app.schemas.auth import (
     UpdateManagementAccessRequest,
     UpdateEmailRequest,
     UpdateMobileRequest,
+    UpdateProfileRequest,
     UpdateSettingsCategoryRequest,
     UpdateUsernameRequest,
 )
@@ -398,6 +399,27 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_email(db, user_id=authenticated_user_id, new_email=payload.newEmail)
+            return serialize_user(user)
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/settings/profile", response_model=AuthUserResponse)
+    def update_profile(
+        payload: UpdateProfileRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            if payload.userId != authenticated_user_id:
+                raise HTTPException(status_code=403, detail="You can only update your own account.")
+            user = auth_service.update_profile(
+                db,
+                user_id=authenticated_user_id,
+                full_name=payload.fullName,
+                date_of_birth=payload.dateOfBirth,
+                gender=payload.gender,
+                alternate_email=payload.alternateEmail,
+            )
             return serialize_user(user)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

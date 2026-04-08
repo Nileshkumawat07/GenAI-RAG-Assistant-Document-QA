@@ -116,6 +116,22 @@ export async function updateEmail(payload) {
   return normalizeAuthUser(data);
 }
 
+export async function updateProfile(payload) {
+  const data = await requestJson(
+    "/auth/settings/profile",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update profile."
+  );
+
+  return normalizeAuthUser(data);
+}
+
 export async function updateMobile(payload) {
   const data = await requestJson(
     "/auth/settings/mobile",

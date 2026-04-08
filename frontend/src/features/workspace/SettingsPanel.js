@@ -6,6 +6,7 @@ import {
   downloadAccountDataPdf,
   fetchSettingsCategory,
   saveSettingsCategory,
+  updateProfile,
   updateEmail,
   updateMobile,
   updateUsername,
@@ -209,8 +210,8 @@ function createDefaultCategoryPayload(categoryId) {
     items: features.reduce((accumulator, featureLabel) => {
       accumulator[slugifySettingLabel(featureLabel)] = {
         label: featureLabel,
-        enabled: false,
-        notes: "",
+        mode: "disabled",
+        value: "",
       };
       return accumulator;
     }, {}),
@@ -228,12 +229,64 @@ function normalizeCategoryPayload(categoryId, rawPayload) {
       ...itemValue,
       ...(rawItem || {}),
       label: itemValue.label,
-      enabled: !!rawItem?.enabled,
-      notes: rawItem?.notes || "",
+      mode: rawItem?.mode || "disabled",
+      value: rawItem?.value || "",
     };
   });
 
   return { items: nextItems };
+}
+
+function getSettingModes(featureLabel) {
+  const normalized = (featureLabel || "").toLowerCase();
+  if (
+    normalized.includes("history")
+    || normalized.includes("logs")
+    || normalized.includes("list")
+    || normalized.includes("view")
+    || normalized.includes("status")
+    || normalized.includes("summary")
+    || normalized.includes("preview")
+    || normalized.includes("notes")
+    || normalized.includes("metrics")
+  ) {
+    return ["hidden", "visible", "detailed"];
+  }
+  if (
+    normalized.includes("frequency")
+    || normalized.includes("sync")
+    || normalized.includes("schedule")
+    || normalized.includes("retention")
+    || normalized.includes("format")
+    || normalized.includes("tone")
+    || normalized.includes("strictness")
+    || normalized.includes("level")
+    || normalized.includes("preference")
+  ) {
+    return ["default", "custom", "strict"];
+  }
+  if (
+    normalized.includes("delete")
+    || normalized.includes("revoke")
+    || normalized.includes("unlink")
+    || normalized.includes("remove")
+    || normalized.includes("archive")
+    || normalized.includes("deactivate")
+  ) {
+    return ["protected", "enabled", "confirm-required"];
+  }
+  return ["disabled", "enabled", "required"];
+}
+
+function getSettingPlaceholder(featureLabel) {
+  const normalized = (featureLabel || "").toLowerCase();
+  if (normalized.includes("email") || normalized.includes("contact")) return "Enter email, channel, or destination";
+  if (normalized.includes("url") || normalized.includes("webhook")) return "Enter URL or endpoint";
+  if (normalized.includes("color") || normalized.includes("theme")) return "Enter theme, color, or variant";
+  if (normalized.includes("time") || normalized.includes("schedule")) return "Enter timing or schedule rule";
+  if (normalized.includes("model") || normalized.includes("ai")) return "Enter model, preset, or AI rule";
+  if (normalized.includes("policy") || normalized.includes("compliance")) return "Enter policy or compliance detail";
+  return "Enter setting value or display detail";
 }
 
 function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted }) {
@@ -249,6 +302,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [categoryPayloads, setCategoryPayloads] = useState({});
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categorySaving, setCategorySaving] = useState(false);
+  const [profileEditMode, setProfileEditMode] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    fullName: "",
+    dateOfBirth: "",
+    gender: "",
+    alternateEmail: "",
+  });
 
   const [usernameForm, setUsernameForm] = useState({ newUsername: "", otp: "", captchaInput: "" });
   const [usernameCaptcha, setUsernameCaptcha] = useState(() => buildCaptcha());
@@ -401,6 +462,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       setStoredSettings(normalizeStoredSettings(null, currentUser));
     }
   }, [storageKey, currentUser]);
+
+  useEffect(() => {
+    setProfileForm({
+      fullName: currentUser?.fullName || currentUser?.name || "",
+      dateOfBirth: currentUser?.dateOfBirth || "",
+      gender: currentUser?.gender || "",
+      alternateEmail: currentUser?.alternateEmail || "",
+    });
+    setProfileEditMode(false);
+  }, [currentUser]);
 
   useEffect(() => {
     if (storageKey) {
@@ -909,6 +980,47 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     pushActivity("Local settings were reset.");
   };
 
+  const handleSaveProfile = async () => {
+    const nextFullName = profileForm.fullName.trim();
+    const nextDateOfBirth = profileForm.dateOfBirth;
+    const nextGender = profileForm.gender.trim();
+    const nextAlternateEmail = profileForm.alternateEmail.trim();
+
+    if (!nextFullName) {
+      setFeedback({ type: "error", text: "Full name is required." });
+      return;
+    }
+    if (!nextDateOfBirth) {
+      setFeedback({ type: "error", text: "Date of birth is required." });
+      return;
+    }
+    if (!nextGender) {
+      setFeedback({ type: "error", text: "Gender is required." });
+      return;
+    }
+    if (nextAlternateEmail && !EMAIL_PATTERN.test(nextAlternateEmail)) {
+      setFeedback({ type: "error", text: "Enter a valid alternate email address." });
+      return;
+    }
+
+    try {
+      setProfileSaving(true);
+      const updatedUser = await updateProfile({
+        userId: currentUser.id,
+        fullName: nextFullName,
+        dateOfBirth: nextDateOfBirth,
+        gender: nextGender,
+        alternateEmail: nextAlternateEmail || null,
+      });
+      persistUser(updatedUser, "Profile updated successfully.");
+      setProfileEditMode(false);
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to update profile." });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   const handleSaveCategoryFeatures = async (categoryId, successText = "Settings saved successfully.") => {
     try {
       setCategorySaving(true);
@@ -934,20 +1046,29 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       <div className="workspace-form-stack">
         <div className="workspace-mini-card">
           <h4>{title || "Feature Roadmap Settings"}</h4>
-          <p>These category controls now save through the backend settings store for this account.</p>
+          <p>These settings are saved through the backend category store for this account.</p>
         </div>
-        {categoryLoading ? <p className="tool-copy">Loading category settings...</p> : null}
+        {categoryLoading ? <p className="tool-copy">Loading category details...</p> : null}
         <div className="workspace-info-grid">
           {features.map((featureLabel) => {
             const itemKey = slugifySettingLabel(featureLabel);
-            const item = payload.items?.[itemKey] || { label: featureLabel, enabled: false, notes: "" };
+            const item = payload.items?.[itemKey] || { label: featureLabel, mode: "disabled", value: "" };
+            const modes = getSettingModes(featureLabel);
 
             return (
               <div key={`${categoryId}-${itemKey}`} className="workspace-mini-card">
-                <label className="terms-check">
-                  <input
-                    type="checkbox"
-                    checked={!!item.enabled}
+                <div className="billing-payment-card-head">
+                  <div>
+                    <h4>{featureLabel}</h4>
+                    <p>Configure how this setting should behave for your workspace or account.</p>
+                  </div>
+                  <span className="billing-status-pill">{item.mode || "disabled"}</span>
+                </div>
+                <div className="workspace-form-stack">
+                  <label className="auth-label">Mode</label>
+                  <select
+                    className="auth-input workspace-static-input"
+                    value={item.mode || modes[0]}
                     onChange={(event) =>
                       updateCategoryPayload(categoryId, (current) => ({
                         ...current,
@@ -956,35 +1077,40 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                           [itemKey]: {
                             ...(current.items?.[itemKey] || {}),
                             label: featureLabel,
-                            enabled: event.target.checked,
-                            notes: current.items?.[itemKey]?.notes || "",
+                            mode: event.target.value,
+                            value: current.items?.[itemKey]?.value || "",
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    {modes.map((mode) => (
+                      <option key={`${itemKey}-${mode}`} value={mode}>
+                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="auth-label">Value</label>
+                  <input
+                    className="auth-input workspace-static-input"
+                    placeholder={getSettingPlaceholder(featureLabel)}
+                    value={item.value || ""}
+                    onChange={(event) =>
+                      updateCategoryPayload(categoryId, (current) => ({
+                        ...current,
+                        items: {
+                          ...current.items,
+                          [itemKey]: {
+                            ...(current.items?.[itemKey] || {}),
+                            label: featureLabel,
+                            mode: current.items?.[itemKey]?.mode || modes[0],
+                            value: event.target.value,
                           },
                         },
                       }))
                     }
                   />
-                  <span>{featureLabel}</span>
-                </label>
-                <textarea
-                  className="question-input workspace-static-textarea"
-                  rows={3}
-                  placeholder="Implementation notes, preferences, or backend details"
-                  value={item.notes || ""}
-                  onChange={(event) =>
-                    updateCategoryPayload(categoryId, (current) => ({
-                      ...current,
-                      items: {
-                        ...current.items,
-                        [itemKey]: {
-                          ...(current.items?.[itemKey] || {}),
-                          label: featureLabel,
-                          enabled: !!(current.items?.[itemKey]?.enabled),
-                          notes: event.target.value,
-                        },
-                      },
-                    }))
-                  }
-                />
+                </div>
               </div>
             );
           })}
@@ -995,7 +1121,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           onClick={() => handleSaveCategoryFeatures(categoryId, `${title || "Category"} saved successfully.`)}
           disabled={categorySaving}
         >
-          {categorySaving ? "Saving..." : "Save Category Settings"}
+          {categorySaving ? "Saving..." : "Save Settings"}
         </button>
       </div>
     );
@@ -1020,24 +1146,82 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
 
         {accountTab === "personalInfo" ? (
-          <div className="workspace-info-grid">
-            {[
-              ["Full Name", profileName],
-              ["Username", profileUsername],
-              ["Email", profileEmail],
-              ["Alternate Email", profileAlternateEmail],
-              ["Mobile", profileMobile],
-              ["Date of Birth", profileDateOfBirth],
-              ["Gender", profileGender],
-              ["Security Question", profileSecurityQuestion],
-              ["Security Answer", profileSecurityAnswer],
-              ["Referral Code", profileReferralCode],
-            ].map(([title, text]) => (
-              <div key={title} className="workspace-mini-card">
-                <h4>{title}</h4>
-                <p>{text}</p>
+          <div className="workspace-form-stack">
+            <div className="billing-action-row">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => {
+                  setProfileEditMode((current) => !current);
+                  setProfileForm({
+                    fullName: currentUser?.fullName || currentUser?.name || "",
+                    dateOfBirth: currentUser?.dateOfBirth || "",
+                    gender: currentUser?.gender || "",
+                    alternateEmail: currentUser?.alternateEmail || "",
+                  });
+                }}
+              >
+                {profileEditMode ? "Cancel Profile Edit" : "Update Profile"}
+              </button>
+            </div>
+
+            {profileEditMode ? (
+              <div className="workspace-form-stack">
+                <input
+                  className="auth-input workspace-static-input"
+                  placeholder="Full name"
+                  value={profileForm.fullName}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, fullName: event.target.value }))}
+                />
+                <input
+                  className="auth-input workspace-static-input"
+                  type="date"
+                  value={profileForm.dateOfBirth}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, dateOfBirth: event.target.value }))}
+                />
+                <select
+                  className="auth-input workspace-static-input"
+                  value={profileForm.gender}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, gender: event.target.value }))}
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+                <input
+                  className="auth-input workspace-static-input"
+                  placeholder="Alternate email"
+                  type="email"
+                  value={profileForm.alternateEmail}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, alternateEmail: event.target.value }))}
+                />
+                <button className="primary-button" type="button" onClick={handleSaveProfile} disabled={profileSaving}>
+                  {profileSaving ? "Saving..." : "Save Profile"}
+                </button>
               </div>
-            ))}
+            ) : null}
+
+            <div className="workspace-info-grid">
+              {[
+                ["Full Name", profileName],
+                ["Username", profileUsername],
+                ["Email", profileEmail],
+                ["Alternate Email", profileAlternateEmail],
+                ["Mobile", profileMobile],
+                ["Date of Birth", profileDateOfBirth],
+                ["Gender", profileGender],
+                ["Security Question", profileSecurityQuestion],
+                ["Security Answer", profileSecurityAnswer],
+                ["Referral Code", profileReferralCode],
+              ].map(([title, text]) => (
+                <div key={title} className="workspace-mini-card">
+                  <h4>{title}</h4>
+                  <p>{text}</p>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
 

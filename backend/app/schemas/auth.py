@@ -43,6 +43,14 @@ class UpdateEmailRequest(BaseModel):
     newEmail: EmailStr
 
 
+class UpdateProfileRequest(BaseModel):
+    userId: str
+    fullName: str
+    dateOfBirth: date
+    gender: str
+    alternateEmail: EmailStr | None = None
+
+
 class UpdateMobileRequest(BaseModel):
     userId: str
     newMobile: str
