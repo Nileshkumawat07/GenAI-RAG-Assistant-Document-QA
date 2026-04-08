@@ -3305,6 +3305,29 @@ body.workspace-body-mode .settings-history-body {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid rgba(42, 75, 140, 0.12);
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(49, 94, 183, 0.55) rgba(42, 75, 140, 0.08);
+}
+
+body.workspace-body-mode .settings-history-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+body.workspace-body-mode .settings-history-body::-webkit-scrollbar-track {
+  background: rgba(42, 75, 140, 0.08);
+  border-radius: 999px;
+}
+
+body.workspace-body-mode .settings-history-body::-webkit-scrollbar-thumb {
+  background: rgba(49, 94, 183, 0.55);
+  border-radius: 999px;
+}
+
+body.workspace-body-mode .settings-history-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(35, 77, 160, 0.72);
 }
 
 body.workspace-body-mode .settings-field-list {
