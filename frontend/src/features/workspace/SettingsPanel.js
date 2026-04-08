@@ -22,6 +22,7 @@ import {
   listLinkedProviders,
   unlinkProvider,
 } from "../auth/linkedProviderApi";
+import { listContactRequests } from "../info/contactApi";
 import { cancelSubscription, downloadInvoicePdf, listInvoices } from "./billingApi";
 import {
   checkFirebaseEmailVerification,
@@ -36,7 +37,7 @@ import { CATEGORY_FEATURES } from "./settingsCatalog";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_PATTERN = /^\d{10}$/;
 const PASSWORD_PATTERN = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$/;
-const STORED_SETTINGS_FORM_CATEGORIES = new Set(["security", "privacy", "notifications", "region"]);
+const STORED_SETTINGS_FORM_CATEGORIES = new Set(["security", "privacy", "notifications", "region", "appearance"]);
 
 function buildCaptcha() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -295,6 +296,15 @@ function applyStoredSettingsCategoryPayload(currentSettings, categoryId, rawPayl
     };
   }
 
+  if (categoryId === "appearance") {
+    nextSettings.preferences = {
+      ...nextSettings.preferences,
+      theme: typeof formPayload.theme === "string" && formPayload.theme.trim() ? formPayload.theme : nextSettings.preferences.theme,
+      language: typeof formPayload.language === "string" && formPayload.language.trim() ? formPayload.language : nextSettings.preferences.language,
+      fontSize: typeof formPayload.fontSize === "string" && formPayload.fontSize.trim() ? formPayload.fontSize : nextSettings.preferences.fontSize,
+    };
+  }
+
   if (categoryId === "activity") {
     nextSettings.activity = normalizeActivityEntries(payload.entries);
   }
@@ -365,6 +375,474 @@ function createSelectOptions(values) {
       .join(" "),
   }));
 }
+
+function createBooleanField(key, label, description, defaultValue = false) {
+  return { key, label, type: "boolean", defaultValue, description };
+}
+
+function createTextField(key, label, description, placeholder = "Enter a value", defaultValue = "") {
+  return { key, label, type: "text", defaultValue, placeholder, description };
+}
+
+function createColorField(key, label, description, defaultValue = "#2d6bc0") {
+  return { key, label, type: "color", defaultValue, description };
+}
+
+function createSelectField(key, label, values, defaultValue, description) {
+  return {
+    key,
+    label,
+    type: "select",
+    options: createSelectOptions(values),
+    defaultValue,
+    description,
+  };
+}
+
+const PROFESSIONAL_SETTINGS_LAYOUTS = {
+  verification: {
+    title: "Verification Center",
+    description: "Use real verification status for this account and save how reminders and recovery prompts should behave.",
+    saveLabel: "Save Verification Preferences",
+    sections: [
+      {
+        title: "Verification Flow",
+        description: "Decide how verified state is surfaced and when reminders should appear.",
+        fields: [
+          createBooleanField("showVerifiedBadges", "Show verified badges", "Display verified status across profile, billing, and support screens.", true),
+          createBooleanField("reverificationReminders", "Re-verification reminders", "Send reminders when a saved email or mobile verification needs attention.", true),
+          createSelectField("verificationExpiryWindow", "Verification review window", ["7-days", "14-days", "30-days"], "14-days", "Choose how often verification review prompts should appear."),
+          createTextField("recoveryEmailAddress", "Recovery email address", "Store a recovery email used for account recovery and verification follow-up.", "Enter recovery email"),
+        ],
+      },
+    ],
+  },
+  "communication-preferences": {
+    title: "Communication Preferences",
+    description: "Save how the account should receive service, support, and promotional communication.",
+    saveLabel: "Save Communication Preferences",
+    sections: [
+      {
+        title: "Delivery Preferences",
+        description: "Choose the communication channels and timing that fit this account.",
+        fields: [
+          createSelectField("preferredChannel", "Preferred contact channel", ["email", "in-app", "sms"], "email", "Use one primary channel for routine communication."),
+          createSelectField("supportLanguage", "Support language", ["english", "hindi"], "english", "Choose the preferred language for support replies."),
+          createTextField("quietHours", "Quiet hours", "Set a local quiet-hours range for non-critical messages.", "Example: 22:00 - 07:00"),
+          createBooleanField("doNotDisturb", "Do not disturb mode", "Suppress non-critical communication during quiet periods.", false),
+        ],
+      },
+    ],
+  },
+  appearance: {
+    title: "Appearance",
+    description: "Control the workspace theme, language, and reading comfort using saved account preferences.",
+    saveLabel: "Save Appearance Preferences",
+    sections: [
+      {
+        title: "Workspace Look And Feel",
+        description: "These saved values support the appearance controls shown above.",
+        fields: [
+          createSelectField("themeMode", "Theme mode", ["light", "dark", "system"], "light", "Choose how the workspace theme should behave."),
+          createSelectField("layoutDensity", "Layout density", ["comfortable", "compact", "spacious"], "comfortable", "Pick the spacing profile for cards and controls."),
+          createColorField("accentColor", "Accent color", "Use one account-level accent color for branded interface highlights."),
+          createBooleanField("reducedMotionTheme", "Reduced motion theme", "Tone down motion-heavy effects for a calmer visual experience.", false),
+        ],
+      },
+    ],
+  },
+  accessibility: {
+    title: "Accessibility",
+    description: "Save readability and accessibility options that make the workspace easier to use on every device.",
+    saveLabel: "Save Accessibility Preferences",
+    sections: [
+      {
+        title: "Reading And Input Comfort",
+        description: "Tailor contrast, scale, and navigation behaviour for accessibility needs.",
+        fields: [
+          createBooleanField("highContrastMode", "High contrast mode", "Increase visual contrast across text, controls, and status elements.", false),
+          createSelectField("textScale", "Text scale", ["100", "110", "125", "140"], "100", "Scale text throughout the workspace without changing the layout structure."),
+          createBooleanField("keyboardNavigationMode", "Keyboard navigation mode", "Improve focus order and keyboard-first navigation across the app.", false),
+          createBooleanField("captionPreference", "Caption and subtitle preference", "Show captions and support copy in a more visible way where available.", false),
+        ],
+      },
+    ],
+  },
+  "connected-apps": {
+    title: "Connected Apps",
+    description: "Review how third-party app access should be governed for this account.",
+    saveLabel: "Save App Access Preferences",
+    sections: [
+      {
+        title: "App Access Rules",
+        description: "Control approval and review policies for connected app access.",
+        fields: [
+          createBooleanField("allowNewConnections", "Allow new app connections", "Permit new third-party apps to be connected to this account.", true),
+          createBooleanField("requireAppApproval", "Require app approval", "Require confirmation before an app receives access to account data.", true),
+          createSelectField("appReviewFrequency", "Access review frequency", ["weekly", "monthly", "quarterly"], "monthly", "Choose how often connected app access should be reviewed."),
+          createBooleanField("revokeDormantApps", "Revoke dormant app access", "Automatically mark dormant apps for review or removal.", false),
+        ],
+      },
+    ],
+  },
+  integrations: {
+    title: "Integrations",
+    description: "Save how integrations should sync, alert, and expose operational state for this account.",
+    saveLabel: "Save Integration Preferences",
+    sections: [
+      {
+        title: "Integration Behaviour",
+        description: "Configure the sync pace and alerting rules for external integrations.",
+        fields: [
+          createSelectField("defaultSyncFrequency", "Default sync frequency", ["instant", "hourly", "daily"], "hourly", "Choose a default sync cadence for connected integrations."),
+          createBooleanField("integrationFailureAlerts", "Integration failure alerts", "Notify the account when an integration fails or becomes unhealthy.", true),
+          createBooleanField("allowBackgroundSync", "Allow background sync", "Keep integrations syncing while the account is not actively open.", true),
+          createSelectField("integrationLogView", "Integration log view", ["summary", "detailed"], "summary", "Choose the level of integration log detail shown in the workspace."),
+        ],
+      },
+    ],
+  },
+  "api-webhooks": {
+    title: "API And Webhooks",
+    description: "Save delivery, retry, and signing preferences for keys and webhook traffic.",
+    saveLabel: "Save API Preferences",
+    sections: [
+      {
+        title: "Webhook Delivery",
+        description: "Control retry, signing, and log retention for webhook operations.",
+        fields: [
+          createBooleanField("webhookSigningRequired", "Require webhook signing", "Require signed webhook payloads for outbound deliveries.", true),
+          createBooleanField("retryFailedDeliveries", "Retry failed deliveries", "Automatically retry failed webhook deliveries.", true),
+          createSelectField("deliveryLogRetention", "Delivery log retention", ["7-days", "30-days", "90-days"], "30-days", "Choose how long webhook delivery history should remain available."),
+          createSelectField("webhookFormat", "Preferred webhook format", ["json", "form"], "json", "Pick the preferred webhook body format for outbound events."),
+        ],
+      },
+    ],
+  },
+  "plans-upgrades": {
+    title: "Plans And Upgrades",
+    description: "Save upgrade, renewal, and plan-comparison preferences for the current subscription.",
+    saveLabel: "Save Plan Preferences",
+    sections: [
+      {
+        title: "Renewal And Upgrade Controls",
+        description: "Choose how plan options and renewal notices should be presented.",
+        fields: [
+          createSelectField("preferredBillingCycle", "Preferred billing cycle", ["monthly", "annual"], "monthly", "Choose the billing cycle you want emphasized in plan views."),
+          createBooleanField("renewalReminders", "Renewal reminders", "Receive reminders before a renewal or expiry date arrives.", true),
+          createBooleanField("upgradeRecommendations", "Upgrade recommendations", "Show suggestions when a better-fitting plan is available.", true),
+          createBooleanField("addOnOffers", "Add-on offers", "Allow relevant add-on recommendations to appear with subscription changes.", false),
+        ],
+      },
+    ],
+  },
+  "usage-limits": {
+    title: "Usage And Limits",
+    description: "Control how usage thresholds, alerts, and quota summaries are shown for this account.",
+    saveLabel: "Save Usage Preferences",
+    sections: [
+      {
+        title: "Quota Alerts",
+        description: "Choose when and how usage warnings should surface.",
+        fields: [
+          createBooleanField("usageAlerts", "Usage alerts", "Show alerts when usage approaches plan limits.", true),
+          createSelectField("alertThreshold", "Alert threshold", ["75", "90", "100"], "90", "Choose the percentage at which usage alerts should begin."),
+          createSelectField("usageWindow", "Preferred usage window", ["7-days", "30-days", "current-cycle"], "current-cycle", "Pick the time window used for summaries."),
+          createBooleanField("overageWarnings", "Overage warnings", "Display stronger warnings when an overage is likely.", true),
+        ],
+      },
+    ],
+  },
+  storage: {
+    title: "Storage",
+    description: "Save cleanup, archive, and storage visibility preferences for workspace files and assets.",
+    saveLabel: "Save Storage Preferences",
+    sections: [
+      {
+        title: "Storage Visibility",
+        description: "Control warnings and how storage insights appear inside the workspace.",
+        fields: [
+          createSelectField("storageWarningThreshold", "Storage warning threshold", ["75", "85", "95"], "85", "Choose when storage warning states should appear."),
+          createBooleanField("cleanupSuggestions", "Cleanup suggestions", "Show cleanup recommendations when storage pressure increases.", true),
+          createBooleanField("duplicateDetection", "Duplicate detection", "Highlight potential duplicate files during storage review.", true),
+          createBooleanField("showArchivedFiles", "Show archived files", "Include archived files in storage overview panels.", false),
+        ],
+      },
+    ],
+  },
+  backups: {
+    title: "Backups",
+    description: "Save backup cadence, notification, and retention preferences for account data snapshots.",
+    saveLabel: "Save Backup Preferences",
+    sections: [
+      {
+        title: "Backup Scheduling",
+        description: "Choose how automatic backups and related notices should behave.",
+        fields: [
+          createBooleanField("autoBackup", "Enable automatic backups", "Allow automatic backup scheduling for eligible account data.", false),
+          createSelectField("backupFrequency", "Backup frequency", ["daily", "weekly", "monthly"], "weekly", "Choose how often scheduled backups should run."),
+          createSelectField("retentionPeriod", "Retention period", ["7-days", "30-days", "90-days"], "30-days", "Keep backup history for the selected retention window."),
+          createBooleanField("backupNotifications", "Backup notifications", "Notify the account when backups succeed or fail.", true),
+        ],
+      },
+    ],
+  },
+  "audit-logs": {
+    title: "Audit Logs",
+    description: "Save how audit entries should be shown and exported for the current account.",
+    saveLabel: "Save Audit Preferences",
+    sections: [
+      {
+        title: "Audit Visibility",
+        description: "Choose the level of audit detail to keep visible in the settings workspace.",
+        fields: [
+          createSelectField("logDetailLevel", "Log detail level", ["summary", "detailed", "full"], "detailed", "Choose how much detail audit entries should show."),
+          createBooleanField("includeSettingsChanges", "Include settings changes", "Show account setting changes in the audit feed.", true),
+          createBooleanField("includeExportEvents", "Include export events", "Include export activity inside the audit trail.", true),
+          createBooleanField("auditExportAccess", "Allow audit export", "Allow exporting audit activity snapshots when needed.", false),
+        ],
+      },
+    ],
+  },
+  "security-logs": {
+    title: "Security Logs",
+    description: "Save which security events should be emphasized for this account.",
+    saveLabel: "Save Security Log Preferences",
+    sections: [
+      {
+        title: "Security Event Tracking",
+        description: "Control the visibility of security-related activity across this account.",
+        fields: [
+          createBooleanField("failedLoginAlerts", "Failed login alerts", "Highlight repeated failed login attempts in the security feed.", true),
+          createBooleanField("deviceActivityLog", "Device activity log", "Show device additions and sign-outs in security history.", true),
+          createBooleanField("passwordChangeLog", "Password change log", "Record password changes in the security log.", true),
+          createBooleanField("securityExportAccess", "Allow security export", "Allow exporting a copy of security activity when needed.", false),
+        ],
+      },
+    ],
+  },
+  "workspace-branding": {
+    title: "Workspace Branding",
+    description: "Save account-level branding choices used for names, colors, and branded exports.",
+    saveLabel: "Save Branding Preferences",
+    sections: [
+      {
+        title: "Brand Identity",
+        description: "Choose the saved brand details that should represent this workspace.",
+        fields: [
+          createTextField("workspaceName", "Workspace name", "Save the preferred workspace display name.", "Enter workspace name"),
+          createColorField("brandColor", "Brand color", "Pick the main brand color for branded views and exported material."),
+          createBooleanField("invoiceBranding", "Invoice branding", "Apply saved branding choices to invoices and billing exports.", true),
+          createTextField("footerText", "Footer text", "Set branded footer copy for workspace exports and communication.", "Enter footer text"),
+        ],
+      },
+    ],
+  },
+  "ai-preferences": {
+    title: "AI Preferences",
+    description: "Save how the assistant should respond by default for this account.",
+    saveLabel: "Save AI Preferences",
+    sections: [
+      {
+        title: "Assistant Defaults",
+        description: "Choose model, tone, and response behaviour for AI features.",
+        fields: [
+          createSelectField("defaultModel", "Default AI model", ["auto", "balanced", "quality"], "auto", "Choose the default model profile for AI responses."),
+          createSelectField("responseTone", "Response tone", ["professional", "friendly", "concise"], "professional", "Select the default tone used in assistant replies."),
+          createSelectField("responseLength", "Response length", ["short", "medium", "long"], "medium", "Set the default response length for generated answers."),
+          createSelectField("creativityLevel", "Creativity level", ["low", "medium", "high"], "medium", "Adjust how exploratory AI responses should be by default."),
+        ],
+      },
+    ],
+  },
+  "roles-permissions": {
+    title: "Roles And Permissions",
+    description: "Save permission defaults and approval rules for team-style access controls.",
+    saveLabel: "Save Permission Preferences",
+    sections: [
+      {
+        title: "Permission Defaults",
+        description: "Choose how access changes and permission-sensitive actions should be handled.",
+        fields: [
+          createSelectField("defaultMemberRole", "Default member role", ["viewer", "editor", "admin"], "viewer", "Choose the default role granted to newly added members."),
+          createBooleanField("inviteApprovalRequired", "Invite approval required", "Require approval before new member invites become active.", true),
+          createBooleanField("exportAccessControl", "Export access control", "Apply extra control to export-sensitive actions.", true),
+          createBooleanField("roleChangeNotifications", "Role change notifications", "Notify the account when roles or permissions are updated.", true),
+        ],
+      },
+    ],
+  },
+  "team-management": {
+    title: "Team Management",
+    description: "Save member-invite, directory, and update preferences for team administration.",
+    saveLabel: "Save Team Preferences",
+    sections: [
+      {
+        title: "Member Operations",
+        description: "Control how invites, team visibility, and update digests should work.",
+        fields: [
+          createSelectField("inviteChannel", "Invite channel", ["email", "link", "admin"], "email", "Choose the preferred invite method for new members."),
+          createSelectField("teamDirectoryVisibility", "Team directory visibility", ["private", "team", "public"], "team", "Control who can view the team directory."),
+          createBooleanField("bulkRoleEdits", "Bulk role edits", "Allow bulk role changes to be surfaced in the team controls.", true),
+          createBooleanField("teamActivityDigest", "Team activity digest", "Receive periodic summaries of team changes and activity.", false),
+        ],
+      },
+    ],
+  },
+  "admin-controls": {
+    title: "Admin Controls",
+    description: "Save oversight and safety preferences for administrator-level controls.",
+    saveLabel: "Save Admin Control Preferences",
+    sections: [
+      {
+        title: "Oversight Rules",
+        description: "Choose how privileged actions and escalation controls should behave.",
+        fields: [
+          createBooleanField("escalationAlerts", "Escalation alerts", "Notify the account when administrative escalation is required.", true),
+          createSelectField("incidentAssignmentMode", "Incident assignment mode", ["manual", "round-robin", "priority"], "manual", "Choose how incidents should be assigned by default."),
+          createBooleanField("privilegedAccessReviews", "Privileged access reviews", "Keep regular review reminders for privileged access.", true),
+          createBooleanField("emergencyLockConfirmations", "Emergency lock confirmations", "Require additional confirmation before lock-style actions.", true),
+        ],
+      },
+    ],
+  },
+  compliance: {
+    title: "Compliance",
+    description: "Save data residency, retention, and compliance-alert preferences for this account.",
+    saveLabel: "Save Compliance Preferences",
+    sections: [
+      {
+        title: "Compliance Controls",
+        description: "Set residency and retention preferences used for compliance-sensitive behaviour.",
+        fields: [
+          createSelectField("dataResidency", "Data residency", ["auto", "india", "us", "eu"], "auto", "Choose the preferred data-residency region."),
+          createSelectField("retentionPolicy", "Retention policy", ["30-days", "90-days", "180-days", "365-days"], "90-days", "Choose the account-level retention window."),
+          createBooleanField("complianceAlerts", "Compliance alerts", "Receive alerts when compliance-sensitive events need review.", true),
+          createBooleanField("policyAcknowledgements", "Policy acknowledgements", "Keep policy acknowledgement prompts active in compliance flows.", true),
+        ],
+      },
+    ],
+  },
+  consent: {
+    title: "Consent",
+    description: "Save consent defaults for analytics, cookies, marketing, and AI training usage.",
+    saveLabel: "Save Consent Preferences",
+    sections: [
+      {
+        title: "Consent Defaults",
+        description: "Choose the consent posture applied across this account.",
+        fields: [
+          createBooleanField("marketingConsent", "Marketing consent", "Allow marketing communication and outreach preferences.", false),
+          createBooleanField("analyticsConsent", "Analytics consent", "Allow analytics collection for account usage improvements.", true),
+          createBooleanField("cookieConsentRequired", "Cookie consent required", "Require a visible cookie consent state for this account.", true),
+          createBooleanField("aiTrainingConsent", "AI training consent", "Allow eligible data to support AI improvement programs.", false),
+        ],
+      },
+    ],
+  },
+  legal: {
+    title: "Legal",
+    description: "Save legal document visibility and regional notice preferences for this account.",
+    saveLabel: "Save Legal Preferences",
+    sections: [
+      {
+        title: "Document Handling",
+        description: "Choose how legal documents and legal contact details should appear.",
+        fields: [
+          createTextField("legalContactEmail", "Legal contact email", "Store a legal or compliance contact email for this account.", "Enter legal contact email"),
+          createSelectField("regionNotes", "Regional legal notes", ["global", "india", "us", "eu"], "global", "Choose which regional legal notice set should be prioritized."),
+          createBooleanField("legalDownloads", "Allow legal document downloads", "Allow legal documents to be downloaded from the workspace.", true),
+          createBooleanField("thirdPartyLicenses", "Show third-party licenses", "Display third-party license information in legal views.", true),
+        ],
+      },
+    ],
+  },
+  "support-tickets": {
+    title: "Support Tickets",
+    description: "Save how support tickets should be created, enriched, and answered for this account.",
+    saveLabel: "Save Ticket Preferences",
+    sections: [
+      {
+        title: "Ticket Workflow",
+        description: "Choose ticket priority, diagnostics, and reply behaviour for support conversations.",
+        fields: [
+          createSelectField("preferredPriority", "Preferred priority", ["standard", "high", "urgent"], "standard", "Choose the default support priority shown for new tickets."),
+          createBooleanField("includeDiagnostics", "Include diagnostics bundle", "Share environment diagnostics with new support requests when helpful.", false),
+          createBooleanField("emailReplies", "Email replies", "Receive support replies through email.", true),
+          createBooleanField("autoShareAccountContext", "Share account context", "Attach account context automatically to ticket submissions.", true),
+        ],
+      },
+    ],
+  },
+  "release-notes": {
+    title: "Release Notes",
+    description: "Save how product updates and release communication should be delivered to this account.",
+    saveLabel: "Save Release Preferences",
+    sections: [
+      {
+        title: "Update Awareness",
+        description: "Choose how often release notes and breaking-change notices should be shown.",
+        fields: [
+          createSelectField("releaseDigestFrequency", "Release digest frequency", ["instant", "weekly", "monthly"], "weekly", "Choose how often release summaries should be delivered."),
+          createBooleanField("productUpdateAlerts", "Product update alerts", "Show product update notices inside the workspace.", true),
+          createBooleanField("breakingChangeNotices", "Breaking change notices", "Highlight important changes that could affect usage.", true),
+          createBooleanField("betaReleaseNotes", "Beta release notes", "Include beta and preview updates in release communication.", false),
+        ],
+      },
+    ],
+  },
+  "system-status": {
+    title: "System Status",
+    description: "Save how live platform status and incident notices should be surfaced for this account.",
+    saveLabel: "Save Status Preferences",
+    sections: [
+      {
+        title: "Status Visibility",
+        description: "Choose the alerting frequency and detail level for platform status events.",
+        fields: [
+          createBooleanField("incidentAlerts", "Incident alerts", "Show incident alerts when a core service is degraded.", true),
+          createBooleanField("maintenanceAnnouncements", "Maintenance announcements", "Show scheduled maintenance announcements in advance.", true),
+          createSelectField("statusRefreshRate", "Status refresh rate", ["auto", "1-minute", "5-minutes"], "auto", "Choose how often the status view should refresh."),
+          createBooleanField("degradedServiceNotices", "Degraded service notices", "Highlight degraded service periods with clearer notices.", true),
+        ],
+      },
+    ],
+  },
+  experiments: {
+    title: "Experiments",
+    description: "Save experimental rollout and preview-behaviour preferences for this account.",
+    saveLabel: "Save Experiment Preferences",
+    sections: [
+      {
+        title: "Experiment Participation",
+        description: "Choose how preview features and experiment prompts should behave.",
+        fields: [
+          createBooleanField("experimentalUi", "Experimental UI", "Allow experimental interface variations for this account.", false),
+          createBooleanField("earlyRolloutParticipation", "Early rollout participation", "Join early rollout groups for selected features.", false),
+          createBooleanField("feedbackPrompts", "Experiment feedback prompts", "Show feedback prompts after using experimental features.", true),
+          createBooleanField("resetOnVersionChange", "Reset on version change", "Reset experiment state when major versions change.", true),
+        ],
+      },
+    ],
+  },
+  "labs-beta-features": {
+    title: "Labs And Beta Features",
+    description: "Save how beta tools and preview AI features should behave for this account.",
+    saveLabel: "Save Beta Preferences",
+    sections: [
+      {
+        title: "Beta Feature Access",
+        description: "Choose which beta surfaces should be shown to this account.",
+        fields: [
+          createBooleanField("joinBeta", "Join beta program", "Allow this account to access beta features when available.", false),
+          createBooleanField("betaAiTools", "Beta AI tools", "Show beta AI tools inside the workspace.", false),
+          createBooleanField("betaIntegrations", "Beta integrations", "Show preview integrations and related beta connectors.", false),
+          createBooleanField("betaTelemetry", "Beta telemetry", "Share beta usage telemetry to improve preview features.", false),
+        ],
+      },
+    ],
+  },
+};
 
 function createSettingDefinition(categoryId, featureLabel) {
   const key = slugifySettingLabel(featureLabel);
@@ -463,6 +941,14 @@ function buildCategoryDefinitions(categoryId) {
   return (CATEGORY_FEATURES[categoryId] || []).map((featureLabel) => createSettingDefinition(categoryId, featureLabel));
 }
 
+function getCategoryDefinitions(categoryId) {
+  const layout = PROFESSIONAL_SETTINGS_LAYOUTS[categoryId];
+  if (layout) {
+    return layout.sections.flatMap((section) => section.fields);
+  }
+  return buildCategoryDefinitions(categoryId);
+}
+
 function normalizeSettingValue(definition, rawValue) {
   if (definition.type === "boolean") {
     return rawValue === true || rawValue === "true";
@@ -478,14 +964,14 @@ function normalizeSettingValue(definition, rawValue) {
 }
 
 function createDefaultCategoryValues(categoryId) {
-  return buildCategoryDefinitions(categoryId).reduce((accumulator, definition) => {
+  return getCategoryDefinitions(categoryId).reduce((accumulator, definition) => {
     accumulator[definition.key] = definition.defaultValue;
     return accumulator;
   }, {});
 }
 
 function normalizeCategorySettings(categoryId, rawPayload) {
-  const definitions = buildCategoryDefinitions(categoryId);
+  const definitions = getCategoryDefinitions(categoryId);
   const fallbackValues = createDefaultCategoryValues(categoryId);
   const rawValues = rawPayload?.values || rawPayload || {};
   const legacyItems = rawPayload?.items || {};
@@ -510,7 +996,17 @@ function normalizeCategorySettings(categoryId, rawPayload) {
 }
 
 function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted }) {
-  const normalizedActiveTab = activeTab === "linked-accounts" ? "linked" : activeTab;
+  const normalizedActiveTab =
+    activeTab === "linked-accounts"
+      ? "linked"
+      : activeTab === "preferences"
+        ? "appearance"
+        : activeTab;
+  const loadableCategoryTab = CATEGORY_FEATURES[activeTab]
+    ? activeTab
+    : CATEGORY_FEATURES[normalizedActiveTab]
+      ? normalizedActiveTab
+      : null;
   const [accountTab, setAccountTab] = useState("personalInfo");
   const [securityTab, setSecurityTab] = useState("password");
   const [preferencesTab, setPreferencesTab] = useState("theme");
@@ -601,6 +1097,8 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const [billingInvoices, setBillingInvoices] = useState([]);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingActionLoading, setBillingActionLoading] = useState("");
+  const [userSupportTickets, setUserSupportTickets] = useState([]);
+  const [supportTicketsLoading, setSupportTicketsLoading] = useState(false);
   const [userSessions, setUserSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionActionLoading, setSessionActionLoading] = useState("");
@@ -657,6 +1155,13 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const currentSession = userSessions.find((session) => session.isCurrent) || null;
   const trustedDeviceCount = userDevices.filter((device) => device.trusted).length;
   const currentDevice = userDevices.find((device) => device.isCurrent) || null;
+  const sortedSupportTickets = [...userSupportTickets].sort((left, right) => {
+    const leftTime = new Date(left?.createdAt || 0).getTime();
+    const rightTime = new Date(right?.createdAt || 0).getTime();
+    return rightTime - leftTime;
+  });
+  const openSupportTicketCount = userSupportTickets.filter((ticket) => (ticket.status || "").trim().toLowerCase() !== "completed").length;
+  const latestSupportTicket = sortedSupportTickets[0] || null;
 
   const updateCategoryValue = (categoryId, key, value) => {
     setCategoryPayloads((current) => ({
@@ -690,7 +1195,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }, [currentUser]);
 
   useEffect(() => {
-    if (!currentUser?.id || !CATEGORY_FEATURES[activeTab]) {
+    if (!currentUser?.id || !loadableCategoryTab) {
       return;
     }
 
@@ -699,23 +1204,23 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     const loadCategoryPayload = async () => {
       try {
         setCategoryLoading(true);
-        const response = await fetchSettingsCategory(activeTab);
+        const response = await fetchSettingsCategory(loadableCategoryTab);
         const payload = extractSettingsPayload(response?.payload);
         if (!ignore) {
           setCategoryPayloads((current) => ({
             ...current,
-            [activeTab]: {
+            [loadableCategoryTab]: {
               ...payload,
-              values: normalizeCategorySettings(activeTab, payload).values,
+              values: normalizeCategorySettings(loadableCategoryTab, payload).values,
             },
           }));
-          if (activeTab === "activity" || STORED_SETTINGS_FORM_CATEGORIES.has(activeTab)) {
-            setStoredSettings((current) => applyStoredSettingsCategoryPayload(current, activeTab, payload, currentUser));
+          if (loadableCategoryTab === "activity" || STORED_SETTINGS_FORM_CATEGORIES.has(loadableCategoryTab)) {
+            setStoredSettings((current) => applyStoredSettingsCategoryPayload(current, loadableCategoryTab, payload, currentUser));
           }
         }
       } catch (error) {
         if (!ignore) {
-          setFeedback({ type: "error", text: error.message || `Failed to load ${activeTab} settings.` });
+          setFeedback({ type: "error", text: error.message || `Failed to load ${loadableCategoryTab} settings.` });
         }
       } finally {
         if (!ignore) {
@@ -729,7 +1234,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     return () => {
       ignore = true;
     };
-  }, [activeTab, currentUser?.id]);
+  }, [activeTab, currentUser?.id, loadableCategoryTab]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--workspace-font-scale", String(preferenceFontScale));
@@ -834,7 +1339,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "billing" || !currentUser?.id) {
+    if (!["billing", "plans-upgrades", "usage-limits", "release-notes", "system-status"].includes(activeTab) || !currentUser?.id) {
       return;
     }
 
@@ -865,7 +1370,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }, [activeTab, currentUser?.id]);
 
   useEffect(() => {
-    if (activeTab !== "sessions" || !currentUser?.id) {
+    if (!["sessions", "security-logs", "system-status"].includes(activeTab) || !currentUser?.id) {
       return;
     }
 
@@ -896,7 +1401,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }, [activeTab, currentUser?.id]);
 
   useEffect(() => {
-    if (activeTab !== "devices" || !currentUser?.id) {
+    if (!["devices", "security-logs", "system-status"].includes(activeTab) || !currentUser?.id) {
       return;
     }
 
@@ -921,6 +1426,37 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     };
 
     loadDevices();
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, currentUser?.id]);
+
+  useEffect(() => {
+    if (!["support", "support-tickets", "system-status"].includes(activeTab) || !currentUser?.id) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadSupportTickets = async () => {
+      try {
+        setSupportTicketsLoading(true);
+        const items = await listContactRequests(currentUser.id);
+        if (!ignore) {
+          setUserSupportTickets(items || []);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setFeedback({ type: "error", text: error.message || "Failed to load support tickets." });
+        }
+      } finally {
+        if (!ignore) {
+          setSupportTicketsLoading(false);
+        }
+      }
+    };
+
+    loadSupportTickets();
     return () => {
       ignore = true;
     };
@@ -1186,10 +1722,13 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     }
   };
 
-  const savePreferences = () => {
-    setFeedback({ type: "success", text: "Preference settings saved successfully." });
-    pushActivity("Preference settings were updated.");
-  };
+  const savePreferences = () =>
+    saveStructuredCategory(
+      "appearance",
+      { form: storedSettings.preferences },
+      "Appearance settings saved successfully.",
+      "Appearance settings were updated."
+    );
 
   const savePrivacy = () =>
     saveStructuredCategory(
@@ -1462,6 +2001,332 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     } finally {
       setCategorySaving(false);
     }
+  };
+
+  const formatCategoryDisplayValue = (value) => {
+    if (typeof value === "boolean") {
+      return value ? "Enabled" : "Disabled";
+    }
+    if (typeof value === "number") {
+      return String(value);
+    }
+    if (typeof value === "string" && value.trim()) {
+      return value
+        .split("-")
+        .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+        .join(" ");
+    }
+    return "Not configured";
+  };
+
+  const buildProfessionalSummaryCards = (categoryId, values) => {
+    const updatedAt = categoryPayloads[categoryId]?.updatedAt;
+    const enabledCount = Object.values(values || {}).filter((value) => value === true).length;
+    const configuredCount = Object.values(values || {}).filter((value) => {
+      if (typeof value === "boolean") {
+        return value;
+      }
+      if (typeof value === "string") {
+        return value.trim().length > 0;
+      }
+      return value != null;
+    }).length;
+    const genericCards = [
+      {
+        title: "Configured Fields",
+        value: `${configuredCount}/${Object.keys(values || {}).length || 0}`,
+        copy: "Saved preferences that already have an explicit value.",
+      },
+      {
+        title: "Enabled Options",
+        value: String(enabledCount),
+        copy: "Active toggles currently enabled for this category.",
+      },
+      {
+        title: "Last Saved",
+        value: updatedAt ? formatSettingsDateTime(updatedAt) : "Not saved yet",
+        copy: "Changes are stored on your backend account profile.",
+      },
+    ];
+
+    if (categoryId === "verification") {
+      return [
+        {
+          title: "Email Status",
+          value: currentUser?.emailVerified ? "Verified" : "Pending",
+          copy: profileEmail || "No email available",
+        },
+        {
+          title: "Mobile Status",
+          value: currentUser?.mobileVerified ? "Verified" : "Pending",
+          copy: profileMobile || "No mobile number available",
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "plans-upgrades") {
+      return [
+        {
+          title: "Current Plan",
+          value: subscriptionPlanName,
+          copy: subscriptionPriceLabel,
+        },
+        {
+          title: "Subscription Status",
+          value: subscriptionStatus === "premium" ? "Premium Active" : formatCategoryDisplayValue(subscriptionStatus),
+          copy: subscriptionExpiresAt ? `Valid till ${formatSettingsDateTime(subscriptionExpiresAt)}` : "No active renewal date",
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "support-tickets") {
+      return [
+        {
+          title: "Open Tickets",
+          value: String(openSupportTicketCount),
+          copy: supportTicketsLoading ? "Loading ticket records..." : "Real support requests from your account history.",
+        },
+        {
+          title: "Latest Ticket",
+          value: latestSupportTicket?.requestCode || "No ticket yet",
+          copy: latestSupportTicket ? `${latestSupportTicket.category} - ${latestSupportTicket.status}` : "Create a ticket from the Contact section.",
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "audit-logs") {
+      return [
+        {
+          title: "Activity Entries",
+          value: String(activityEntries.length),
+          copy: "Recent saved account activity entries.",
+        },
+        {
+          title: "Latest Activity",
+          value: activityEntries[0]?.text || "No activity yet",
+          copy: activityEntries[0]?.createdAt ? formatSettingsRelativeTime(activityEntries[0].createdAt) : "No recent log entry",
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "security-logs") {
+      return [
+        {
+          title: "Active Sessions",
+          value: String(activeSessionCount),
+          copy: "Live sessions currently tracked for this account.",
+        },
+        {
+          title: "Known Devices",
+          value: String(userDevices.length),
+          copy: `${trustedDeviceCount} trusted device${trustedDeviceCount === 1 ? "" : "s"}`,
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "system-status") {
+      return [
+        {
+          title: "Auth Session",
+          value: currentUser?.id ? "Connected" : "Unavailable",
+          copy: currentSession ? `Current session: ${currentSession.deviceLabel}` : "No active session metadata yet",
+        },
+        {
+          title: "Support Queue",
+          value: String(openSupportTicketCount),
+          copy: supportTicketsLoading ? "Checking support queue..." : "Open support items tied to this account.",
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "connected-apps" || categoryId === "integrations") {
+      const linkedCount = Object.values(storedSettings.linked || {}).filter((provider) => provider?.linked).length;
+      return [
+        {
+          title: "Linked Providers",
+          value: String(linkedCount),
+          copy: "OAuth-linked providers currently connected to this account.",
+        },
+        genericCards[0],
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "workspace-branding") {
+      return [
+        {
+          title: "Workspace Name",
+          value: values.workspaceName || profileName,
+          copy: "Branding uses this name when a custom value is saved.",
+        },
+        {
+          title: "Brand Accent",
+          value: values.brandColor || "Default accent",
+          copy: "Saved brand color for invoices and workspace labels.",
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "ai-preferences") {
+      return [
+        {
+          title: "Default Model",
+          value: formatCategoryDisplayValue(values.defaultModel),
+          copy: "Saved default model profile for AI responses.",
+        },
+        {
+          title: "Response Tone",
+          value: formatCategoryDisplayValue(values.responseTone),
+          copy: "Tone used when a more specific mode is not selected.",
+        },
+        genericCards[2],
+      ];
+    }
+
+    if (categoryId === "roles-permissions" || categoryId === "team-management" || categoryId === "admin-controls") {
+      return [
+        {
+          title: "Current Access Mode",
+          value: formatCategoryDisplayValue(currentUser?.mode || "member"),
+          copy: currentUser?.isAdmin ? "Administrator access is active." : currentUser?.isManagement ? "Management access is active." : "Standard member access is active.",
+        },
+        genericCards[0],
+        genericCards[2],
+      ];
+    }
+
+    return genericCards;
+  };
+
+  const renderCategoryFieldControl = (categoryId, definition, value) => {
+    if (definition.type === "boolean") {
+      return (
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.checked)}
+          />
+          <span className="settings-toggle-track">
+            <span className="settings-toggle-thumb" />
+          </span>
+          <span className="settings-toggle-label">{value ? "Enabled" : "Disabled"}</span>
+        </label>
+      );
+    }
+
+    if (definition.type === "select") {
+      return (
+        <select
+          className="auth-input workspace-static-input settings-control-input"
+          value={value || definition.defaultValue}
+          onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+        >
+          {(definition.options || []).map((option) => (
+            <option key={`${definition.key}-${option.value}`} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (definition.type === "color") {
+      return (
+        <div className="settings-color-row">
+          <input
+            className="settings-color-input"
+            type="color"
+            value={value || definition.defaultValue}
+            onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+          />
+          <input
+            className="auth-input workspace-static-input settings-control-input"
+            value={value || definition.defaultValue}
+            onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <input
+        className="auth-input workspace-static-input settings-control-input"
+        value={value || ""}
+        placeholder={definition.placeholder || "Enter a value"}
+        onChange={(event) => updateCategoryValue(categoryId, definition.key, event.target.value)}
+      />
+    );
+  };
+
+  const renderProfessionalCategorySection = (categoryId) => {
+    const layout = PROFESSIONAL_SETTINGS_LAYOUTS[categoryId];
+    if (!layout) {
+      return null;
+    }
+
+    const payload = categoryPayloads[categoryId] || { values: createDefaultCategoryValues(categoryId) };
+    const values = payload.values || createDefaultCategoryValues(categoryId);
+    const summaryCards = buildProfessionalSummaryCards(categoryId, values);
+
+    return (
+      <div className="workspace-form-stack">
+        <div className="workspace-mini-card settings-section-hero">
+          <div>
+            <p className="settings-section-kicker">Professional Settings</p>
+            <h4>{layout.title}</h4>
+            <p>{layout.description}</p>
+          </div>
+        </div>
+        <div className="workspace-info-grid">
+          {summaryCards.map((card) => (
+            <div key={`${categoryId}-${card.title}`} className="workspace-mini-card">
+              <h4>{card.title}</h4>
+              <p>{card.value}</p>
+              <p className="tool-copy">{card.copy}</p>
+            </div>
+          ))}
+        </div>
+        {layout.sections.map((section) => (
+          <div key={`${categoryId}-${section.title}`} className="workspace-mini-card">
+            <div className="settings-card-head">
+              <div>
+                <h4>{section.title}</h4>
+                <p>{section.description}</p>
+              </div>
+            </div>
+            <div className="settings-field-list">
+              {section.fields.map((definition) => (
+                <div key={`${categoryId}-${definition.key}`} className="workspace-mini-card settings-field-row">
+                  <div className="settings-field-copy">
+                    <h4>{definition.label}</h4>
+                    <p>{definition.description}</p>
+                  </div>
+                  <div className="settings-field-control">
+                    {renderCategoryFieldControl(categoryId, definition, values[definition.key])}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => handleSaveCategorySettings(categoryId, `${layout.title} saved successfully.`)}
+          disabled={categorySaving}
+        >
+          {categorySaving ? "Saving..." : layout.saveLabel}
+        </button>
+      </div>
+    );
   };
 
   const renderGenericCategorySection = (categoryId, title, description) => {
@@ -2469,37 +3334,18 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
 
   if (normalizedActiveTab === "account") {
     return (
-      <>
-        <div className="workspace-form-stack">
-          {feedback.text ? (
-            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-              <p>{feedback.text}</p>
-            </div>
-          ) : null}
-          {renderAccount()}
-        </div>
-        {renderGenericCategorySection("account", "Additional Account Settings", "These account preferences are saved to your backend settings store.")}
-      </>
+      <div className="workspace-form-stack">
+        {feedback.text ? (
+          <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+            <p>{feedback.text}</p>
+          </div>
+        ) : null}
+        {renderAccount()}
+      </div>
     );
   }
 
   if (normalizedActiveTab === "security") {
-    return (
-      <>
-        <div className="workspace-form-stack">
-          {feedback.text ? (
-            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
-              <p>{feedback.text}</p>
-            </div>
-          ) : null}
-          {renderSecurity()}
-        </div>
-        {renderGenericCategorySection("security", "Additional Security Settings", "Security preferences here are saved per account and can be updated any time.")}
-      </>
-    );
-  }
-
-  if (activeTab === "preferences") {
     return (
       <div className="workspace-form-stack">
         {feedback.text ? (
@@ -2507,8 +3353,24 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             <p>{feedback.text}</p>
           </div>
         ) : null}
-        {renderPreferences()}
+        {renderSecurity()}
       </div>
+    );
+  }
+
+  if (normalizedActiveTab === "appearance") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          {renderPreferences()}
+        </div>
+        {renderProfessionalCategorySection("appearance")}
+      </>
     );
   }
 
@@ -2635,12 +3497,57 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           ) : null}
         </div>
-        {renderGenericCategorySection("privacy", "Privacy Controls", "Choose how your data, visibility, and consent preferences should behave.")}
       </>
     );
   }
 
-  if (activeTab === "platform") {
+  if (normalizedActiveTab === "verification") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          <div className="workspace-mini-card settings-section-hero">
+            <div>
+              <p className="settings-section-kicker">Live Verification</p>
+              <h4>Track email and mobile verification with real account data</h4>
+              <p>These cards reflect the current account state instead of generic placeholder settings.</p>
+            </div>
+            <div className="settings-overview-grid">
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Email</span>
+                <strong>{currentUser?.emailVerified ? "Verified" : "Pending"}</strong>
+                <span className="settings-stat-meta">{profileEmail || "No email available"}</span>
+              </div>
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Mobile</span>
+                <strong>{currentUser?.mobileVerified ? "Verified" : "Pending"}</strong>
+                <span className="settings-stat-meta">{profileMobile || "No mobile available"}</span>
+              </div>
+            </div>
+          </div>
+          <div className="workspace-info-grid">
+            <div className="workspace-mini-card">
+              <h4>Recovery Email</h4>
+              <p>{currentUser?.alternateEmail || "No recovery email saved yet."}</p>
+              <p className="tool-copy">Update this from Account settings to keep verification recovery options current.</p>
+            </div>
+            <div className="workspace-mini-card">
+              <h4>Account Verification Scope</h4>
+              <p>{currentUser?.emailVerified && currentUser?.mobileVerified ? "Full contact verification is active." : "Complete both email and mobile verification for full account readiness."}</p>
+              <p className="tool-copy">Email and mobile verification are used across sign-in, security actions, and support flows.</p>
+            </div>
+          </div>
+        </div>
+        {renderProfessionalCategorySection("verification")}
+      </>
+    );
+  }
+
+  if (normalizedActiveTab === "platform") {
     return (
       <div className="workspace-form-stack">
         <div className="workspace-mini-card privacy-export-card">
@@ -2702,7 +3609,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             Clear Activity Log
           </button>
         </div>
-        {renderGenericCategorySection("activity", "Activity Preferences", "Control how activity history and related summaries are shown in your workspace.")}
       </>
     );
   }
@@ -2878,7 +3784,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           })}
         </div>
       </div>
-      {renderGenericCategorySection("linked-accounts", "Linked Account Preferences", "Save preferences related to account linking, sync, and provider behavior.")}
       </>
     );
   }
@@ -2928,7 +3833,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </label>
         <button className="primary-button" type="button" onClick={saveNotifications}>Save Preferences</button>
       </div>
-      {renderGenericCategorySection("notifications", "Advanced Notification Settings", "Manage saved notification preferences across email, billing, product, and security updates.")}
       </>
     );
   }
@@ -3122,7 +4026,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </div>
         ) : null}
       </div>
-      {renderGenericCategorySection("billing", "Billing Preferences", "Save backend billing preferences such as contact details, reminders, and payment behavior.")}
       </>
     );
   }
@@ -3180,7 +4083,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         </select>
         <button className="primary-button" type="button" onClick={saveRegion}>Save Region & Language</button>
       </div>
-      {renderGenericCategorySection("region", "Region Preferences", "Store region, locale, and formatting preferences for this account.")}
       </>
     );
   }
@@ -3199,12 +4101,238 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           <p>Support preferences saved below stay attached to your account and can be reused for future support interactions.</p>
         </div>
       </div>
-      {renderGenericCategorySection("support", "Support Preferences", "Save support-related preferences such as routing, availability, and self-service helpers.")}
       </>
     );
   }
 
-  if (activeTab === "sessions") {
+  if (normalizedActiveTab === "support-tickets") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          {feedback.text ? (
+            <div className={`workspace-mini-card ${feedback.type === "error" ? "error-text" : feedback.type === "success" ? "success-text" : ""}`}>
+              <p>{feedback.text}</p>
+            </div>
+          ) : null}
+          <div className="workspace-mini-card settings-section-hero">
+            <div>
+              <p className="settings-section-kicker">Support History</p>
+              <h4>Real tickets linked to your account</h4>
+              <p>These records come from your saved contact and support requests instead of generated placeholders.</p>
+            </div>
+            <div className="settings-overview-grid">
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Open tickets</span>
+                <strong>{openSupportTicketCount}</strong>
+                <span className="settings-stat-meta">Tickets still waiting for completion.</span>
+              </div>
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Latest ticket</span>
+                <strong>{latestSupportTicket?.requestCode || "None"}</strong>
+                <span className="settings-stat-meta">{latestSupportTicket ? latestSupportTicket.status : "No requests yet"}</span>
+              </div>
+            </div>
+          </div>
+          {supportTicketsLoading ? <p className="tool-copy">Loading support tickets...</p> : null}
+          {!supportTicketsLoading && userSupportTickets.length === 0 ? (
+            <div className="workspace-mini-card settings-empty-state">
+              <h4>No support tickets yet</h4>
+              <p>Requests submitted from the Contact section will appear here with their real status and reference code.</p>
+            </div>
+          ) : null}
+          {!supportTicketsLoading && userSupportTickets.length > 0 ? (
+            <div className="settings-record-list">
+              {sortedSupportTickets.map((ticket) => (
+                <div key={ticket.id} className="workspace-mini-card settings-record-card">
+                  <div className="settings-card-head">
+                    <div>
+                      <h4>{ticket.title}</h4>
+                      <p>{ticket.category} - {ticket.requestCode || "No code yet"}</p>
+                    </div>
+                    <div className="settings-pill-row">
+                      <span className="billing-status-pill">{ticket.status}</span>
+                    </div>
+                  </div>
+                  <div className="settings-meta-grid">
+                    <div className="settings-meta-item">
+                      <span>Submitted</span>
+                      <strong>{formatSettingsDateTime(ticket.createdAt)}</strong>
+                    </div>
+                    <div className="settings-meta-item">
+                      <span>Assigned manager</span>
+                      <strong>{ticket.assignedManagerName || "Not assigned"}</strong>
+                    </div>
+                    <div className="settings-meta-item">
+                      <span>First response</span>
+                      <strong>{formatSettingsDateTime(ticket.firstResponseAt)}</strong>
+                    </div>
+                    <div className="settings-meta-item">
+                      <span>Last status update</span>
+                      <strong>{formatSettingsDateTime(ticket.lastStatusUpdatedAt)}</strong>
+                    </div>
+                  </div>
+                  <p className="tool-copy">{ticket.adminMessage || "No support reply has been added yet."}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {renderProfessionalCategorySection("support-tickets")}
+      </>
+    );
+  }
+
+  if (normalizedActiveTab === "audit-logs") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          <div className="workspace-mini-card settings-section-hero">
+            <div>
+              <p className="settings-section-kicker">Audit Trail</p>
+              <h4>Recent account-level activity</h4>
+              <p>These entries are generated from saved account actions and settings events.</p>
+            </div>
+            <div className="settings-overview-grid">
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Entries</span>
+                <strong>{activityEntries.length}</strong>
+                <span className="settings-stat-meta">Saved activity items currently available.</span>
+              </div>
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Latest event</span>
+                <strong>{activityEntries[0] ? formatSettingsRelativeTime(activityEntries[0].createdAt) : "None"}</strong>
+                <span className="settings-stat-meta">{activityEntries[0]?.text || "No activity logged yet"}</span>
+              </div>
+            </div>
+          </div>
+          {activityEntries.length > 0 ? (
+            <div className="settings-record-list">
+              {activityEntries.map((entry) => (
+                <div key={entry.id} className="workspace-mini-card settings-record-card">
+                  <div className="settings-card-head">
+                    <div>
+                      <h4>{entry.text}</h4>
+                      <p>Saved audit event</p>
+                    </div>
+                    <div className="settings-pill-row">
+                      <span className="billing-status-pill">{formatSettingsRelativeTime(entry.createdAt)}</span>
+                    </div>
+                  </div>
+                  <p className="tool-copy">Recorded {formatSettingsDateTime(entry.createdAt)}.</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="workspace-mini-card settings-empty-state">
+              <h4>No audit events yet</h4>
+              <p>Saved account actions such as exports, updates, and security changes will appear here.</p>
+            </div>
+          )}
+        </div>
+        {renderProfessionalCategorySection("audit-logs")}
+      </>
+    );
+  }
+
+  if (normalizedActiveTab === "security-logs") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          <div className="workspace-mini-card settings-section-hero">
+            <div>
+              <p className="settings-section-kicker">Security Events</p>
+              <h4>Session and device activity for this account</h4>
+              <p>These records are based on real login sessions and known devices tied to your account.</p>
+            </div>
+            <div className="settings-overview-grid">
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Active sessions</span>
+                <strong>{activeSessionCount}</strong>
+                <span className="settings-stat-meta">{signedOutSessionCount} signed out session records</span>
+              </div>
+              <div className="settings-stat-card">
+                <span className="settings-stat-label">Known devices</span>
+                <strong>{userDevices.length}</strong>
+                <span className="settings-stat-meta">{trustedDeviceCount} trusted device{trustedDeviceCount === 1 ? "" : "s"}</span>
+              </div>
+            </div>
+          </div>
+          {sessionsLoading ? <p className="tool-copy">Loading security activity...</p> : null}
+          {!sessionsLoading && userSessions.length > 0 ? (
+            <div className="settings-record-list">
+              {userSessions.slice(0, 8).map((session) => (
+                <div key={session.id} className="workspace-mini-card settings-record-card">
+                  <div className="settings-card-head">
+                    <div>
+                      <h4>{session.deviceLabel}</h4>
+                      <p>{session.browserName || "Unknown browser"} on {session.osName || "Unknown OS"}</p>
+                    </div>
+                    <div className="settings-pill-row">
+                      {session.isCurrent ? <span className="billing-status-pill">Current</span> : null}
+                      {session.isRevoked ? <span className="billing-status-pill danger-pill">Signed out</span> : <span className="billing-status-pill">Tracked</span>}
+                    </div>
+                  </div>
+                  <div className="settings-meta-grid">
+                    <div className="settings-meta-item">
+                      <span>Device type</span>
+                      <strong>{session.deviceType}</strong>
+                    </div>
+                    <div className="settings-meta-item">
+                      <span>IP address</span>
+                      <strong>{session.ipAddress || "Not available"}</strong>
+                    </div>
+                    <div className="settings-meta-item">
+                      <span>Created</span>
+                      <strong>{formatSettingsDateTime(session.createdAt)}</strong>
+                    </div>
+                    <div className="settings-meta-item">
+                      <span>Last activity</span>
+                      <strong>{formatSettingsRelativeTime(session.lastSeenAt)}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {renderProfessionalCategorySection("security-logs")}
+      </>
+    );
+  }
+
+  if (normalizedActiveTab === "system-status") {
+    return (
+      <>
+        <div className="workspace-form-stack">
+          <div className="workspace-info-grid">
+            <div className="workspace-mini-card">
+              <h4>Authentication Service</h4>
+              <p>{currentUser?.id ? "Connected" : "Unavailable"}</p>
+              <p className="tool-copy">Your authenticated workspace session is active.</p>
+            </div>
+            <div className="workspace-mini-card">
+              <h4>Session Tracking</h4>
+              <p>{activeSessionCount > 0 ? "Operational" : "Waiting for session data"}</p>
+              <p className="tool-copy">{activeSessionCount} active session record{activeSessionCount === 1 ? "" : "s"} currently visible.</p>
+            </div>
+            <div className="workspace-mini-card">
+              <h4>Support Queue</h4>
+              <p>{supportTicketsLoading ? "Loading" : "Operational"}</p>
+              <p className="tool-copy">{openSupportTicketCount} open support request{openSupportTicketCount === 1 ? "" : "s"} on this account.</p>
+            </div>
+            <div className="workspace-mini-card">
+              <h4>Billing Snapshot</h4>
+              <p>{billingLoading ? "Loading" : "Available"}</p>
+              <p className="tool-copy">{billingInvoices.length} invoice record{billingInvoices.length === 1 ? "" : "s"} currently available.</p>
+            </div>
+          </div>
+        </div>
+        {renderProfessionalCategorySection("system-status")}
+      </>
+    );
+  }
+
+  if (normalizedActiveTab === "sessions") {
     return (
       <div className="workspace-form-stack">
         {feedback.text ? (
@@ -3260,7 +4388,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                 <div className="settings-card-head">
                   <div>
                     <h4>{session.deviceLabel}</h4>
-                    <p>{session.browserName || "Unknown browser"} on {session.osName || "Unknown OS"} • {session.deviceType}</p>
+                    <p>{session.browserName || "Unknown browser"} on {session.osName || "Unknown OS"} - {session.deviceType}</p>
                   </div>
                   <div className="settings-pill-row">
                     {session.isCurrent ? <span className="billing-status-pill">Current session</span> : null}
@@ -3308,7 +4436,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     );
   }
 
-  if (activeTab === "devices") {
+  if (normalizedActiveTab === "devices") {
     return (
       <div className="workspace-form-stack">
         {feedback.text ? (
@@ -3377,7 +4505,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
                   </div>
                 </div>
                 <p className="tool-copy">
-                  {device.locationLabel || "Current network"} • last seen {formatSettingsDateTime(device.lastSeenAt)}
+                  {device.locationLabel || "Current network"} - last seen {formatSettingsDateTime(device.lastSeenAt)}
                 </p>
                 <div className="settings-card-actions">
                   {!device.isCurrent ? (
@@ -3399,7 +4527,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     );
   }
 
-  if (activeTab === "data-export") {
+  if (normalizedActiveTab === "data-export") {
     return (
       <>
         <div className="workspace-form-stack">
@@ -3423,12 +4551,11 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             {privacyActionLoading === "download" ? "Downloading..." : "Download Account Data PDF"}
           </button>
         </div>
-        {renderGenericCategorySection("data-export", "Export Preferences", "Choose which exports should be available and how export settings should behave.")}
       </>
     );
   }
 
-  if (activeTab === "danger-zone") {
+  if (normalizedActiveTab === "danger-zone") {
     return (
       <>
         <div className="workspace-form-stack">
@@ -3483,7 +4610,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             </div>
           ) : null}
         </div>
-        {renderGenericCategorySection("danger-zone", "Danger Zone Preferences", "Save safeguard preferences for destructive or account-sensitive actions.")}
       </>
     );
   }
@@ -3499,10 +4625,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     );
   }
 
-  if (CATEGORY_FEATURES[activeTab]) {
+  if (PROFESSIONAL_SETTINGS_LAYOUTS[normalizedActiveTab]) {
+    return renderProfessionalCategorySection(normalizedActiveTab);
+  }
+
+  if (loadableCategoryTab) {
     return renderGenericCategorySection(
-      activeTab,
-      `${activeTab.replace(/-/g, " ")} Settings`,
+      loadableCategoryTab,
+      `${loadableCategoryTab.replace(/-/g, " ")} Settings`,
       "These settings are saved to the backend and reload with your account."
     );
   }

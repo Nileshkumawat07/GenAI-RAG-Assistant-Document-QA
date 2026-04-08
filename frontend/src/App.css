@@ -4530,3 +4530,159 @@ body.workspace-body-mode .contact-request-empty-card p {
     min-width: 640px;
   }
 }
+
+@media (max-width: 720px) {
+  body.workspace-body-mode {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  body.workspace-body-mode,
+  body.workspace-body-mode #root {
+    min-height: 100dvh;
+    height: auto;
+  }
+
+  .workspace-app-shell {
+    min-height: 100dvh;
+    height: auto;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      10px
+      max(12px, env(safe-area-inset-bottom));
+    overflow: visible;
+  }
+
+  .workspace-app-header {
+    position: sticky;
+    top: max(0px, env(safe-area-inset-top));
+    z-index: 70;
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .workspace-app-shell .app-header-inner {
+    gap: 12px;
+  }
+
+  .header-menu-shell {
+    position: static;
+  }
+
+  .header-dropdown-menu,
+  .profile-dropdown-menu {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 72px);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: calc(100dvh - 90px);
+    overflow-y: auto;
+    z-index: 95;
+  }
+
+  .workspace-app-body {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  body.workspace-body-mode .workspace-page,
+  body.workspace-body-mode .workspace-shell {
+    height: auto;
+    min-height: 0;
+  }
+
+  body.workspace-body-mode .workspace-page {
+    overflow: visible;
+  }
+
+  body.workspace-body-mode .workspace-shell {
+    flex-direction: column;
+    overflow: visible;
+    border-radius: 24px;
+  }
+
+  body.workspace-body-mode .workspace-sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    padding: 16px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  body.workspace-body-mode .sidebar-title {
+    margin-bottom: 8px;
+    font-size: 22px;
+  }
+
+  body.workspace-body-mode .sidebar-description {
+    margin-bottom: 14px;
+    font-size: 13px;
+  }
+
+  body.workspace-body-mode .sidebar-tabs {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(140px, 1fr);
+    gap: 10px;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0 6px;
+    scrollbar-width: none;
+  }
+
+  body.workspace-body-mode .sidebar-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.workspace-body-mode .sidebar-tab {
+    min-width: max-content;
+    min-height: 44px;
+    padding: 10px 12px;
+    white-space: nowrap;
+    border-radius: 14px;
+  }
+
+  body.workspace-body-mode .sidebar-boost-card {
+    margin-top: 16px;
+  }
+
+  body.workspace-body-mode .workspace-content {
+    padding: 12px;
+    overflow: visible;
+  }
+
+  body.workspace-body-mode .info-card {
+    padding: 12px 14px;
+  }
+
+  body.workspace-body-mode .content-card {
+    height: auto;
+    min-height: 0;
+    padding: 10px;
+    overflow: visible;
+  }
+
+  body.workspace-body-mode .workspace-mini-card,
+  body.workspace-body-mode .tool-card,
+  body.workspace-body-mode .info-card,
+  body.workspace-body-mode .content-card {
+    border-radius: 18px;
+  }
+
+  body.workspace-body-mode .billing-action-row,
+  body.workspace-body-mode .workspace-inline-action,
+  body.workspace-body-mode .settings-toolbar-row,
+  body.workspace-body-mode .settings-card-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.workspace-body-mode .settings-record-card,
+  body.workspace-body-mode .workspace-form-stack .workspace-mini-card,
+  body.workspace-body-mode .workspace-form-stack .settings-field-row {
+    padding: 14px;
+  }
+}

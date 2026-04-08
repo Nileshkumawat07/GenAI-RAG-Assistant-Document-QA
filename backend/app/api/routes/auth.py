@@ -156,8 +156,24 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
 
         device_rows = []
         for device_key, sessions in grouped.items():
-            ordered = sorted(sessions, key=lambda entry: entry.last_seen_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-            latest = ordered[0]
+            active_sessions = [entry for entry in sessions if not entry.is_revoked]
+            if not active_sessions:
+                continue
+
+            ordered = sorted(
+                active_sessions,
+                key=lambda entry: entry.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            )
+            current_session = next(
+                (
+                    entry
+                    for entry in ordered
+                    if current_token_id and entry.token_id == current_token_id and not entry.is_revoked
+                ),
+                None,
+            )
+            latest = current_session or ordered[0]
             device_rows.append(
                 DeviceItemResponse(
                     id=device_key,
@@ -165,14 +181,20 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                     deviceType=latest.device_type,
                     browserName=latest.browser_name,
                     osName=latest.os_name,
-                    trusted=any(bool(entry.trusted) for entry in sessions),
-                    isCurrent=bool(current_token_id and latest.token_id == current_token_id and not latest.is_revoked),
-                    sessionCount=len([entry for entry in sessions if not entry.is_revoked]),
+                    trusted=any(bool(entry.trusted) for entry in active_sessions),
+                    isCurrent=any(bool(current_token_id and entry.token_id == current_token_id and not entry.is_revoked) for entry in active_sessions),
+                    sessionCount=len(active_sessions),
                     lastSeenAt=serialize_datetime_utc(latest.last_seen_at),
                     ipAddress=latest.ip_address,
                     locationLabel=latest.location_label,
                 )
             )
+        device_rows.sort(
+            key=lambda row: (
+                0 if row.isCurrent else 1,
+                row.lastSeenAt or "",
+            )
+        )
         return device_rows
 
     def ensure_runtime_login_session_schema(db: Session) -> None:
@@ -474,48 +496,114 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             headers={"Content-Disposition": f'attachment; filename="admin-{section}.csv"'},
         )
 
-    def require_authenticated_user_id(
-        authorization: str | None = Header(default=None),
-        db: Session = Depends(get_db),
-    ) -> str:
-        if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Missing authorization token.")
+    def resolve_login_session(
+        db: Session,
+        *,
+        user_id: str,
+        token_id: str | None,
+        request: Request | None = None,
+    ) -> UserLoginSession | None:
+        if token_id:
+            direct_match = db.execute(
+                select(UserLoginSession).where(
+                    UserLoginSession.user_id == user_id,
+                    UserLoginSession.token_id == token_id,
+                )
+            ).scalar_one_or_none()
+            if direct_match:
+                return direct_match
 
-        token = authorization.split(" ", 1)[1].strip()
-        if not token:
-            raise HTTPException(status_code=401, detail="Missing authorization token.")
+        if request is None:
+            return None
 
-        try:
-            user_id, token_id = auth_service.verify_access_token_details(token)
-            if token_id:
-                login_session = db.execute(
-                    select(UserLoginSession).where(UserLoginSession.token_id == token_id)
-                ).scalar_one_or_none()
-                if login_session and login_session.is_revoked:
-                    raise AuthServiceError("This session has been signed out.")
-                if login_session:
-                    login_session.last_seen_at = datetime.now(timezone.utc)
-                    db.commit()
-            auth_service.get_user_by_id(db, user_id=user_id)
-            return user_id
-        except AuthServiceError as exc:
-            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        active_sessions = db.execute(
+            select(UserLoginSession)
+            .where(
+                UserLoginSession.user_id == user_id,
+                UserLoginSession.is_revoked.is_(False),
+            )
+            .order_by(UserLoginSession.last_seen_at.desc(), UserLoginSession.created_at.desc())
+        ).scalars().all()
+        if not active_sessions:
+            return None
+        if len(active_sessions) == 1:
+            return active_sessions[0]
 
-    def get_authenticated_session_context(
+        user_agent = request.headers.get("user-agent")
+        client_ip = extract_client_ip(request)
+        browser_name = extract_browser_name(user_agent)
+        os_name = extract_os_name(user_agent)
+        device_type = extract_device_type(user_agent)
+
+        ranked_matches: list[tuple[int, UserLoginSession]] = []
+        for session in active_sessions:
+            score = 0
+            if user_agent and session.user_agent == user_agent:
+                score += 8
+            if client_ip and session.ip_address == client_ip:
+                score += 4
+            if browser_name and session.browser_name == browser_name:
+                score += 2
+            if os_name and session.os_name == os_name:
+                score += 2
+            if device_type and session.device_type == device_type:
+                score += 1
+            if score > 0:
+                ranked_matches.append((score, session))
+
+        if not ranked_matches:
+            return None
+
+        ranked_matches.sort(
+            key=lambda item: (
+                item[0],
+                item[1].last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
+                item[1].created_at or datetime.min.replace(tzinfo=timezone.utc),
+            ),
+            reverse=True,
+        )
+        return ranked_matches[0][1]
+
+    def resolve_authenticated_session_context(
         authorization: str | None,
         db: Session,
+        request: Request | None = None,
     ) -> tuple[str, str | None]:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing authorization token.")
+
         token = authorization.split(" ", 1)[1].strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing authorization token.")
+
         try:
             user_id, token_id = auth_service.verify_access_token_details(token)
+            login_session = resolve_login_session(db, user_id=user_id, token_id=token_id, request=request)
+            if login_session and login_session.is_revoked:
+                raise AuthServiceError("This session has been signed out.")
+            if login_session:
+                token_id = login_session.token_id
+                login_session.last_seen_at = datetime.now(timezone.utc)
+                db.commit()
             auth_service.get_user_by_id(db, user_id=user_id)
             return user_id, token_id
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    def require_authenticated_user_id(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        db: Session = Depends(get_db),
+    ) -> str:
+        user_id, _ = resolve_authenticated_session_context(authorization, db, request)
+        return user_id
+
+    def get_authenticated_session_context(
+        authorization: str | None,
+        db: Session,
+        request: Request | None = None,
+    ) -> tuple[str, str | None]:
+        return resolve_authenticated_session_context(authorization, db, request)
 
     def serialize_user(user, token_id: str | None = None):
         is_admin = auth_service.is_admin_email(user.email)
@@ -606,50 +694,58 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
 
     @router.get("/session/current", response_model=AuthUserResponse)
     def get_current_session_user(
+        request: Request,
+        authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            authenticated_user_id, token_id = get_authenticated_session_context(authorization, db, request)
             user = auth_service.get_user_by_id(db, user_id=authenticated_user_id)
-            return serialize_user(user)
+            return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     @router.post("/settings/username", response_model=AuthUserResponse)
     def update_username(
         payload: UpdateUsernameRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            authenticated_user_id, token_id = get_authenticated_session_context(authorization, db, request)
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_username(db, user_id=authenticated_user_id, new_username=payload.newUsername)
-            return serialize_user(user)
+            return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/settings/email", response_model=AuthUserResponse)
     def update_email(
         payload: UpdateEmailRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            authenticated_user_id, token_id = get_authenticated_session_context(authorization, db, request)
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_email(db, user_id=authenticated_user_id, new_email=payload.newEmail)
-            return serialize_user(user)
+            return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/settings/profile", response_model=AuthUserResponse)
     def update_profile(
         payload: UpdateProfileRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            authenticated_user_id, token_id = get_authenticated_session_context(authorization, db, request)
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_profile(
@@ -660,21 +756,23 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 gender=payload.gender,
                 alternate_email=payload.alternateEmail,
             )
-            return serialize_user(user)
+            return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/settings/mobile", response_model=AuthUserResponse)
     def update_mobile(
         payload: UpdateMobileRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
-        authenticated_user_id: str = Depends(require_authenticated_user_id),
     ):
         try:
+            authenticated_user_id, token_id = get_authenticated_session_context(authorization, db, request)
             if payload.userId != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="You can only update your own account.")
             user = auth_service.update_mobile(db, user_id=authenticated_user_id, new_mobile=payload.newMobile)
-            return serialize_user(user)
+            return serialize_user(user, token_id=token_id)
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -732,10 +830,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
 
     @router.get("/settings/sessions", response_model=list[SessionItemResponse])
     def list_user_sessions(
+        request: Request,
         authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
     ):
-        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        user_id, current_token_id = get_authenticated_session_context(authorization, db, request)
         rows = db.execute(
             select(UserLoginSession)
             .where(UserLoginSession.user_id == user_id)
@@ -746,10 +845,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     @router.post("/settings/sessions/{session_id}/revoke")
     def revoke_user_session(
         session_id: str,
+        request: Request,
         authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
     ):
-        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        user_id, current_token_id = get_authenticated_session_context(authorization, db, request)
         session_row = db.execute(
             select(UserLoginSession).where(
                 UserLoginSession.id == session_id,
@@ -767,10 +867,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
 
     @router.post("/settings/sessions/revoke-all")
     def revoke_all_user_sessions(
+        request: Request,
         authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
     ):
-        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        user_id, current_token_id = get_authenticated_session_context(authorization, db, request)
         rows = db.execute(
             select(UserLoginSession).where(
                 UserLoginSession.user_id == user_id,
@@ -787,10 +888,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
 
     @router.get("/settings/devices", response_model=list[DeviceItemResponse])
     def list_user_devices(
+        request: Request,
         authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
     ):
-        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        user_id, current_token_id = get_authenticated_session_context(authorization, db, request)
         rows = db.execute(
             select(UserLoginSession)
             .where(UserLoginSession.user_id == user_id)
@@ -801,10 +903,11 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
     @router.post("/settings/devices/{session_id}/remove")
     def remove_user_device(
         session_id: str,
+        request: Request,
         authorization: str | None = Header(default=None),
         db: Session = Depends(get_db),
     ):
-        user_id, current_token_id = get_authenticated_session_context(authorization, db)
+        user_id, current_token_id = get_authenticated_session_context(authorization, db, request)
         rows = db.execute(
             select(UserLoginSession).where(
                 UserLoginSession.user_id == user_id,
