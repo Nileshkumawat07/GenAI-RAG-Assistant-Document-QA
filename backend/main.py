@@ -18,6 +18,7 @@ from app.api.routes.linked_providers import build_linked_provider_router
 from app.api.routes.management import build_management_router
 from app.api.routes.object_detection import build_object_detection_router
 from app.api.routes.payments import build_payment_router
+from app.api.routes.workspace_hub import build_workspace_hub_router
 from app.core.config import FRONTEND_ORIGIN
 from app.core.database import Base, engine
 import app.models  # Ensure ORM models are registered before create_all().
@@ -31,6 +32,7 @@ from app.services.otp_service import OTPService
 from app.services.payment_service import PaymentService
 from app.services.rag_service import RAGService
 from app.services.social_oauth_service import SocialOAuthService
+from app.services.workspace_hub_service import WorkspaceHubService
 
 
 def ensure_user_social_link_schema() -> None:
@@ -437,6 +439,7 @@ def create_app() -> FastAPI:
     admin_center_service = AdminCenterService(auth_service)
     social_oauth_service = SocialOAuthService()
     payment_service = PaymentService()
+    workspace_hub_service = WorkspaceHubService()
     ensure_social_oauth_config_seed(social_oauth_service)
     ensure_management_support_schema()
     ensure_reply_template_seed(management_service)
@@ -461,6 +464,7 @@ def create_app() -> FastAPI:
     app.include_router(build_admin_center_router(admin_center_service, auth_service))
     app.include_router(build_linked_provider_router(linked_provider_service, auth_service, social_oauth_service))
     app.include_router(build_payment_router(payment_service, auth_service))
+    app.include_router(build_workspace_hub_router(workspace_hub_service))
     app.include_router(build_document_router(rag_service))
     app.include_router(build_object_detection_router())
     app.include_router(build_image_generation_router())

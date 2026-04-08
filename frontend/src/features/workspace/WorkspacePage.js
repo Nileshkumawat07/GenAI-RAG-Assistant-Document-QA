@@ -4,6 +4,11 @@ import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import SettingsPanel from "./SettingsPanel";
+import AnalyticsPanel from "./AnalyticsPanel";
+import ChatHistoryPanel from "./ChatHistoryPanel";
+import DashboardPanel from "./DashboardPanel";
+import NotificationsPanel from "./NotificationsPanel";
+import TeamManagementPanel from "./TeamManagementPanel";
 import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser, updateManagementAccess } from "../auth/authApi";
 import {
   adminDeleteContactRequest,
@@ -33,6 +38,22 @@ import {
 import { requestJson } from "../../shared/api/http";
 import { getSessionId } from "../../shared/session/session";
 import { SETTINGS_TABS } from "./settingsCatalog";
+import {
+  addWorkspaceTeamMember,
+  createWorkspaceChatMessage,
+  createWorkspaceChatThread,
+  createWorkspaceTeam,
+  getWorkspaceAnalytics,
+  getWorkspaceChatMessages,
+  getWorkspaceChats,
+  getWorkspaceDashboard,
+  getWorkspaceNotifications,
+  getWorkspaceTeams,
+  getWorkspaceUsers,
+  markAllWorkspaceNotificationsRead,
+  markWorkspaceNotificationRead,
+  updateWorkspaceTeamMember,
+} from "./workspaceHubApi";
 
 const PRICING_PLAN_DETAILS = [
   {
@@ -441,7 +462,7 @@ const INFO_PAGE_CONFIG = {
 };
 
 function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onAccountDeleted }) {
-  const [activeSection, setActiveSection] = useState("document-retrieval");
+  const [activeSection, setActiveSection] = useState("dashboard");
   const [sessionId] = useState(() => getSessionId());
   const [selectedFile, setSelectedFile] = useState(null);
   const [question, setQuestion] = useState("");
@@ -527,6 +548,24 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     body: "",
     requiresApproval: false,
   });
+  const [workspaceDashboard, setWorkspaceDashboard] = useState(null);
+  const [workspaceNotifications, setWorkspaceNotifications] = useState([]);
+  const [workspaceAnalytics, setWorkspaceAnalytics] = useState(null);
+  const [workspaceThreads, setWorkspaceThreads] = useState([]);
+  const [workspaceMessages, setWorkspaceMessages] = useState([]);
+  const [workspaceTeams, setWorkspaceTeams] = useState([]);
+  const [workspaceUsers, setWorkspaceUsers] = useState([]);
+  const [workspaceHubLoading, setWorkspaceHubLoading] = useState(false);
+  const [workspaceHubError, setWorkspaceHubError] = useState("");
+  const [activeWorkspaceThreadId, setActiveWorkspaceThreadId] = useState("");
+  const [workspaceThreadTitle, setWorkspaceThreadTitle] = useState("");
+  const [workspaceThreadMessage, setWorkspaceThreadMessage] = useState("");
+  const [workspaceNewMessage, setWorkspaceNewMessage] = useState("");
+  const [workspaceTeamName, setWorkspaceTeamName] = useState("");
+  const [workspaceTeamDescription, setWorkspaceTeamDescription] = useState("");
+  const [selectedWorkspaceTeamId, setSelectedWorkspaceTeamId] = useState("");
+  const [selectedInviteUserId, setSelectedInviteUserId] = useState("");
+  const [selectedInviteRole, setSelectedInviteRole] = useState("member");
 
   const infoConfig = selectedInfoPage ? INFO_PAGE_CONFIG[selectedInfoPage] : null;
   const activeInfoTab = useMemo(() => {
@@ -1065,6 +1104,141 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }
   };
 
+  const handleWorkspaceThreadCreate = async () => {
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      const thread = await createWorkspaceChatThread({
+        title: workspaceThreadTitle,
+        openingMessage: workspaceThreadMessage,
+      });
+      setWorkspaceThreadTitle("");
+      setWorkspaceThreadMessage("");
+      setWorkspaceThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]);
+      setActiveWorkspaceThreadId(thread.id);
+      await loadWorkspaceThreadMessages(thread.id);
+      await loadWorkspaceHubData();
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to create thread.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
+  const handleWorkspaceMessageCreate = async () => {
+    if (!activeWorkspaceThreadId) return;
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      await createWorkspaceChatMessage(activeWorkspaceThreadId, {
+        role: "user",
+        content: workspaceNewMessage,
+      });
+      setWorkspaceNewMessage("");
+      await loadWorkspaceThreadMessages(activeWorkspaceThreadId);
+      const chats = await getWorkspaceChats();
+      setWorkspaceThreads(chats || []);
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to save message.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
+  const handleWorkspaceTeamCreate = async () => {
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      const team = await createWorkspaceTeam({
+        name: workspaceTeamName,
+        description: workspaceTeamDescription,
+      });
+      setWorkspaceTeamName("");
+      setWorkspaceTeamDescription("");
+      setWorkspaceTeams((current) => [team, ...current.filter((item) => item.id !== team.id)]);
+      setSelectedWorkspaceTeamId(team.id);
+      await loadWorkspaceHubData();
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to create team.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
+  const handleWorkspaceTeamMemberAdd = async () => {
+    if (!selectedWorkspaceTeamId || !selectedInviteUserId) return;
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      const updatedTeam = await addWorkspaceTeamMember(selectedWorkspaceTeamId, {
+        userId: selectedInviteUserId,
+        role: selectedInviteRole,
+      });
+      setSelectedInviteUserId("");
+      setWorkspaceTeams((current) => current.map((item) => (item.id === updatedTeam.id ? updatedTeam : item)));
+      await loadWorkspaceHubData();
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to add member.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
+  const handleWorkspaceTeamMemberUpdate = async (membershipId, payload) => {
+    if (!selectedWorkspaceTeamId) return;
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      const updatedTeam = await updateWorkspaceTeamMember(selectedWorkspaceTeamId, membershipId, payload);
+      setWorkspaceTeams((current) => current.map((item) => (item.id === updatedTeam.id ? updatedTeam : item)));
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to update member.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
+  const handleWorkspaceNotificationRead = async (notificationId) => {
+    try {
+      await markWorkspaceNotificationRead(notificationId);
+      setWorkspaceNotifications((current) =>
+        current.map((item) => (item.id === notificationId ? { ...item, isRead: true, readAt: new Date().toISOString() } : item))
+      );
+      setWorkspaceDashboard((current) =>
+        current
+          ? {
+              ...current,
+              unreadNotifications: Math.max((current.unreadNotifications || 0) - 1, 0),
+            }
+          : current
+      );
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to update notification.");
+    }
+  };
+
+  const handleWorkspaceNotificationsReadAll = async () => {
+    try {
+      await markAllWorkspaceNotificationsRead();
+      setWorkspaceNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      setWorkspaceDashboard((current) => (current ? { ...current, unreadNotifications: 0 } : current));
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to update notifications.");
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedInfoPage) {
+      loadWorkspaceHubData();
+    }
+  }, [selectedInfoPage, currentUser?.id]);
+
+  useEffect(() => {
+    if (!selectedInfoPage && activeSection === "chat-history") {
+      loadWorkspaceThreadMessages(activeWorkspaceThreadId);
+    }
+  }, [selectedInfoPage, activeSection, activeWorkspaceThreadId]);
+
   useEffect(() => {
     if (selectedInfoPage === "contact" && currentUser?.id) {
       loadContactRequests();
@@ -1275,6 +1449,51 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       setAdminError(deleteError.message || "Failed to delete admin request.");
     } finally {
       setAdminActionRequestId("");
+    }
+  };
+
+  const loadWorkspaceHubData = async () => {
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      const [dashboard, notifications, analytics, chats, teams, users] = await Promise.all([
+        getWorkspaceDashboard(),
+        getWorkspaceNotifications(),
+        getWorkspaceAnalytics(),
+        getWorkspaceChats(),
+        getWorkspaceTeams(),
+        getWorkspaceUsers(),
+      ]);
+      setWorkspaceDashboard(dashboard);
+      setWorkspaceNotifications(notifications || []);
+      setWorkspaceAnalytics(analytics);
+      setWorkspaceThreads(chats || []);
+      setWorkspaceTeams(teams || []);
+      setWorkspaceUsers(users || []);
+      setActiveWorkspaceThreadId((current) => current || chats?.[0]?.id || "");
+      setSelectedWorkspaceTeamId((current) => current || teams?.[0]?.id || "");
+    } catch (loadError) {
+      setWorkspaceHubError(loadError.message || "Failed to load workspace data.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
+  const loadWorkspaceThreadMessages = async (threadId) => {
+    if (!threadId) {
+      setWorkspaceMessages([]);
+      return;
+    }
+
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      const messages = await getWorkspaceChatMessages(threadId);
+      setWorkspaceMessages(messages || []);
+    } catch (loadError) {
+      setWorkspaceHubError(loadError.message || "Failed to load thread messages.");
+    } finally {
+      setWorkspaceHubLoading(false);
     }
   };
 
@@ -1533,7 +1752,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       ? "Transform your documents into an instant answer workspace with fast retrieval and precise responses."
       : activeSection === "object-detection"
         ? "Use Groq vision to inspect an uploaded image and return detected objects with counts and approximate locations."
-        : "Generate images from prompts with an SDXL Lightning pipeline that can use cached model files or download them on first use.";
+        : activeSection === "image-generation"
+          ? "Generate images from prompts with an SDXL Lightning pipeline that can use cached model files or download them on first use."
+          : activeSection === "dashboard"
+            ? "Open a concise command center for saved activity, unread work, and quick workspace signals."
+            : activeSection === "notifications"
+              ? "Review alerts, product updates, and team events in one structured notification feed."
+              : activeSection === "analytics"
+                ? "Track usage patterns across chats, notifications, and workspace teams."
+                : activeSection === "chat-history"
+                  ? "Save prompt threads and assistant notes so the workspace keeps context over time."
+                  : "Create and manage shared team workspaces with role-based member access.";
 
   const statusContent =
     activeSection === "document-retrieval" ? (
@@ -1547,10 +1776,35 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         <p className="status-item status-info">Object detection is ready.</p>
         <p className="status-item status-info">Upload an image to analyze visible objects.</p>
       </>
-    ) : (
+    ) : activeSection === "image-generation" ? (
       <>
         <p className="status-item status-info">Image generation is ready.</p>
         <p className="status-item status-info">Write a prompt and generate with SDXL Lightning. The first run may take longer while models load.</p>
+      </>
+    ) : activeSection === "dashboard" ? (
+      <>
+        <p className="status-item status-info">Workspace dashboard ready.</p>
+        <p className="status-item status-info">Refresh to pull the latest notifications, chats, and team counts.</p>
+      </>
+    ) : activeSection === "notifications" ? (
+      <>
+        <p className="status-item status-info">Notification center ready.</p>
+        <p className="status-item status-info">Mark individual alerts or clear all unread items.</p>
+      </>
+    ) : activeSection === "analytics" ? (
+      <>
+        <p className="status-item status-info">Analytics view ready.</p>
+        <p className="status-item status-info">Usage bars summarize the last seven days of activity.</p>
+      </>
+    ) : activeSection === "chat-history" ? (
+      <>
+        <p className="status-item status-info">Chat history is ready.</p>
+        <p className="status-item status-info">Create a thread, pick it from the list, and keep adding saved notes.</p>
+      </>
+    ) : (
+      <>
+        <p className="status-item status-info">Team management is ready.</p>
+        <p className="status-item status-info">Create workspaces, invite members, and update shared roles from one panel.</p>
       </>
     );
 
@@ -4017,6 +4271,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 ))
               : (
                 <>
+                  <button className={`sidebar-tab ${activeSection === "dashboard" ? "active" : ""}`} onClick={() => setActiveSection("dashboard")} type="button">
+                    Dashboard
+                  </button>
                   <button className={`sidebar-tab ${activeSection === "document-retrieval" ? "active" : ""}`} onClick={() => setActiveSection("document-retrieval")} type="button">
                     Document Retrieval
                   </button>
@@ -4026,6 +4283,18 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <button className={`sidebar-tab ${activeSection === "image-generation" ? "active" : ""}`} onClick={() => setActiveSection("image-generation")} type="button">
                     Image Generation
                   </button>
+                  <button className={`sidebar-tab ${activeSection === "notifications" ? "active" : ""}`} onClick={() => setActiveSection("notifications")} type="button">
+                    Notifications
+                  </button>
+                  <button className={`sidebar-tab ${activeSection === "analytics" ? "active" : ""}`} onClick={() => setActiveSection("analytics")} type="button">
+                    Analytics
+                  </button>
+                  <button className={`sidebar-tab ${activeSection === "chat-history" ? "active" : ""}`} onClick={() => setActiveSection("chat-history")} type="button">
+                    Chat History
+                  </button>
+                  <button className={`sidebar-tab ${activeSection === "team-management" ? "active" : ""}`} onClick={() => setActiveSection("team-management")} type="button">
+                    Team Management
+                  </button>
                 </>
               )}
           </div>
@@ -4033,7 +4302,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           {selectedInfoPage !== "settings" ? (
             <div className="sidebar-boost-card">
               <div className="sidebar-status">
-                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : "Image Generation Status"}</h4>
+                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "notifications" ? "Notification Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
                 {selectedInfoPage === "contact" ? (
                   <div className="workspace-form-stack">
                     <div className="status-feed">
@@ -4075,6 +4344,13 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           <div className={`content-card ${activeSection === "object-detection" || activeSection === "image-generation" ? "object-detection-mode" : ""}`}>
             {infoConfig ? (
               renderInfoContent()
+            ) : activeSection === "dashboard" ? (
+              <DashboardPanel
+                data={workspaceDashboard}
+                loading={workspaceHubLoading}
+                error={workspaceHubError}
+                onRefresh={loadWorkspaceHubData}
+              />
             ) : activeSection === "document-retrieval" ? (
               <DocumentRetrievalPanel
                 answer={answer}
@@ -4092,6 +4368,59 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
               />
             ) : activeSection === "object-detection" ? (
               <ObjectDetectionPanel />
+            ) : activeSection === "notifications" ? (
+              <NotificationsPanel
+                notifications={workspaceNotifications}
+                loading={workspaceHubLoading}
+                error={workspaceHubError}
+                onMarkRead={handleWorkspaceNotificationRead}
+                onMarkAllRead={handleWorkspaceNotificationsReadAll}
+                onRefresh={loadWorkspaceHubData}
+              />
+            ) : activeSection === "analytics" ? (
+              <AnalyticsPanel
+                data={workspaceAnalytics}
+                loading={workspaceHubLoading}
+                error={workspaceHubError}
+                onRefresh={loadWorkspaceHubData}
+              />
+            ) : activeSection === "chat-history" ? (
+              <ChatHistoryPanel
+                threads={workspaceThreads}
+                messages={workspaceMessages}
+                activeThreadId={activeWorkspaceThreadId}
+                threadTitle={workspaceThreadTitle}
+                threadMessage={workspaceThreadMessage}
+                newMessage={workspaceNewMessage}
+                loading={workspaceHubLoading}
+                error={workspaceHubError}
+                onThreadTitleChange={setWorkspaceThreadTitle}
+                onThreadMessageChange={setWorkspaceThreadMessage}
+                onCreateThread={handleWorkspaceThreadCreate}
+                onSelectThread={setActiveWorkspaceThreadId}
+                onNewMessageChange={setWorkspaceNewMessage}
+                onSendMessage={handleWorkspaceMessageCreate}
+              />
+            ) : activeSection === "team-management" ? (
+              <TeamManagementPanel
+                teams={workspaceTeams}
+                users={workspaceUsers}
+                selectedTeamId={selectedWorkspaceTeamId}
+                teamName={workspaceTeamName}
+                teamDescription={workspaceTeamDescription}
+                selectedInviteUserId={selectedInviteUserId}
+                selectedInviteRole={selectedInviteRole}
+                loading={workspaceHubLoading}
+                error={workspaceHubError}
+                onTeamNameChange={setWorkspaceTeamName}
+                onTeamDescriptionChange={setWorkspaceTeamDescription}
+                onCreateTeam={handleWorkspaceTeamCreate}
+                onSelectTeam={setSelectedWorkspaceTeamId}
+                onInviteUserChange={setSelectedInviteUserId}
+                onInviteRoleChange={setSelectedInviteRole}
+                onAddMember={handleWorkspaceTeamMemberAdd}
+                onUpdateMember={handleWorkspaceTeamMemberUpdate}
+              />
             ) : (
               <ImageGenerationPanel />
             )}

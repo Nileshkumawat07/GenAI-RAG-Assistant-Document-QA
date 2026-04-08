@@ -1,0 +1,117 @@
+from pydantic import BaseModel, Field
+
+
+class DashboardMetricResponse(BaseModel):
+    label: str
+    value: str
+    hint: str | None = None
+
+
+class DashboardActivityResponse(BaseModel):
+    id: str
+    title: str
+    detail: str
+    createdAt: str | None = None
+    tone: str = "info"
+
+
+class DashboardResponse(BaseModel):
+    metrics: list[DashboardMetricResponse] = Field(default_factory=list)
+    recentActivity: list[DashboardActivityResponse] = Field(default_factory=list)
+    unreadNotifications: int = 0
+    activeTeams: int = 0
+    activeChats: int = 0
+
+
+class WorkspaceNotificationResponse(BaseModel):
+    id: str
+    category: str
+    title: str
+    message: str
+    actionUrl: str | None = None
+    isRead: bool = False
+    createdAt: str | None = None
+    readAt: str | None = None
+
+
+class AnalyticsPointResponse(BaseModel):
+    label: str
+    value: int
+
+
+class AnalyticsResponse(BaseModel):
+    headline: dict = Field(default_factory=dict)
+    chatActivity: list[AnalyticsPointResponse] = Field(default_factory=list)
+    notificationActivity: list[AnalyticsPointResponse] = Field(default_factory=list)
+    teamDistribution: list[AnalyticsPointResponse] = Field(default_factory=list)
+
+
+class ChatThreadResponse(BaseModel):
+    id: str
+    title: str
+    lastMessagePreview: str | None = None
+    createdAt: str | None = None
+    updatedAt: str | None = None
+    lastMessageAt: str | None = None
+    messageCount: int = 0
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    createdAt: str | None = None
+
+
+class CreateChatThreadRequest(BaseModel):
+    title: str
+    openingMessage: str | None = None
+
+
+class CreateChatMessageRequest(BaseModel):
+    role: str = "user"
+    content: str
+
+
+class TeamMemberResponse(BaseModel):
+    id: str
+    userId: str
+    role: str
+    status: str
+    joinedAt: str | None = None
+    createdAt: str | None = None
+    userName: str | None = None
+    userEmail: str | None = None
+
+
+class WorkspaceUserSummaryResponse(BaseModel):
+    id: str
+    fullName: str
+    email: str
+
+
+class TeamWorkspaceResponse(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    isPersonal: bool = False
+    createdAt: str | None = None
+    updatedAt: str | None = None
+    ownerUserId: str
+    memberCount: int = 0
+    members: list[TeamMemberResponse] = Field(default_factory=list)
+
+
+class CreateTeamWorkspaceRequest(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class AddTeamMemberRequest(BaseModel):
+    userId: str
+    role: str = "member"
+
+
+class UpdateTeamMemberRequest(BaseModel):
+    role: str | None = None
+    status: str | None = None

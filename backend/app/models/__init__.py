@@ -18,6 +18,11 @@ from app.models.user import User
 from app.models.user_archive import UserArchive
 from app.models.user_login_session import UserLoginSession
 from app.models.user_setting import UserSetting
+from app.models.workspace_chat_message import WorkspaceChatMessage
+from app.models.workspace_chat_thread import WorkspaceChatThread
+from app.models.workspace_notification import WorkspaceNotification
+from app.models.team_member import TeamMember
+from app.models.team_workspace import TeamWorkspace
 
 __all__ = [
     "User",
@@ -44,4 +49,9 @@ __all__ = [
     "UserArchive",
     "UserLoginSession",
     "UserSetting",
+    "WorkspaceNotification",
+    "WorkspaceChatThread",
+    "WorkspaceChatMessage",
+    "TeamWorkspace",
+    "TeamMember",
 ]

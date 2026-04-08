@@ -1,7 +1,9 @@
 email-validator
+alembic
 pypdf
 SQLAlchemy
 pymysql
 cryptography
 razorpay
 reportlab
+pytest
