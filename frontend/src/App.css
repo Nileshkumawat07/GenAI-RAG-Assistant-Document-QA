@@ -4048,6 +4048,14 @@ body.workspace-body-mode .admin-table-action-button:hover {
   transform: translateY(-1px);
 }
 
+body.workspace-body-mode .admin-table-action-group {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 body.workspace-body-mode .admin-table-empty {
   color: var(--muted);
   font-style: italic;

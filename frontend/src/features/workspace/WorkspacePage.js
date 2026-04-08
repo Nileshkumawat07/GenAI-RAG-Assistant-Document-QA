@@ -1102,12 +1102,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     try {
       setManagementToggleUserId(userId);
       setAdminError("");
-      const updatedUser = await updateManagementAccess({
+      await updateManagementAccess({
         userId,
         isManagement: nextIsManagement,
       });
       await loadAdministrationData();
-      setSelectedAdminUserId(updatedUser.id);
+      if (!nextIsManagement) {
+        setSelectedAdminUserId("");
+      }
     } catch (toggleError) {
       setAdminError(toggleError.message || "Failed to update management access.");
     } finally {
@@ -1903,8 +1905,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           "email",
           "mobile",
           "created_at",
-          "__view_user__",
-          "__remove_management__",
+          "__management_actions__",
         ];
 
         return (
@@ -1946,10 +1947,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                           {tableColumns.map((columnName) => (
                             <th key={columnName}>
                               <span>
-                                {columnName === "__view_user__"
-                                  ? "View Profile"
-                                  : columnName === "__remove_management__"
-                                    ? "Remove"
+                                {columnName === "__management_actions__"
+                                  ? "Action"
                                     : prettifyKey(columnName)}
                               </span>
                             </th>
@@ -1962,23 +1961,24 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                             <tr key={`management-user-${index}`}>
                               {tableColumns.map((columnName) => (
                                 <td key={`management-user-${index}-${columnName}`}>
-                                  {columnName === "__view_user__" ? (
-                                    <button
-                                      type="button"
-                                      className="admin-table-action-button"
-                                      onClick={() => setSelectedAdminUserId(row.id)}
-                                    >
-                                      View Profile
-                                    </button>
-                                  ) : columnName === "__remove_management__" ? (
-                                    <button
-                                      type="button"
-                                      className="admin-table-action-button danger-tone"
-                                      onClick={() => handleManagementAccessToggle(row.id, false)}
-                                      disabled={managementToggleUserId === row.id}
-                                    >
-                                      {managementToggleUserId === row.id ? "Removing..." : "Remove"}
-                                    </button>
+                                  {columnName === "__management_actions__" ? (
+                                    <div className="admin-table-action-group">
+                                      <button
+                                        type="button"
+                                        className="admin-table-action-button"
+                                        onClick={() => setSelectedAdminUserId(row.id)}
+                                      >
+                                        View Profile
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="admin-table-action-button danger-tone"
+                                        onClick={() => handleManagementAccessToggle(row.id, false)}
+                                        disabled={managementToggleUserId === row.id}
+                                      >
+                                        {managementToggleUserId === row.id ? "Removing..." : "Remove"}
+                                      </button>
+                                    </div>
                                   ) : (
                                     renderDatabaseCell(columnName, row[columnName])
                                   )}
@@ -2970,7 +2970,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 ))}
               </div>
 
-              {isAdmin && selectedAdminUserDetails.userRow.id !== currentUser?.id ? (
+              {isAdmin && selectedAdminUserDetails.userRow.id !== currentUser?.id && !(selectedInfoPage === "administration" && activeInfoTab === "management") ? (
                 <div className="admin-toolbar">
                   <div className="admin-toolbar-copy">
                     <h4>Management Permission</h4>
