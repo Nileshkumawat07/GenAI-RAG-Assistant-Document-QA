@@ -422,6 +422,7 @@ const INFO_PAGE_CONFIG = {
     tabs: [
       { id: "overview", label: "Overview", heading: "Management Overview" },
       { id: "requests", label: "Contact Requests", heading: "Contact Request Queue" },
+      { id: "users", label: "Users", heading: "Management Users" },
       { id: "support", label: "Support", heading: "Support Request Table" },
     ],
   },
@@ -2289,7 +2290,10 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         );
       }
 
-      if (activeInfoTab === "management" && selectedInfoPage === "administration") {
+      if (
+        (activeInfoTab === "management" && selectedInfoPage === "administration") ||
+        (activeInfoTab === "users" && selectedInfoPage === "management")
+      ) {
         const tableColumns = [
           "publicUserCode",
           "fullName",
@@ -2399,26 +2403,30 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                                       >
                                         View Profile
                                       </button>
-                                      <button
-                                        type="button"
-                                        className="admin-table-action-button"
-                                        onClick={() => handleManagementSuspendToggle(row.id, !row.accessSuspended)}
-                                        disabled={managementToggleUserId === row.id}
-                                      >
-                                        {managementToggleUserId === row.id
-                                          ? "Updating..."
-                                          : row.accessSuspended
-                                            ? "Resume"
-                                            : "Suspend"}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="admin-table-action-button danger-tone"
-                                        onClick={() => handleManagementAccessToggle(row.id, false)}
-                                        disabled={managementToggleUserId === row.id}
-                                      >
-                                        {managementToggleUserId === row.id ? "Removing..." : "Remove"}
-                                      </button>
+                                      {isAdmin ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className="admin-table-action-button"
+                                            onClick={() => handleManagementSuspendToggle(row.id, !row.accessSuspended)}
+                                            disabled={managementToggleUserId === row.id}
+                                          >
+                                            {managementToggleUserId === row.id
+                                              ? "Updating..."
+                                              : row.accessSuspended
+                                                ? "Resume"
+                                                : "Suspend"}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="admin-table-action-button danger-tone"
+                                            onClick={() => handleManagementAccessToggle(row.id, false)}
+                                            disabled={managementToggleUserId === row.id}
+                                          >
+                                            {managementToggleUserId === row.id ? "Removing..." : "Remove"}
+                                          </button>
+                                        </>
+                                      ) : null}
                                     </div>
                                   ) : (
                                     renderDatabaseCell(
