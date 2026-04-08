@@ -1,9 +1,10 @@
 import secrets
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.routes.auth import build_auth_router
@@ -18,6 +19,7 @@ from app.api.routes.payments import build_payment_router
 from app.core.config import FRONTEND_ORIGIN
 from app.core.database import Base, engine
 import app.models  # Ensure ORM models are registered before create_all().
+from app.models.user import User
 from app.services.auth_service import AuthService
 from app.services.contact_request_service import ContactRequestService
 from app.services.linked_provider_service import LinkedProviderService
@@ -196,6 +198,66 @@ def ensure_social_oauth_config_seed(social_oauth_service: SocialOAuthService) ->
         social_oauth_service.ensure_provider_rows(db)
 
 
+def ensure_manual_test_users(auth_service: AuthService) -> None:
+    manual_users = [
+        {
+            "full_name": "Rishvi Sharma",
+            "username": "rishvi",
+            "email": "rishvi@example.com",
+            "alternate_email": "rishvi.alt@example.com",
+            "mobile": "9000000001",
+            "gender": "Female",
+        },
+        {
+            "full_name": "Aastha Patil",
+            "username": "aastha",
+            "email": "aastha@example.com",
+            "alternate_email": "aastha.alt@example.com",
+            "mobile": "9000000002",
+            "gender": "Female",
+        },
+        {
+            "full_name": "Rutkar Deshmukh",
+            "username": "rutkar",
+            "email": "rutkar@example.com",
+            "alternate_email": "rutkar.alt@example.com",
+            "mobile": "9000000003",
+            "gender": "Male",
+        },
+    ]
+
+    with Session(engine) as db:
+        for item in manual_users:
+            existing_user = db.execute(
+                select(User).where(
+                    or_(
+                        User.username == item["username"],
+                        User.email == item["email"],
+                        User.mobile == item["mobile"],
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing_user:
+                continue
+
+            auth_service.register_user(
+                db,
+                full_name=item["full_name"],
+                username=item["username"],
+                date_of_birth=date(2000, 1, 1),
+                gender=item["gender"],
+                email=item["email"],
+                alternate_email=item["alternate_email"],
+                mobile=item["mobile"],
+                security_question="What is your favorite color?",
+                security_answer="Blue",
+                referral_code="DUMMY001",
+                password="Nilesh@9890",
+                email_verified=True,
+                mobile_verified=True,
+            )
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
     Base.metadata.create_all(bind=engine)
@@ -213,6 +275,7 @@ def create_app() -> FastAPI:
     social_oauth_service = SocialOAuthService()
     payment_service = PaymentService()
     ensure_social_oauth_config_seed(social_oauth_service)
+    ensure_manual_test_users(auth_service)
     base_dir = Path(__file__).resolve().parent
     frontend_build_dir = base_dir.parent / "frontend" / "build"
 
