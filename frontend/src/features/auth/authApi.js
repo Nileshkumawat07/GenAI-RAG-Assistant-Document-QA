@@ -293,6 +293,20 @@ export async function deleteAccount(payload) {
   );
 }
 
+export async function resetAccountSettings(payload) {
+  return requestJson(
+    "/auth/settings/reset",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to reset saved settings."
+  );
+}
+
 export async function fetchSettingsCategory(category) {
   return requestJson(
     `/auth/settings/categories/${encodeURIComponent(category)}`,

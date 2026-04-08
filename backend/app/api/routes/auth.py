@@ -7,7 +7,7 @@ from io import BytesIO, StringIO
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
-from sqlalchemy import inspect, select, text
+from sqlalchemy import delete, inspect, select, text
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -32,6 +32,7 @@ from app.schemas.auth import (
     DeleteAccountRequest,
     DownloadAccountDataRequest,
     LoginRequest,
+    ResetSettingsRequest,
     SendEmailVerificationRequest,
     SessionItemResponse,
     SignupRequest,
@@ -1246,6 +1247,20 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 media_type="application/pdf",
                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
+        except AuthServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/settings/reset")
+    def reset_settings(
+        payload: ResetSettingsRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            auth_service.verify_account_password(db, user_id=authenticated_user_id, password=payload.password)
+            db.execute(delete(UserSetting).where(UserSetting.user_id == authenticated_user_id))
+            db.commit()
+            return {"message": "Saved settings reset successfully."}
         except AuthServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

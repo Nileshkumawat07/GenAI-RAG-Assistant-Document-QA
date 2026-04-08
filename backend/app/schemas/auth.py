@@ -71,6 +71,10 @@ class DeleteAccountRequest(BaseModel):
     confirmationText: str
 
 
+class ResetSettingsRequest(BaseModel):
+    password: str
+
+
 class UpdateManagementAccessRequest(BaseModel):
     userId: str
     isManagement: bool

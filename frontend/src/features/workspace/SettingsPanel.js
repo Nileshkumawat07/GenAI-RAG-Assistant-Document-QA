@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   changePassword,
@@ -7,6 +7,7 @@ import {
   fetchSettingsCategory,
   listUserDevices,
   listUserSessions,
+  resetAccountSettings,
   removeUserDevice,
   revokeAllOtherSessions,
   revokeUserSession,
@@ -35,6 +36,7 @@ import { CATEGORY_FEATURES } from "./settingsCatalog";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_PATTERN = /^\d{10}$/;
 const PASSWORD_PATTERN = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$/;
+const STORED_SETTINGS_FORM_CATEGORIES = new Set(["security", "privacy", "notifications", "region"]);
 
 function buildCaptcha() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -198,7 +200,106 @@ function createActivityEntry(text) {
   return {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     text,
+    createdAt: new Date().toISOString(),
   };
+}
+
+function extractSettingsPayload(rawPayload) {
+  return rawPayload && typeof rawPayload === "object" ? rawPayload : {};
+}
+
+function extractSettingsFormPayload(rawPayload) {
+  const payload = extractSettingsPayload(rawPayload);
+  return payload.form && typeof payload.form === "object" ? payload.form : payload;
+}
+
+function normalizeActivityEntries(rawEntries) {
+  if (!Array.isArray(rawEntries)) {
+    return [];
+  }
+
+  return rawEntries
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const text = typeof entry.text === "string" ? entry.text.trim() : "";
+      if (!text) {
+        return null;
+      }
+
+      return {
+        id: typeof entry.id === "string" && entry.id.trim() ? entry.id : `activity-${index}`,
+        text,
+        createdAt:
+          typeof entry.createdAt === "string" && entry.createdAt.trim()
+            ? entry.createdAt
+            : new Date().toISOString(),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function applyStoredSettingsCategoryPayload(currentSettings, categoryId, rawPayload, currentUser) {
+  const nextSettings = normalizeStoredSettings(currentSettings, currentUser);
+  const formPayload = extractSettingsFormPayload(rawPayload);
+  const payload = extractSettingsPayload(rawPayload);
+
+  if (categoryId === "security") {
+    nextSettings.security = {
+      ...nextSettings.security,
+      twoStepEnabled: formPayload.twoStepEnabled === true || formPayload.twoStepEnabled === "true",
+    };
+  }
+
+  if (categoryId === "privacy") {
+    nextSettings.privacy = {
+      ...nextSettings.privacy,
+      allowAdPersonalization:
+        formPayload.allowAdPersonalization === undefined
+          ? nextSettings.privacy.allowAdPersonalization
+          : formPayload.allowAdPersonalization === true || formPayload.allowAdPersonalization === "true",
+      enableCookieTracking:
+        formPayload.enableCookieTracking === undefined
+          ? nextSettings.privacy.enableCookieTracking
+          : formPayload.enableCookieTracking === true || formPayload.enableCookieTracking === "true",
+    };
+  }
+
+  if (categoryId === "notifications") {
+    nextSettings.notifications = {
+      ...nextSettings.notifications,
+      emailAlerts:
+        formPayload.emailAlerts === undefined
+          ? nextSettings.notifications.emailAlerts
+          : formPayload.emailAlerts === true || formPayload.emailAlerts === "true",
+      smsNotifications:
+        formPayload.smsNotifications === undefined
+          ? nextSettings.notifications.smsNotifications
+          : formPayload.smsNotifications === true || formPayload.smsNotifications === "true",
+      inAppAlerts:
+        formPayload.inAppAlerts === undefined
+          ? nextSettings.notifications.inAppAlerts
+          : formPayload.inAppAlerts === true || formPayload.inAppAlerts === "true",
+    };
+  }
+
+  if (categoryId === "region") {
+    nextSettings.region = {
+      ...nextSettings.region,
+      timezone: typeof formPayload.timezone === "string" && formPayload.timezone.trim() ? formPayload.timezone : nextSettings.region.timezone,
+      dateFormat: typeof formPayload.dateFormat === "string" && formPayload.dateFormat.trim() ? formPayload.dateFormat : nextSettings.region.dateFormat,
+      country: typeof formPayload.country === "string" && formPayload.country.trim() ? formPayload.country : nextSettings.region.country,
+    };
+  }
+
+  if (categoryId === "activity") {
+    nextSettings.activity = normalizeActivityEntries(payload.entries);
+  }
+
+  return normalizeStoredSettings(nextSettings, currentUser);
 }
 
 function formatSettingsDateTime(value) {
@@ -526,11 +627,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   const mobileNewRecaptchaId = useRef(`settings-mobile-new-${Math.random().toString(36).slice(2, 10)}`);
   const passwordRecaptchaId = useRef(`settings-password-mobile-${Math.random().toString(36).slice(2, 10)}`);
 
-  const storageKey = useMemo(
-    () => (currentUser?.id ? `genai_workspace_settings_${currentUser.id}` : null),
-    [currentUser?.id]
-  );
-
   const profileName = currentUser?.fullName || currentUser?.name || "User";
   const profileEmail = currentUser?.email || "";
   const profileUsername = currentUser?.username || "user_profile";
@@ -576,23 +672,12 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   };
 
   useEffect(() => {
-    if (!storageKey) {
-      setStoredSettings(normalizeStoredSettings(null, currentUser));
-      return;
-    }
+    setStoredSettings(normalizeStoredSettings(null, currentUser));
+  }, [currentUser?.id]);
 
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) {
-        setStoredSettings(normalizeStoredSettings(null, currentUser));
-        return;
-      }
-
-      setStoredSettings(normalizeStoredSettings(JSON.parse(raw), currentUser));
-    } catch {
-      setStoredSettings(normalizeStoredSettings(null, currentUser));
-    }
-  }, [storageKey, currentUser]);
+  useEffect(() => {
+    setStoredSettings((current) => normalizeStoredSettings(current, currentUser));
+  }, [currentUser?.email, currentUser?.fullName, currentUser?.name, currentUser?.createdAt]);
 
   useEffect(() => {
     setProfileForm({
@@ -605,12 +690,6 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   }, [currentUser]);
 
   useEffect(() => {
-    if (storageKey) {
-      window.localStorage.setItem(storageKey, JSON.stringify(storedSettings));
-    }
-  }, [storageKey, storedSettings]);
-
-  useEffect(() => {
     if (!currentUser?.id || !CATEGORY_FEATURES[activeTab]) {
       return;
     }
@@ -621,11 +700,18 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       try {
         setCategoryLoading(true);
         const response = await fetchSettingsCategory(activeTab);
+        const payload = extractSettingsPayload(response?.payload);
         if (!ignore) {
           setCategoryPayloads((current) => ({
             ...current,
-            [activeTab]: normalizeCategorySettings(activeTab, response?.payload || {}),
+            [activeTab]: {
+              ...payload,
+              values: normalizeCategorySettings(activeTab, payload).values,
+            },
           }));
+          if (activeTab === "activity" || STORED_SETTINGS_FORM_CATEGORIES.has(activeTab)) {
+            setStoredSettings((current) => applyStoredSettingsCategoryPayload(current, activeTab, payload, currentUser));
+          }
         }
       } catch (error) {
         if (!ignore) {
@@ -923,17 +1009,94 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     setStoredSettings((current) => updater(current));
   };
 
-  const pushActivity = (text) => {
-    updateStoredSettings((current) => ({
+  const buildMergedCategoryPayload = (categoryId, patch = {}) => {
+    const currentPayload = extractSettingsPayload(categoryPayloads[categoryId]);
+    const nextForm =
+      patch.form || currentPayload.form
+        ? {
+            ...(currentPayload.form && typeof currentPayload.form === "object" ? currentPayload.form : {}),
+            ...(patch.form && typeof patch.form === "object" ? patch.form : {}),
+          }
+        : undefined;
+
+    return {
+      ...currentPayload,
+      ...patch,
+      ...(nextForm ? { form: nextForm } : {}),
+      values: {
+        ...createDefaultCategoryValues(categoryId),
+        ...(currentPayload.values || {}),
+        ...(patch.values || {}),
+      },
+    };
+  };
+
+  const syncCategoryPayloadState = (categoryId, payload) => {
+    const normalizedPayload = extractSettingsPayload(payload);
+    setCategoryPayloads((current) => ({
       ...current,
-      activity: [createActivityEntry(text), ...(current.activity || [])].slice(0, 10),
+      [categoryId]: {
+        ...normalizedPayload,
+        values: normalizeCategorySettings(categoryId, normalizedPayload).values,
+      },
     }));
+  };
+
+  const persistActivityEntries = async (entries) => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    const nextPayload = buildMergedCategoryPayload("activity", { entries });
+    syncCategoryPayloadState("activity", nextPayload);
+
+    try {
+      await saveSettingsCategory("activity", nextPayload);
+    } catch {
+      // Keep the local activity log visible even if persistence is temporarily unavailable.
+    }
+  };
+
+  const pushActivity = (text, options = {}) => {
+    let nextEntries = [];
+    updateStoredSettings((current) => {
+      nextEntries = [createActivityEntry(text), ...(current.activity || [])].slice(0, 20);
+      return {
+        ...current,
+        activity: nextEntries,
+      };
+    });
+
+    if (!options.skipPersistence) {
+      void persistActivityEntries(nextEntries);
+    }
   };
 
   const persistUser = (nextUser, successText) => {
     onUserUpdate(nextUser);
     setFeedback({ type: "success", text: successText });
     pushActivity(successText);
+  };
+
+  const saveStructuredCategory = async (categoryId, patch, successText, activityText) => {
+    try {
+      setCategorySaving(true);
+      const nextPayload = buildMergedCategoryPayload(categoryId, patch);
+      const response = await saveSettingsCategory(categoryId, nextPayload);
+      const responsePayload = extractSettingsPayload(response?.payload || nextPayload);
+      syncCategoryPayloadState(categoryId, responsePayload);
+      if (categoryId === "activity" || STORED_SETTINGS_FORM_CATEGORIES.has(categoryId)) {
+        setStoredSettings((current) => applyStoredSettingsCategoryPayload(current, categoryId, responsePayload, currentUser));
+      }
+      setFeedback({ type: "success", text: successText });
+      if (activityText) {
+        pushActivity(activityText, { skipPersistence: categoryId === "activity" });
+      }
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to save settings." });
+    } finally {
+      setCategorySaving(false);
+    }
   };
 
   const sendStoredMobileOtp = async ({
@@ -1028,20 +1191,29 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     pushActivity("Preference settings were updated.");
   };
 
-  const savePrivacy = () => {
-    setFeedback({ type: "success", text: "Privacy settings saved successfully." });
-    pushActivity("Privacy settings were updated.");
-  };
+  const savePrivacy = () =>
+    saveStructuredCategory(
+      "privacy",
+      { form: storedSettings.privacy },
+      "Privacy settings saved successfully.",
+      "Privacy settings were updated."
+    );
 
-  const saveNotifications = () => {
-    setFeedback({ type: "success", text: "Notification settings saved successfully." });
-    pushActivity("Notification settings were updated.");
-  };
+  const saveNotifications = () =>
+    saveStructuredCategory(
+      "notifications",
+      { form: storedSettings.notifications },
+      "Notification settings saved successfully.",
+      "Notification settings were updated."
+    );
 
-  const saveRegion = () => {
-    setFeedback({ type: "success", text: "Region settings saved successfully." });
-    pushActivity("Region settings were updated.");
-  };
+  const saveRegion = () =>
+    saveStructuredCategory(
+      "region",
+      { form: storedSettings.region },
+      "Region settings saved successfully.",
+      "Region settings were updated."
+    );
 
   const handleCancelSubscription = async () => {
     if (subscriptionStatus !== "premium") {
@@ -1161,16 +1333,30 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     }
   };
 
-  const resetAllSettings = () => {
+  const resetAllSettings = async () => {
     if (!resetPassword.trim()) {
-      setFeedback({ type: "error", text: "Enter your password before resetting local settings." });
+      setFeedback({ type: "error", text: "Enter your password before resetting saved settings." });
       return;
     }
 
-    setStoredSettings(createDefaultStoredSettings());
-    setResetPassword("");
-    setFeedback({ type: "success", text: "Local settings were reset to defaults." });
-    pushActivity("Local settings were reset.");
+    if (resetPassword.trim().length < 8) {
+      setFeedback({ type: "error", text: "Enter your full current password before resetting saved settings." });
+      return;
+    }
+
+    try {
+      setCategorySaving(true);
+      await resetAccountSettings({ password: resetPassword.trim() });
+      setStoredSettings(normalizeStoredSettings(null, currentUser));
+      setCategoryPayloads({});
+      setResetPassword("");
+      setFeedback({ type: "success", text: "Saved settings were reset successfully." });
+      pushActivity("Saved settings were reset to defaults.", { skipPersistence: true });
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message || "Failed to reset saved settings." });
+    } finally {
+      setCategorySaving(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -1263,7 +1449,12 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
     try {
       setCategorySaving(true);
       const payload = categoryPayloads[categoryId] || { values: createDefaultCategoryValues(categoryId) };
-      await saveSettingsCategory(categoryId, payload);
+      const response = await saveSettingsCategory(categoryId, payload);
+      const responsePayload = extractSettingsPayload(response?.payload || payload);
+      syncCategoryPayloadState(categoryId, responsePayload);
+      if (categoryId === "activity" || STORED_SETTINGS_FORM_CATEGORIES.has(categoryId)) {
+        setStoredSettings((current) => applyStoredSettingsCategoryPayload(current, categoryId, responsePayload, currentUser));
+      }
       setFeedback({ type: "success", text: successText });
       pushActivity(`${categoryId.replace(/-/g, " ")} settings were saved.`);
     } catch (error) {
@@ -2107,13 +2298,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
             <button
               className="primary-button"
               type="button"
-              onClick={() => {
-                setFeedback({
-                  type: "success",
-                  text: `Two-step verification ${storedSettings.security.twoStepEnabled ? "enabled" : "disabled"} successfully.`,
-                });
-                pushActivity("Two-step verification setting was updated.");
-              }}
+              onClick={() =>
+                saveStructuredCategory(
+                  "security",
+                  { form: { twoStepEnabled: storedSettings.security.twoStepEnabled } },
+                  `Two-step verification ${storedSettings.security.twoStepEnabled ? "enabled" : "disabled"} successfully.`,
+                  "Two-step verification setting was updated."
+                )
+              }
             >
               Save Two-Step Setting
             </button>
@@ -2492,15 +2684,20 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
         <div className="workspace-form-stack">
           <p className="tool-copy workspace-copy-paragraph">Recent account activities:</p>
           {activityEntries.length > 0 ? activityEntries.map((entry) => (
-            <div key={entry.id} className="workspace-mini-card"><p>{entry.text}</p></div>
+            <div key={entry.id} className="workspace-mini-card">
+              <p>{entry.text}</p>
+              <p className="tool-copy">Saved {formatSettingsRelativeTime(entry.createdAt)}</p>
+            </div>
           )) : <div className="workspace-mini-card"><p>No activity recorded yet.</p></div>}
           <button
             className="primary-button"
             type="button"
-            onClick={() => {
+            onClick={async () => {
               updateStoredSettings((current) => ({ ...current, activity: [] }));
+              await persistActivityEntries([]);
               setFeedback({ type: "success", text: "Activity log cleared." });
             }}
+            disabled={activityEntries.length === 0}
           >
             Clear Activity Log
           </button>
@@ -2993,12 +3190,14 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
       <>
       <div className="workspace-form-stack">
         <div className="workspace-info-grid">
-          <div className="workspace-mini-card"><h4>Help Center</h4><p>Browse guides, onboarding help, and workspace how-to articles.</p></div>
-          <div className="workspace-mini-card"><h4>Priority Support</h4><p>Reach the support team for billing, technical, and account assistance.</p></div>
-          <div className="workspace-mini-card"><h4>Feature Requests</h4><p>Submit product ideas and improvement requests for future releases.</p></div>
-          <div className="workspace-mini-card"><h4>Release Updates</h4><p>See recent improvements, fixes, and updates across the assistant.</p></div>
+          <div className="workspace-mini-card"><h4>Support Member ID</h4><p>{currentUser?.publicUserCode || "Will appear after your account is fully provisioned."}</p></div>
+          <div className="workspace-mini-card"><h4>Primary Contact</h4><p>{profileEmail || "No email available"}</p></div>
+          <div className="workspace-mini-card"><h4>Current Plan</h4><p>{subscriptionPlanName}</p></div>
+          <div className="workspace-mini-card"><h4>Support Routing</h4><p>Use the contact and support ticket sections to create and track real requests for this account.</p></div>
         </div>
-        <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Support center is not enabled in this build." })}>Open Support Center</button>
+        <div className="workspace-mini-card">
+          <p>Support preferences saved below stay attached to your account and can be reused for future support interactions.</p>
+        </div>
       </div>
       {renderGenericCategorySection("support", "Support Preferences", "Save support-related preferences such as routing, availability, and self-service helpers.")}
       </>
@@ -3240,16 +3439,16 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
           ) : null}
           <div className="workspace-mini-card">
             <h4>Danger Zone</h4>
-            <p>Use these actions carefully. They affect local settings and permanent account state.</p>
+            <p>Use these actions carefully. They affect saved account settings and permanent account state.</p>
           </div>
           <input
             className="auth-input workspace-static-input"
-            placeholder="Enter your password to reset local settings"
+            placeholder="Enter your password to reset saved settings"
             type="password"
             value={resetPassword}
             onChange={(event) => setResetPassword(event.target.value)}
           />
-          <button className="primary-button secondary-tone" type="button" onClick={resetAllSettings}>Reset Local Settings</button>
+          <button className="primary-button secondary-tone" type="button" onClick={resetAllSettings}>Reset Saved Settings</button>
           <button
             className="primary-button danger-tone"
             type="button"
@@ -3292,8 +3491,10 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   if (normalizedActiveTab === "terms") {
     return (
       <div className="workspace-form-stack">
-        <p className="tool-copy workspace-copy-paragraph">Please review the Terms and Conditions and Privacy Policy. Continuing usage means acceptance of all conditions.</p>
-        <button className="primary-button" type="button" onClick={() => setFeedback({ type: "info", text: "Full terms document is not enabled in this build." })}>Read Full Terms</button>
+        <p className="tool-copy workspace-copy-paragraph">Please review the Terms and Conditions and Privacy Policy for the current account before continuing.</p>
+        <div className="workspace-mini-card">
+          <p>Legal and consent preferences are saved through the related settings categories in this workspace.</p>
+        </div>
       </div>
     );
   }
@@ -3309,7 +3510,7 @@ function SettingsPanel({ activeTab, currentUser, onUserUpdate, onAccountDeleted 
   return (
     <div className="workspace-form-stack">
       <div className="workspace-mini-card">
-        <p>Resetting will revert local settings in this browser to their default values.</p>
+        <p>Resetting will revert saved account settings to their default values.</p>
       </div>
       <input
         className="auth-input workspace-static-input"
