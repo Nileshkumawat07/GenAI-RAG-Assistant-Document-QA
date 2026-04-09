@@ -301,151 +301,172 @@ function ObjectDetectionPanel() {
   };
 
   return (
-    <div className="feature-panel object-detection-panel-root">
-      <div className="insight-section">
-        <div className="insight-card">
-          <h3 className="tool-title">Object Detection Guidance</h3>
-          <p className="tool-copy">
-            Upload an image and Groq vision will identify the visible objects,
-            estimated counts, confidence, and approximate locations.
-          </p>
-        </div>
-      </div>
-
-      <div className="content-grid single-column">
-        <article className="tool-card object-detection-upload-card">
-          <div className="object-detection-top-head">
-            <div className="object-detection-head-block">
-              <h3 className="tool-title">Upload Image</h3>
-              <p className="tool-copy">Select an image or use your camera for object detection.</p>
+    <div className="workspace-premium-shell">
+      <section className="workspace-command-hero">
+        <article className="workspace-hub-card workspace-command-story workspace-tool-premium-hero">
+          <div className="workspace-command-topline">
+            <div>
+              <span className="workspace-command-kicker">Vision Analysis</span>
+              <h3 className="workspace-command-title">Premium object detection workspace for fast visual review and count-level output.</h3>
+              <p className="workspace-command-lede">
+                Upload an image or capture one live, then convert the scene into a cleaner operational summary with object labels, counts, confidence, and locations.
+              </p>
             </div>
-
-            <div className="object-detection-head-block object-detection-result-head">
-              <div>
-                <h3 className="tool-title">Detection Result</h3>
-                <p className="tool-copy">Detected objects returned by the Groq vision model.</p>
-              </div>
-              <span className="answer-badge">
-                {result ? `${result.object_count} Objects` : "Waiting"}
-              </span>
+            <div className="workspace-chat-hero-pill">
+              <span>Objects found</span>
+              <strong>{result ? result.object_count : "0"}</strong>
             </div>
           </div>
 
-          <div className="object-detection-upload-layout">
-            <div className="object-detection-input-panel">
-              <div className="object-detection-upload-shell">
-                <input
-                  ref={uploadInputRef}
-                  className="hidden-file-input"
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp"
-                  onChange={handleSelectImage}
-                />
-                <input
-                  ref={cameraInputRef}
-                  className="hidden-file-input"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleSelectImage}
-                />
-                <button
-                  className="upload-box object-detection-upload-box"
-                  type="button"
-                  onClick={openUploadPicker}
-                >
-                  {isCameraOpen ? (
-                    <div className="camera-preview-shell object-detection-inline-camera">
-                      <video ref={videoRef} className="camera-preview" autoPlay playsInline muted />
-                      <canvas ref={canvasRef} className="camera-canvas" />
-                    </div>
-                  ) : previewUrl ? (
-                    <div className="upload-preview-content">
-                      <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
-                    </div>
-                  ) : (
-                    <>
-                      <span className="upload-icon">+</span>
-                      <strong>Choose an image</strong>
-                      <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
-                    </>
-                  )}
-                </button>
+          <div className="workspace-command-badge-row">
+            <article className="workspace-command-badge">
+              <span>Input types</span>
+              <strong>JPG / PNG / WEBP</strong>
+              <p>Camera-friendly and mobile-friendly image flow.</p>
+            </article>
+            <article className="workspace-command-badge">
+              <span>Capture mode</span>
+              <strong>{isCameraOpen ? "Live" : "Idle"}</strong>
+              <p>Switch between upload and direct camera capture.</p>
+            </article>
+            <article className="workspace-command-badge">
+              <span>Detection status</span>
+              <strong>{result ? "Ready" : "Waiting"}</strong>
+              <p>Run analysis to populate object summaries and evidence cards.</p>
+            </article>
+          </div>
+        </article>
 
-                <button
-                  className="upload-overlay-button upload-camera-button"
-                  type="button"
-                  onClick={handleCameraButtonClick}
-                  disabled={isStartingCamera}
-                >
-                  <span className="camera-icon" aria-hidden="true">
-                    {isCameraOpen ? "x" : "\uD83D\uDCF7"}
-                  </span>
-                  <span className="sr-only">
-                    {isStartingCamera ? "Opening camera" : isCameraOpen ? "Close camera" : "Open camera"}
-                  </span>
-                </button>
-
-                {isCameraOpen ? (
-                  <div className="camera-overlay-actions">
-                    <button className="primary-button camera-overlay-button" type="button" onClick={capturePhoto}>
-                      Capture Photo
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              {cameraError ? <p className="error-text">{cameraError}</p> : null}
+        <aside className="workspace-command-sidebar">
+          <section className="workspace-hub-card workspace-spotlight-panel">
+            <div className="workspace-spotlight-head">
+              <span className="workspace-spotlight-tag">Selected image</span>
             </div>
+            <strong>{selectedImage?.name || "No image loaded"}</strong>
+            <p>{selectedImage ? "Current image is staged for visual analysis." : "Choose an image or open the camera to start object detection."}</p>
+            <div className="workspace-focus-meta">
+              <span>{isCameraOpen ? "Camera open" : "Camera closed"}</span>
+              <span>{selectedImage ? "Ready to detect" : "No media selected"}</span>
+            </div>
+          </section>
+        </aside>
+      </section>
 
-            <div className="answer-box detection-answer-box detection-inline-box">
-              {error ? <p className="error-text">{error}</p> : null}
+      {(error || cameraError) ? <p className="error-text">{error || cameraError}</p> : null}
 
-              {result ? (
-                <div className="detection-results">
-                  <div className="detection-inline-summary">
-                    <p className="detection-summary-label">Summary</p>
-                    <p className="answer-paragraph">{result.summary}</p>
-                    <p className="detection-summary-meta">
-                      Total objects counted: {result.object_count}
-                    </p>
-                  </div>
-                  {result.objects.length ? (
-                    <div className="detection-results-grid">
-                      {result.objects.map((item, index) => (
-                        <article key={`${item.label}-${index}`} className="detection-object-card">
-                          <div className="detection-object-head">
-                            <h4>{item.label}</h4>
-                            <span className={`confidence-badge confidence-${item.confidence}`}>
-                              {item.confidence}
-                            </span>
-                          </div>
-                          <p className="detection-object-meta">Count: {item.count}</p>
-                          <p className="detection-object-meta">Location: {item.location}</p>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="answer-paragraph">No clear objects were detected.</p>
-                  )}
+      <section className="workspace-command-main">
+        <article className="workspace-hub-card workspace-tool-form-card">
+          <div className="workspace-section-heading">
+            <div>
+              <span className="workspace-hub-eyebrow">Visual input</span>
+              <h4>Select or capture an image</h4>
+            </div>
+            <span className="workspace-section-summary">Upload or camera</span>
+          </div>
+
+          <div className="object-detection-upload-shell workspace-premium-upload-shell">
+            <input
+              ref={uploadInputRef}
+              className="hidden-file-input"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp"
+              onChange={handleSelectImage}
+            />
+            <input
+              ref={cameraInputRef}
+              className="hidden-file-input"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleSelectImage}
+            />
+            <button className="upload-box object-detection-upload-box workspace-premium-upload-box" type="button" onClick={openUploadPicker}>
+              {isCameraOpen ? (
+                <div className="camera-preview-shell object-detection-inline-camera">
+                  <video ref={videoRef} className="camera-preview" autoPlay playsInline muted />
+                  <canvas ref={canvasRef} className="camera-canvas" />
+                </div>
+              ) : previewUrl ? (
+                <div className="upload-preview-content">
+                  <img src={previewUrl} alt="Object detection preview" className="upload-preview-image" />
                 </div>
               ) : (
-                <div className="detection-note detection-empty-state">
-                  Run object detection and the result will appear here.
-                </div>
+                <>
+                  <span className="upload-icon">+</span>
+                  <strong>Choose an image</strong>
+                  <small>Supported formats: JPG, JPEG, PNG, WEBP</small>
+                </>
               )}
-            </div>
+            </button>
+
+            <button
+              className="upload-overlay-button upload-camera-button"
+              type="button"
+              onClick={handleCameraButtonClick}
+              disabled={isStartingCamera}
+            >
+              <span className="camera-icon" aria-hidden="true">
+                {isCameraOpen ? "x" : "\uD83D\uDCF7"}
+              </span>
+              <span className="sr-only">
+                {isStartingCamera ? "Opening camera" : isCameraOpen ? "Close camera" : "Open camera"}
+              </span>
+            </button>
+
+            {isCameraOpen ? (
+              <div className="camera-overlay-actions">
+                <button className="hero-button hero-button-primary camera-overlay-button" type="button" onClick={capturePhoto}>
+                  Capture Photo
+                </button>
+              </div>
+            ) : null}
           </div>
 
-          <button
-            className="primary-button object-detection-action"
-            onClick={detectObjects}
-            disabled={!selectedImage || isDetecting}
-          >
+          <button className="hero-button hero-button-primary" onClick={detectObjects} disabled={!selectedImage || isDetecting}>
             {isDetecting ? "Detecting..." : "Detect Objects"}
           </button>
         </article>
-      </div>
+
+        <article className="workspace-hub-card workspace-tool-answer-card">
+          <div className="workspace-section-heading">
+            <div>
+              <span className="workspace-hub-eyebrow">Detection result</span>
+              <h4>Objects, confidence, and scene summary</h4>
+            </div>
+            <span className="answer-badge">{result ? `${result.object_count} Objects` : "Waiting"}</span>
+          </div>
+
+          <div className="answer-box workspace-tool-answer-box detection-inline-box">
+            {result ? (
+              <div className="detection-results">
+                <div className="detection-inline-summary">
+                  <p className="detection-summary-label">Summary</p>
+                  <p className="answer-paragraph">{result.summary}</p>
+                  <p className="detection-summary-meta">Total objects counted: {result.object_count}</p>
+                </div>
+                {result.objects.length ? (
+                  <div className="detection-results-grid">
+                    {result.objects.map((item, index) => (
+                      <article key={`${item.label}-${index}`} className="detection-object-card">
+                        <div className="detection-object-head">
+                          <h4>{item.label}</h4>
+                          <span className={`confidence-badge confidence-${item.confidence}`}>{item.confidence}</span>
+                        </div>
+                        <p className="detection-object-meta">Count: {item.count}</p>
+                        <p className="detection-object-meta">Location: {item.location}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="answer-paragraph">No clear objects were detected.</p>
+                )}
+              </div>
+            ) : (
+              <p>Run object detection and the result will appear here.</p>
+            )}
+          </div>
+        </article>
+      </section>
     </div>
   );
 }

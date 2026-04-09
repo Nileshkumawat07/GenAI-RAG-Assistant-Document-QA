@@ -5210,6 +5210,43 @@ body.workspace-body-mode .contact-request-empty-card p {
   background: rgba(255, 238, 236, 0.98);
 }
 
+.workspace-tool-premium-hero {
+  min-height: 100%;
+}
+
+.workspace-tool-form-card,
+.workspace-tool-answer-card {
+  min-height: 100%;
+}
+
+.workspace-tool-textarea {
+  min-height: 164px;
+  margin-bottom: 0;
+}
+
+.workspace-tool-answer-box {
+  min-height: 260px;
+}
+
+.workspace-tool-preview-box {
+  min-height: 320px;
+}
+
+.workspace-premium-upload-box {
+  min-height: 220px;
+  margin-bottom: 0;
+  background:
+    radial-gradient(circle at top right, rgba(92, 147, 255, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 247, 255, 0.95));
+  border-style: solid;
+  border-color: rgba(18, 61, 122, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.workspace-premium-upload-shell {
+  min-height: 280px;
+}
+
 .workspace-analytics-bars {
   display: grid;
   gap: 10px;
