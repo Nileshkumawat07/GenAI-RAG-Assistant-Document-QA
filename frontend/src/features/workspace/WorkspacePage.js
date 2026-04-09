@@ -1433,7 +1433,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         getWorkspaceTeams(),
         getWorkspaceUsers(),
       ]);
-      const [dashboardResult, , analyticsResult, chatsResult, teamsResult, usersResult] = results;
+      const [dashboardResult, notificationsResult, analyticsResult, chatsResult, teamsResult, usersResult] = results;
 
       if (dashboardResult.status === "fulfilled") {
         setWorkspaceDashboard(dashboardResult.value);
@@ -1460,8 +1460,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       if (usersResult.status === "fulfilled") {
         setWorkspaceUsers(usersResult.value || []);
       }
-
-      setWorkspaceHubError("");
+      const workspaceSectionErrors = [];
+      if (notificationsResult.status === "rejected") {
+        workspaceSectionErrors.push(notificationsResult.reason?.message || "Failed to load notifications.");
+      }
+      if (chatsResult.status === "rejected") {
+        workspaceSectionErrors.push(chatsResult.reason?.message || "Failed to load chat history.");
+      }
+      if (teamsResult.status === "rejected") {
+        workspaceSectionErrors.push(teamsResult.reason?.message || "Failed to load teams.");
+      }
+      if (usersResult.status === "rejected") {
+        workspaceSectionErrors.push(usersResult.reason?.message || "Failed to load workspace users.");
+      }
+      setWorkspaceHubError(workspaceSectionErrors[0] || "");
     } catch (loadError) {
       setWorkspaceHubError(loadError.message || "Failed to load workspace data.");
     } finally {

@@ -251,6 +251,7 @@ class WorkspaceHubService:
         return [self.serialize_thread(db, item) for item in self._user_threads(db, user_id)]
 
     def create_thread(self, db: Session, *, user_id: str, title: str, opening_message: str | None = None) -> dict:
+        self.ensure_user_bootstrap(db, user_id=user_id)
         cleaned_title = (title or "").strip()
         if len(cleaned_title) < 3:
             raise WorkspaceHubServiceError("Thread title must be at least 3 characters.")
@@ -278,6 +279,17 @@ class WorkspaceHubService:
                     created_at=now,
                 )
             )
+        db.add(
+            WorkspaceNotification(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                category="chat",
+                title="Chat thread saved",
+                message=f"Your thread '{cleaned_title}' was added to workspace history.",
+                action_url="#/workspace",
+                created_at=now,
+            )
+        )
         db.commit()
         db.refresh(thread)
         return self.serialize_thread(db, thread)
@@ -336,6 +348,7 @@ class WorkspaceHubService:
         ]
 
     def create_team(self, db: Session, *, user_id: str, name: str, description: str | None) -> dict:
+        self.ensure_user_bootstrap(db, user_id=user_id)
         cleaned_name = (name or "").strip()
         if len(cleaned_name) < 3:
             raise WorkspaceHubServiceError("Team name must be at least 3 characters.")
@@ -360,6 +373,17 @@ class WorkspaceHubService:
                 role="owner",
                 status="active",
                 joined_at=now,
+                created_at=now,
+            )
+        )
+        db.add(
+            WorkspaceNotification(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                category="team",
+                title="Team created",
+                message=f"Your shared workspace '{cleaned_name}' is ready.",
+                action_url="#/workspace",
                 created_at=now,
             )
         )
