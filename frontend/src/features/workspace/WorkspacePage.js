@@ -46,6 +46,7 @@ import {
   getWorkspaceChatMessages,
   getWorkspaceChats,
   getWorkspaceDashboard,
+  getWorkspaceNotifications,
   getWorkspaceTeams,
   getWorkspaceUsers,
   updateWorkspaceTeamMember,
