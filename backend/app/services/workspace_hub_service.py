@@ -24,11 +24,13 @@ class WorkspaceHubService:
     def ensure_user_bootstrap(self, db: Session, *, user_id: str) -> None:
         user = self._require_user(db, user_id)
         personal_team = db.execute(
-            select(TeamWorkspace).where(
+            select(TeamWorkspace)
+            .where(
                 TeamWorkspace.owner_user_id == user_id,
                 TeamWorkspace.is_personal.is_(True),
             )
-        ).scalar_one_or_none()
+            .order_by(TeamWorkspace.created_at.asc(), TeamWorkspace.id.asc())
+        ).scalars().first()
         if not personal_team:
             personal_team = TeamWorkspace(
                 id=str(uuid.uuid4()),
