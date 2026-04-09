@@ -33,7 +33,7 @@ class WorkspaceHubService:
             personal_team = TeamWorkspace(
                 id=str(uuid.uuid4()),
                 owner_user_id=user_id,
-                name=f"{user.full_name.split()[0]}'s Workspace",
+                name=self._personal_workspace_name(user),
                 description="Personal workspace for saved activity and collaboration setup.",
                 is_personal=True,
             )
@@ -588,6 +588,21 @@ class WorkspaceHubService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def _personal_workspace_name(self, user: User) -> str:
+        raw_name = (getattr(user, "full_name", None) or "").strip()
+        if raw_name:
+            return f"{raw_name.split()[0]}'s Workspace"
+
+        username = (getattr(user, "username", None) or "").strip()
+        if username:
+            return f"{username}'s Workspace"
+
+        email = (getattr(user, "email", None) or "").strip()
+        if email and "@" in email:
+            return f"{email.split('@', 1)[0]}'s Workspace"
+
+        return "My Workspace"
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:
         if not value:
