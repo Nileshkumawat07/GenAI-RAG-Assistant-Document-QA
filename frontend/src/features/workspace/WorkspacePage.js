@@ -42,6 +42,7 @@ import {
   createWorkspaceChatMessage,
   createWorkspaceChatThread,
   createWorkspaceTeam,
+  deleteWorkspaceChatThread,
   getWorkspaceAnalytics,
   getWorkspaceChatMessages,
   getWorkspaceChats,
@@ -49,6 +50,7 @@ import {
   getWorkspaceNotifications,
   getWorkspaceTeams,
   getWorkspaceUsers,
+  removeWorkspaceTeamMember,
   updateWorkspaceTeamMember,
 } from "./workspaceHubApi";
 
@@ -1143,6 +1145,24 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }
   };
 
+  const handleWorkspaceThreadDelete = async (threadId) => {
+    if (!threadId) return;
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      await deleteWorkspaceChatThread(threadId);
+      const chats = await getWorkspaceChats();
+      setWorkspaceThreads(chats || []);
+      const nextActiveThreadId = (chats || []).find((item) => item.id !== threadId)?.id || "";
+      setActiveWorkspaceThreadId(nextActiveThreadId);
+      await loadWorkspaceThreadMessages(nextActiveThreadId);
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to delete thread.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
   const handleWorkspaceTeamCreate = async () => {
     try {
       setWorkspaceHubLoading(true);
@@ -1191,6 +1211,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       setWorkspaceTeams((current) => current.map((item) => (item.id === updatedTeam.id ? updatedTeam : item)));
     } catch (error) {
       setWorkspaceHubError(error.message || "Failed to update member.");
+    } finally {
+      setWorkspaceHubLoading(false);
+    }
+  };
+
+  const handleWorkspaceTeamMemberRemove = async (membershipId) => {
+    if (!selectedWorkspaceTeamId) return;
+    try {
+      setWorkspaceHubLoading(true);
+      setWorkspaceHubError("");
+      const updatedTeam = await removeWorkspaceTeamMember(selectedWorkspaceTeamId, membershipId);
+      setWorkspaceTeams((current) => current.map((item) => (item.id === updatedTeam.id ? updatedTeam : item)));
+    } catch (error) {
+      setWorkspaceHubError(error.message || "Failed to remove member.");
     } finally {
       setWorkspaceHubLoading(false);
     }
@@ -4383,6 +4417,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 onSelectThread={setActiveWorkspaceThreadId}
                 onNewMessageChange={setWorkspaceNewMessage}
                 onSendMessage={handleWorkspaceMessageCreate}
+                onDeleteThread={handleWorkspaceThreadDelete}
               />
             ) : activeSection === "team-management" ? (
               <TeamManagementPanel
@@ -4403,6 +4438,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 onInviteRoleChange={setSelectedInviteRole}
                 onAddMember={handleWorkspaceTeamMemberAdd}
                 onUpdateMember={handleWorkspaceTeamMemberUpdate}
+                onRemoveMember={handleWorkspaceTeamMemberRemove}
               />
             ) : (
               <ImageGenerationPanel />

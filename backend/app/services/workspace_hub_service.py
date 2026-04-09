@@ -459,6 +459,27 @@ class WorkspaceHubService:
         db.refresh(message)
         return self.serialize_message(message)
 
+    def delete_thread(self, db: Session, *, user_id: str, thread_id: str) -> dict:
+        thread = self._require_thread(db, user_id=user_id, thread_id=thread_id)
+        deleted_title = thread.title
+        db.execute(
+            WorkspaceChatMessage.__table__.delete().where(WorkspaceChatMessage.thread_id == thread.id)
+        )
+        db.delete(thread)
+        db.add(
+            WorkspaceNotification(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                category="chat",
+                title="Chat thread removed",
+                message=f"'{deleted_title}' was removed from workspace history.",
+                action_url="#/workspace",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+        return {"deletedId": thread_id}
+
     def list_teams(self, db: Session, *, user_id: str) -> list[dict]:
         self.ensure_user_bootstrap(db, user_id=user_id)
         teams = self._user_teams(db, user_id)
@@ -472,6 +493,7 @@ class WorkspaceHubService:
                 "id": item.id,
                 "fullName": item.full_name,
                 "email": item.email,
+                "publicUserCode": item.public_user_code,
             }
             for item in users
             if not item.archived_at
@@ -582,6 +604,34 @@ class WorkspaceHubService:
         db.refresh(team)
         return self.serialize_team(db, team)
 
+    def remove_team_member(self, db: Session, *, actor_user_id: str, team_id: str, membership_id: str) -> dict:
+        team = self._require_team_owner_access(db, actor_user_id=actor_user_id, team_id=team_id)
+        member = db.execute(
+            select(TeamMember).where(TeamMember.id == membership_id, TeamMember.team_id == team.id)
+        ).scalar_one_or_none()
+        if not member:
+            raise WorkspaceHubServiceError("Team member was not found.")
+        if member.role == "owner":
+            raise WorkspaceHubServiceError("The team owner cannot be removed.")
+
+        removed_user_id = member.user_id
+        db.delete(member)
+        team.updated_at = datetime.now(timezone.utc)
+        db.add(
+            WorkspaceNotification(
+                id=str(uuid.uuid4()),
+                user_id=removed_user_id,
+                category="team",
+                title=f"Removed from {team.name}",
+                message="Your access to that shared workspace has been removed.",
+                action_url="#/workspace",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+        db.refresh(team)
+        return self.serialize_team(db, team)
+
     def serialize_notification(self, item: WorkspaceNotification) -> dict:
         return {
             "id": item.id,
@@ -595,17 +645,25 @@ class WorkspaceHubService:
         }
 
     def serialize_thread(self, db: Session, item: WorkspaceChatThread) -> dict:
-        message_count = db.execute(
-            select(func.count()).select_from(WorkspaceChatMessage).where(WorkspaceChatMessage.thread_id == item.id)
-        ).scalar_one()
+        messages = db.execute(
+            select(WorkspaceChatMessage)
+            .where(WorkspaceChatMessage.thread_id == item.id)
+            .order_by(WorkspaceChatMessage.created_at.asc())
+        ).scalars().all()
+        latest_message = messages[-1] if messages else None
+        message_count = len(messages)
         return {
             "id": item.id,
             "title": item.title,
             "lastMessagePreview": item.last_message_preview,
+            "lastMessageRole": latest_message.role if latest_message else None,
             "createdAt": self._serialize_datetime(item.created_at),
             "updatedAt": self._serialize_datetime(item.updated_at),
             "lastMessageAt": self._serialize_datetime(item.last_message_at),
             "messageCount": message_count,
+            "userMessageCount": len([message for message in messages if message.role == "user"]),
+            "assistantMessageCount": len([message for message in messages if message.role == "assistant"]),
+            "systemMessageCount": len([message for message in messages if message.role == "system"]),
         }
 
     def serialize_message(self, item: WorkspaceChatMessage) -> dict:
@@ -617,6 +675,7 @@ class WorkspaceHubService:
         }
 
     def serialize_team(self, db: Session, item: TeamWorkspace) -> dict:
+        owner = db.execute(select(User).where(User.id == item.owner_user_id)).scalar_one_or_none()
         members = db.execute(
             select(TeamMember, User)
             .join(User, User.id == TeamMember.user_id)
@@ -629,6 +688,7 @@ class WorkspaceHubService:
                 "userId": user.id,
                 "role": member.role,
                 "status": member.status,
+                "invitedByUserId": member.invited_by_user_id,
                 "joinedAt": self._serialize_datetime(member.joined_at),
                 "createdAt": self._serialize_datetime(member.created_at),
                 "userName": user.full_name,
@@ -644,7 +704,12 @@ class WorkspaceHubService:
             "createdAt": self._serialize_datetime(item.created_at),
             "updatedAt": self._serialize_datetime(item.updated_at),
             "ownerUserId": item.owner_user_id,
+            "ownerName": owner.full_name if owner else None,
+            "ownerEmail": owner.email if owner else None,
             "memberCount": len(serialized_members),
+            "activeMemberCount": len([member for member in serialized_members if member["status"] == "active"]),
+            "adminCount": len([member for member in serialized_members if member["role"] in {"owner", "admin"}]),
+            "pausedMemberCount": len([member for member in serialized_members if member["status"] != "active"]),
             "members": serialized_members,
         }
 

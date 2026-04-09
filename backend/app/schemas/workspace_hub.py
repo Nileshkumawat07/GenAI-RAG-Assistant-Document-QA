@@ -92,10 +92,14 @@ class ChatThreadResponse(BaseModel):
     id: str
     title: str
     lastMessagePreview: str | None = None
+    lastMessageRole: str | None = None
     createdAt: str | None = None
     updatedAt: str | None = None
     lastMessageAt: str | None = None
     messageCount: int = 0
+    userMessageCount: int = 0
+    assistantMessageCount: int = 0
+    systemMessageCount: int = 0
 
 
 class ChatMessageResponse(BaseModel):
@@ -120,6 +124,7 @@ class TeamMemberResponse(BaseModel):
     userId: str
     role: str
     status: str
+    invitedByUserId: str | None = None
     joinedAt: str | None = None
     createdAt: str | None = None
     userName: str | None = None
@@ -130,6 +135,7 @@ class WorkspaceUserSummaryResponse(BaseModel):
     id: str
     fullName: str
     email: str
+    publicUserCode: str | None = None
 
 
 class TeamWorkspaceResponse(BaseModel):
@@ -140,7 +146,12 @@ class TeamWorkspaceResponse(BaseModel):
     createdAt: str | None = None
     updatedAt: str | None = None
     ownerUserId: str
+    ownerName: str | None = None
+    ownerEmail: str | None = None
     memberCount: int = 0
+    activeMemberCount: int = 0
+    adminCount: int = 0
+    pausedMemberCount: int = 0
     members: list[TeamMemberResponse] = Field(default_factory=list)
 
 

@@ -75,6 +75,10 @@ def test_chat_thread_and_message_flow():
     assert message["role"] == "assistant"
     assert len(messages) == 2
     assert messages[-1]["content"] == "Saved answer"
+    refreshed_threads = service.list_threads(db, user_id="user-1")
+    assert refreshed_threads[0]["assistantMessageCount"] >= 1
+    assert refreshed_threads[0]["userMessageCount"] >= 1
+    assert refreshed_threads[0]["lastMessageRole"] == "assistant"
 
 
 def test_team_management_adds_member_and_updates_state():
@@ -113,3 +117,43 @@ def test_team_management_adds_member_and_updates_state():
 
     changed_member = next(item for item in updated_again["members"] if item["userId"] == "user-2")
     assert changed_member["role"] == "admin"
+    assert updated_again["activeMemberCount"] == 2
+    assert updated_again["adminCount"] == 2
+
+
+def test_thread_delete_and_member_remove_flow():
+    db = build_session()
+    db.add_all(
+        [
+            build_user("user-1", "one@example.com", "userone", "User One"),
+            build_user("user-2", "two@example.com", "usertwo", "User Two"),
+        ]
+    )
+    db.commit()
+    service = WorkspaceHubService()
+    service.ensure_user_bootstrap(db, user_id="user-1")
+
+    thread = service.create_thread(db, user_id="user-1", title="Temporary thread", opening_message="Draft")
+    deleted = service.delete_thread(db, user_id="user-1", thread_id=thread["id"])
+    threads_after_delete = service.list_threads(db, user_id="user-1")
+
+    team = service.create_team(db, user_id="user-1", name="Ops Team", description="Operations")
+    updated_team = service.add_team_member(
+        db,
+        actor_user_id="user-1",
+        team_id=team["id"],
+        target_user_id="user-2",
+        role="member",
+    )
+    removable_member = next(item for item in updated_team["members"] if item["userId"] == "user-2")
+    removed_team = service.remove_team_member(
+        db,
+        actor_user_id="user-1",
+        team_id=team["id"],
+        membership_id=removable_member["id"],
+    )
+
+    assert deleted["deletedId"] == thread["id"]
+    assert all(item["id"] != thread["id"] for item in threads_after_delete)
+    assert removed_team["memberCount"] == 1
+    assert all(item["userId"] != "user-2" for item in removed_team["members"])

@@ -60,6 +60,14 @@ export async function createWorkspaceChatMessage(threadId, payload) {
   );
 }
 
+export async function deleteWorkspaceChatThread(threadId) {
+  return requestJson(
+    `/workspace/chats/${encodeURIComponent(threadId)}`,
+    { method: "DELETE" },
+    "Failed to delete the chat thread."
+  );
+}
+
 export async function getWorkspaceTeams() {
   return requestJson("/workspace/teams", { method: "GET" }, "Failed to load teams.");
 }
@@ -101,5 +109,13 @@ export async function updateWorkspaceTeamMember(teamId, membershipId, payload) {
       body: JSON.stringify(payload),
     },
     "Failed to update the team member."
+  );
+}
+
+export async function removeWorkspaceTeamMember(teamId, membershipId) {
+  return requestJson(
+    `/workspace/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(membershipId)}`,
+    { method: "DELETE" },
+    "Failed to remove the team member."
   );
 }

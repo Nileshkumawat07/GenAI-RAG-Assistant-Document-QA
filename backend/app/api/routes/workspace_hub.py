@@ -118,6 +118,17 @@ def build_workspace_hub_router(workspace_hub_service: WorkspaceHubService) -> AP
         except WorkspaceHubServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.delete("/chats/{thread_id}")
+    def delete_thread(
+        thread_id: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            return workspace_hub_service.delete_thread(db, user_id=authenticated_user_id, thread_id=thread_id)
+        except WorkspaceHubServiceError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @router.get("/teams", response_model=list[TeamWorkspaceResponse])
     def list_teams(
         db: Session = Depends(get_db),
@@ -173,7 +184,7 @@ def build_workspace_hub_router(workspace_hub_service: WorkspaceHubService) -> AP
         payload: UpdateTeamMemberRequest,
         db: Session = Depends(get_db),
         authenticated_user_id: str = Depends(require_authenticated_user_id),
-    ):
+        ):
         try:
             return workspace_hub_service.update_team_member(
                 db,
@@ -182,6 +193,23 @@ def build_workspace_hub_router(workspace_hub_service: WorkspaceHubService) -> AP
                 membership_id=membership_id,
                 role=payload.role,
                 status=payload.status,
+            )
+        except WorkspaceHubServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.delete("/teams/{team_id}/members/{membership_id}", response_model=TeamWorkspaceResponse)
+    def remove_team_member(
+        team_id: str,
+        membership_id: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            return workspace_hub_service.remove_team_member(
+                db,
+                actor_user_id=authenticated_user_id,
+                team_id=team_id,
+                membership_id=membership_id,
             )
         except WorkspaceHubServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

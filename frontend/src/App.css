@@ -5016,6 +5016,200 @@ body.workspace-body-mode .contact-request-empty-card p {
   font-size: 12px;
 }
 
+.workspace-chat-premium-hero,
+.workspace-team-premium-hero {
+  min-height: 100%;
+}
+
+.workspace-chat-hero-pill {
+  min-width: 104px;
+  padding: 14px 16px;
+  border: 1px solid rgba(18, 61, 122, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  text-align: right;
+}
+
+.workspace-chat-hero-pill span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-soft);
+}
+
+.workspace-chat-hero-pill strong {
+  font-size: 34px;
+  color: var(--primary-deep);
+}
+
+.workspace-chat-compose-card,
+.workspace-chat-summary-card,
+.workspace-team-create-card,
+.workspace-team-health-card,
+.workspace-chat-library-card,
+.workspace-chat-transcript-card,
+.workspace-team-roster-card,
+.workspace-team-invite-card {
+  min-height: 100%;
+}
+
+.workspace-chat-thread-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.workspace-chat-thread-tile {
+  min-height: 156px;
+  align-items: stretch;
+}
+
+.workspace-chat-thread-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspace-chat-role-tag,
+.workspace-team-type-tag,
+.workspace-team-role-tag,
+.workspace-team-status-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(18, 61, 122, 0.12);
+  background: rgba(238, 245, 255, 0.92);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-chat-role-tag.is-assistant,
+.workspace-team-role-tag.is-admin,
+.workspace-team-role-tag.is-owner {
+  background: linear-gradient(180deg, rgba(12, 41, 84, 0.97), rgba(35, 84, 160, 0.94));
+  border-color: rgba(18, 61, 122, 0.24);
+  color: #ffffff;
+}
+
+.workspace-chat-role-tag.is-system {
+  background: rgba(241, 247, 255, 0.92);
+  color: #315e9d;
+}
+
+.workspace-team-type-tag.is-shared,
+.workspace-team-status-tag.is-active {
+  background: rgba(227, 245, 236, 0.96);
+  color: #1a6a45;
+  border-color: rgba(26, 106, 69, 0.16);
+}
+
+.workspace-team-type-tag.is-personal,
+.workspace-team-status-tag.is-paused {
+  background: rgba(255, 245, 228, 0.98);
+  color: #9b5d11;
+  border-color: rgba(155, 93, 17, 0.16);
+}
+
+.workspace-chat-message-stream {
+  display: grid;
+  gap: 14px;
+}
+
+.workspace-chat-bubble,
+.workspace-team-member-card {
+  padding: 16px 18px;
+  border: 1px solid rgba(18, 61, 122, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 24px rgba(18, 43, 85, 0.05);
+}
+
+.workspace-chat-bubble.is-user {
+  background: linear-gradient(180deg, rgba(238, 245, 255, 0.98), rgba(255, 255, 255, 0.95));
+}
+
+.workspace-chat-bubble.is-assistant {
+  background: linear-gradient(180deg, rgba(12, 41, 84, 0.98), rgba(35, 84, 160, 0.95));
+}
+
+.workspace-chat-bubble.is-assistant strong,
+.workspace-chat-bubble.is-assistant p,
+.workspace-chat-bubble.is-assistant span {
+  color: #ffffff;
+}
+
+.workspace-chat-bubble.is-assistant p {
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.workspace-chat-bubble-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.workspace-chat-bubble-head strong {
+  display: block;
+  font-size: 16px;
+}
+
+.workspace-chat-bubble-head span,
+.workspace-chat-bubble-head p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.workspace-chat-reply-box {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(18, 61, 122, 0.08);
+}
+
+.workspace-team-topline-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.workspace-team-invite-card .workspace-form-stack {
+  min-height: 100%;
+}
+
+.workspace-team-member-card {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-team-member-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-team-action-row {
+  flex-wrap: wrap;
+}
+
+.workspace-danger-button {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.22);
+  background: rgba(255, 245, 244, 0.94);
+}
+
+.workspace-danger-button:hover {
+  border-color: rgba(180, 35, 24, 0.34);
+  background: rgba(255, 238, 236, 0.98);
+}
+
 .workspace-analytics-bars {
   display: grid;
   gap: 10px;
@@ -5910,6 +6104,11 @@ body.workspace-body-mode .contact-request-empty-card p {
     grid-template-columns: 1fr;
   }
 
+  .workspace-team-topline-grid,
+  .workspace-chat-thread-grid {
+    grid-template-columns: 1fr;
+  }
+
   .workspace-command-topline,
   .workspace-spotlight-head,
   .workspace-section-heading,
@@ -5922,6 +6121,12 @@ body.workspace-body-mode .contact-request-empty-card p {
     flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
+  }
+
+  .workspace-chat-bubble-head,
+  .workspace-chat-thread-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .workspace-stream-item {
