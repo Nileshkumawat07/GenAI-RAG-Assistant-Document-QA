@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.routes.auth import build_auth_router
 from app.api.routes.admin_center import build_admin_center_router
 from app.api.routes.contact_requests import build_contact_request_router
+from app.api.routes.chat_management import build_chat_management_router
 from app.api.routes.documents import build_document_router
 from app.api.routes.frontend import build_frontend_router, mount_frontend
 from app.api.routes.health import build_health_router
@@ -26,6 +27,7 @@ from app.models.user import User
 from app.services.auth_service import AuthService
 from app.services.admin_center_service import AdminCenterService
 from app.services.contact_request_service import ContactRequestService
+from app.services.chat_management_service import ChatManagementService
 from app.services.linked_provider_service import LinkedProviderService
 from app.services.management_service import ManagementService
 from app.services.otp_service import OTPService
@@ -463,6 +465,7 @@ def create_app() -> FastAPI:
     social_oauth_service = SocialOAuthService()
     payment_service = PaymentService()
     workspace_hub_service = WorkspaceHubService()
+    chat_management_service = ChatManagementService(auth_service)
     ensure_social_oauth_config_seed(social_oauth_service)
     ensure_management_support_schema()
     ensure_reply_template_seed(management_service)
@@ -488,6 +491,7 @@ def create_app() -> FastAPI:
     app.include_router(build_linked_provider_router(linked_provider_service, auth_service, social_oauth_service))
     app.include_router(build_payment_router(payment_service, auth_service))
     app.include_router(build_workspace_hub_router(workspace_hub_service))
+    app.include_router(build_chat_management_router(chat_management_service))
     app.include_router(build_document_router(rag_service))
     app.include_router(build_object_detection_router())
     app.include_router(build_image_generation_router())

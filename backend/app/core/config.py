@@ -20,6 +20,8 @@ TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "8"))
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000").strip()
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").strip().rstrip("/")
 DOCUMENTS_DIR = Path(os.getenv("DOCUMENTS_DIR", str(BASE_DIR / "documents"))).resolve()
+CHAT_UPLOADS_DIR = Path(os.getenv("CHAT_UPLOADS_DIR", str(BASE_DIR / "chat_uploads"))).resolve()
+CHAT_UPLOAD_MAX_BYTES = int(os.getenv("CHAT_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
 EMBEDDING_MODEL_NAME = os.getenv(
     "EMBEDDING_MODEL_NAME",
     "all-MiniLM-L6-v2",

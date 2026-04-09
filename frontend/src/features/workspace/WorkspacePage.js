@@ -6,6 +6,7 @@ import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import SettingsPanel from "./SettingsPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
 import ChatHistoryPanel from "./ChatHistoryPanel";
+import ChatManagementPanel from "./ChatManagementPanel";
 import DashboardPanel from "./DashboardPanel";
 import TeamManagementPanel from "./TeamManagementPanel";
 import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser, updateManagementAccess } from "../auth/authApi";
@@ -1794,6 +1795,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             ? "Open a concise command center for saved activity, unread work, and quick workspace signals."
             : activeSection === "analytics"
               ? "Track usage patterns across chats, notifications, and workspace teams."
+              : activeSection === "chat"
+                ? "Discover users, manage friend requests, and run realtime one-to-one conversations from one production-ready workspace."
               : activeSection === "chat-history"
                 ? "Save prompt threads and assistant notes so the workspace keeps context over time."
                 : "Create and manage shared team workspaces with role-based member access.";
@@ -1824,6 +1827,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       <>
         <p className="status-item status-info">Analytics view ready.</p>
         <p className="status-item status-info">Usage bars summarize the last seven days of activity.</p>
+      </>
+    ) : activeSection === "chat" ? (
+      <>
+        <p className="status-item status-info">Chat management is ready.</p>
+        <p className="status-item status-info">Search users, handle requests, and message friends in realtime.</p>
       </>
     ) : activeSection === "chat-history" ? (
       <>
@@ -4321,6 +4329,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <button className={`sidebar-tab ${activeSection === "team-management" ? "active" : ""}`} onClick={() => setActiveSection("team-management")} type="button">
                     Team Management
                   </button>
+                  <button className={`sidebar-tab ${activeSection === "chat" ? "active" : ""}`} onClick={() => setActiveSection("chat")} type="button">
+                    Chat
+                  </button>
                 </>
               )}
           </div>
@@ -4328,7 +4339,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           {selectedInfoPage !== "settings" ? (
             <div className="sidebar-boost-card">
               <div className="sidebar-status">
-                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
+                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "chat" ? "Chat Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
                 {selectedInfoPage === "contact" ? (
                   <div className="workspace-form-stack">
                     <div className="status-feed">
@@ -4401,6 +4412,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 error={workspaceAnalyticsError}
                 onRefresh={loadWorkspaceHubData}
               />
+            ) : activeSection === "chat" ? (
+              <ChatManagementPanel currentUser={currentUser} />
             ) : activeSection === "chat-history" ? (
               <ChatHistoryPanel
                 threads={workspaceThreads}
