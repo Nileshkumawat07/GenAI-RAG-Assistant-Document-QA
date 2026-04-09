@@ -4938,10 +4938,18 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-hub-card {
   padding: 18px;
-  border-radius: 20px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 245, 255, 0.94));
   box-shadow: 0 14px 30px rgba(18, 43, 85, 0.08);
+}
+
+.workspace-hub-card-square {
+  border-radius: 4px;
+}
+
+.workspace-hub-card-compact {
+  min-height: 0;
 }
 
 .workspace-hub-card strong {
@@ -4967,9 +4975,13 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-hub-list-item {
   border: 1px solid rgba(18, 61, 122, 0.1);
-  border-radius: 16px;
+  border-radius: 4px;
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.82);
+}
+
+.workspace-hub-list-item-square {
+  border-radius: 4px;
 }
 
 .workspace-hub-list-item.is-active {
@@ -4979,6 +4991,15 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-hub-list-item.is-read {
   opacity: 0.84;
+}
+
+.workspace-hub-inline-meta {
+  display: inline-block;
+  margin-top: 0.35rem;
+  color: #41618f;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .workspace-hub-thread-button {

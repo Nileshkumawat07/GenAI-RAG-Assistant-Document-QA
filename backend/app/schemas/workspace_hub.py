@@ -11,13 +11,33 @@ class DashboardActivityResponse(BaseModel):
     id: str
     title: str
     detail: str
+    category: str | None = None
     createdAt: str | None = None
     tone: str = "info"
+
+
+class DashboardInsightResponse(BaseModel):
+    label: str
+    value: str
+    detail: str | None = None
+
+
+class DashboardCollectionItemResponse(BaseModel):
+    id: str
+    title: str
+    detail: str
+    meta: str | None = None
+    createdAt: str | None = None
 
 
 class DashboardResponse(BaseModel):
     metrics: list[DashboardMetricResponse] = Field(default_factory=list)
     recentActivity: list[DashboardActivityResponse] = Field(default_factory=list)
+    activityInsights: list[DashboardInsightResponse] = Field(default_factory=list)
+    recentChats: list[DashboardCollectionItemResponse] = Field(default_factory=list)
+    activeTeamsList: list[DashboardCollectionItemResponse] = Field(default_factory=list)
+    supportRequestsList: list[DashboardCollectionItemResponse] = Field(default_factory=list)
+    paymentHistory: list[DashboardCollectionItemResponse] = Field(default_factory=list)
     unreadNotifications: int = 0
     activeTeams: int = 0
     activeChats: int = 0
@@ -39,11 +59,33 @@ class AnalyticsPointResponse(BaseModel):
     value: int
 
 
+class AnalyticsBreakdownResponse(BaseModel):
+    label: str
+    value: int
+    hint: str | None = None
+
+
+class AnalyticsTimelineResponse(BaseModel):
+    label: str
+    chats: int = 0
+    messages: int = 0
+    notifications: int = 0
+    teams: int = 0
+    supportRequests: int = 0
+    payments: int = 0
+
+
 class AnalyticsResponse(BaseModel):
     headline: dict = Field(default_factory=dict)
     chatActivity: list[AnalyticsPointResponse] = Field(default_factory=list)
     notificationActivity: list[AnalyticsPointResponse] = Field(default_factory=list)
     teamDistribution: list[AnalyticsPointResponse] = Field(default_factory=list)
+    activityMix: list[AnalyticsBreakdownResponse] = Field(default_factory=list)
+    teamRoleDistribution: list[AnalyticsBreakdownResponse] = Field(default_factory=list)
+    notificationCategoryBreakdown: list[AnalyticsBreakdownResponse] = Field(default_factory=list)
+    supportStatusBreakdown: list[AnalyticsBreakdownResponse] = Field(default_factory=list)
+    paymentStatusBreakdown: list[AnalyticsBreakdownResponse] = Field(default_factory=list)
+    weeklyTimeline: list[AnalyticsTimelineResponse] = Field(default_factory=list)
 
 
 class ChatThreadResponse(BaseModel):

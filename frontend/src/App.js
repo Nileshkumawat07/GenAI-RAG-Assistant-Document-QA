@@ -13,6 +13,7 @@ import {
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
 import {
+  getWorkspaceDashboard,
   getWorkspaceNotifications,
   markAllWorkspaceNotificationsRead,
   markWorkspaceNotificationRead,
@@ -27,6 +28,7 @@ function App() {
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
   const [headerNotifications, setHeaderNotifications] = useState([]);
+  const [headerRecentActivity, setHeaderRecentActivity] = useState([]);
   const [headerNotificationsLoading, setHeaderNotificationsLoading] = useState(false);
 
   const buildRouteHash = (nextScreen, nextInfoPage = null) => {
@@ -206,10 +208,15 @@ function App() {
     }
     try {
       setHeaderNotificationsLoading(true);
-      const items = await getWorkspaceNotifications();
+      const [items, dashboard] = await Promise.all([
+        getWorkspaceNotifications(),
+        getWorkspaceDashboard(),
+      ]);
       setHeaderNotifications(items || []);
+      setHeaderRecentActivity(dashboard?.recentActivity || []);
     } catch {
       setHeaderNotifications([]);
+      setHeaderRecentActivity([]);
     } finally {
       setHeaderNotificationsLoading(false);
     }
@@ -275,6 +282,7 @@ function App() {
   useEffect(() => {
     if (!currentUser || screen !== "workspace") {
       setHeaderNotifications([]);
+      setHeaderRecentActivity([]);
       return;
     }
 
@@ -464,6 +472,29 @@ function App() {
                               ))
                             ) : (
                               <p className="header-dropdown-copy">No notifications yet.</p>
+                            )}
+                          </div>
+                          <div className="header-notification-menu-head">
+                            <div>
+                              <strong>Recent Activity</strong>
+                              <span>{headerRecentActivity.length} items</span>
+                            </div>
+                          </div>
+                          <div className="header-notification-list">
+                            {headerNotificationsLoading ? (
+                              <p className="header-dropdown-copy">Loading recent activity...</p>
+                            ) : headerRecentActivity.length > 0 ? (
+                              headerRecentActivity.slice(0, 6).map((item) => (
+                                <div key={item.id} className="header-dropdown-item header-notification-item is-read">
+                                  <span className="header-dropdown-title">{item.title}</span>
+                                  <span className="header-dropdown-copy">{item.detail}</span>
+                                  <span className="header-dropdown-copy">
+                                    {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Just now"}
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="header-dropdown-copy">No recent activity yet.</p>
                             )}
                           </div>
                         </div>

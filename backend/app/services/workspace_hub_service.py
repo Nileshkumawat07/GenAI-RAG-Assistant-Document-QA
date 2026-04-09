@@ -131,6 +131,7 @@ class WorkspaceHubService:
                     "id": item.id,
                     "title": item.title,
                     "detail": item.message,
+                    "category": item.category,
                     "createdAt": self._serialize_datetime(item.created_at),
                     "tone": "success" if item.is_read else "info",
                 }
@@ -141,17 +142,56 @@ class WorkspaceHubService:
                     "id": thread.id,
                     "title": f"Chat thread: {thread.title}",
                     "detail": thread.last_message_preview or "Recent workspace note saved.",
+                    "category": "chat",
                     "createdAt": self._serialize_datetime(thread.last_message_at or thread.updated_at),
                     "tone": "info",
                 }
             )
+        for team in teams[:2]:
+            recent_activity.append(
+                {
+                    "id": team.id,
+                    "title": f"Team workspace: {team.name}",
+                    "detail": team.description or "Shared workspace available for collaboration.",
+                    "category": "team",
+                    "createdAt": self._serialize_datetime(team.updated_at or team.created_at),
+                    "tone": "success" if not team.is_personal else "info",
+                }
+            )
+        for request in requests[:2]:
+            recent_activity.append(
+                {
+                    "id": request.id,
+                    "title": f"Support request: {request.title}",
+                    "detail": f"{request.category} | {request.status}",
+                    "category": "support",
+                    "createdAt": self._serialize_datetime(request.created_at),
+                    "tone": "warning" if request.status.lower() not in {"completed", "resolved", "closed"} else "success",
+                }
+            )
+        for transaction in transactions[:2]:
+            recent_activity.append(
+                {
+                    "id": transaction.id,
+                    "title": f"Payment: {transaction.plan_name}",
+                    "detail": f"{transaction.currency} {transaction.amount / 100:.2f} | {transaction.status}",
+                    "category": "payment",
+                    "createdAt": self._serialize_datetime(transaction.created_at),
+                    "tone": "success" if transaction.status.lower() == "verified" else "info",
+                }
+            )
         recent_activity = sorted(recent_activity, key=lambda item: item["createdAt"] or "", reverse=True)[:5]
+        unread_notifications = len([item for item in notifications if not item.is_read])
+        personal_teams = len([team for team in teams if team.is_personal])
+        shared_teams = max(len(teams) - personal_teams, 0)
+        active_support = len([item for item in requests if item.status.lower() not in {"completed", "resolved", "closed"}])
+        verified_payments = len([item for item in transactions if item.status.lower() == "verified"])
 
         return {
             "metrics": [
                 {
                     "label": "Unread Notifications",
-                    "value": str(len([item for item in notifications if not item.is_read])),
+                    "value": str(unread_notifications),
                     "hint": "Alerts waiting for your attention",
                 },
                 {
@@ -176,7 +216,51 @@ class WorkspaceHubService:
                 },
             ],
             "recentActivity": recent_activity,
-            "unreadNotifications": len([item for item in notifications if not item.is_read]),
+            "activityInsights": [
+                {
+                    "label": "Shared Workspaces",
+                    "value": str(shared_teams),
+                    "detail": "Team spaces shared with collaborators",
+                },
+                {
+                    "label": "Personal Workspaces",
+                    "value": str(personal_teams),
+                    "detail": "Private spaces reserved for your own activity",
+                },
+                {
+                    "label": "Open Support",
+                    "value": str(active_support),
+                    "detail": "Requests still awaiting a final outcome",
+                },
+                {
+                    "label": "Verified Payments",
+                    "value": str(verified_payments),
+                    "detail": "Successful subscription payments recorded",
+                },
+            ],
+            "recentChats": [self._serialize_dashboard_chat(db, item) for item in threads[:4]],
+            "activeTeamsList": [self._serialize_dashboard_team(db, item) for item in teams[:4]],
+            "supportRequestsList": [
+                {
+                    "id": item.id,
+                    "title": item.title,
+                    "detail": item.category,
+                    "meta": item.status,
+                    "createdAt": self._serialize_datetime(item.created_at),
+                }
+                for item in requests[:4]
+            ],
+            "paymentHistory": [
+                {
+                    "id": item.id,
+                    "title": item.plan_name,
+                    "detail": f"{item.currency} {item.amount / 100:.2f}",
+                    "meta": item.status,
+                    "createdAt": self._serialize_datetime(item.created_at),
+                }
+                for item in transactions[:4]
+            ],
+            "unreadNotifications": unread_notifications,
             "activeTeams": len(teams),
             "activeChats": len(threads),
         }
@@ -217,12 +301,18 @@ class WorkspaceHubService:
         self.ensure_user_bootstrap(db, user_id=user_id)
         notifications = self._user_notifications(db, user_id)
         teams = self._user_teams(db, user_id)
+        threads = self._user_threads(db, user_id)
+        messages = db.execute(
+            select(WorkspaceChatMessage).where(WorkspaceChatMessage.user_id == user_id)
+        ).scalars().all()
+        requests = db.execute(select(ContactRequest).where(ContactRequest.user_id == user_id)).scalars().all()
+        transactions = db.execute(
+            select(SubscriptionTransaction).where(SubscriptionTransaction.user_id == user_id)
+        ).scalars().all()
         chat_points = self._build_daily_counts(
             [
                 item.created_at
-                for item in db.execute(
-                    select(WorkspaceChatMessage).where(WorkspaceChatMessage.user_id == user_id)
-                ).scalars().all()
+                for item in messages
             ],
             days=7,
         )
@@ -233,19 +323,57 @@ class WorkspaceHubService:
                 select(func.count()).select_from(TeamMember).where(TeamMember.team_id == team.id)
             ).scalar_one()
             team_distribution.append({"label": team.name, "value": member_count})
+        team_memberships = db.execute(
+            select(TeamMember).where(TeamMember.user_id == user_id)
+        ).scalars().all()
 
         return {
             "headline": {
-                "chatThreads": len(self._user_threads(db, user_id)),
-                "messagesSaved": db.execute(
-                    select(func.count()).select_from(WorkspaceChatMessage).where(WorkspaceChatMessage.user_id == user_id)
-                ).scalar_one(),
+                "chatThreads": len(threads),
+                "messagesSaved": len(messages),
                 "notificationsReceived": len(notifications),
                 "teamsAvailable": len(teams),
+                "supportRequests": len(requests),
+                "paymentsLogged": len(transactions),
             },
             "chatActivity": chat_points,
             "notificationActivity": notification_points,
             "teamDistribution": team_distribution,
+            "activityMix": [
+                {"label": "Threads", "value": len(threads), "hint": "Saved chat containers"},
+                {"label": "Messages", "value": len(messages), "hint": "Messages stored across threads"},
+                {"label": "Notifications", "value": len(notifications), "hint": "Alerts and reminders generated"},
+                {"label": "Teams", "value": len(teams), "hint": "Personal and shared workspaces"},
+                {"label": "Support", "value": len(requests), "hint": "Tracked contact requests"},
+                {"label": "Payments", "value": len(transactions), "hint": "Billing and subscription records"},
+            ],
+            "teamRoleDistribution": self._build_breakdown(
+                [item.role for item in team_memberships],
+                hints={
+                    "owner": "Primary owner access",
+                    "admin": "Can manage members and updates",
+                    "member": "Standard collaborator access",
+                },
+            ),
+            "notificationCategoryBreakdown": self._build_breakdown(
+                [item.category for item in notifications],
+                hints={
+                    "welcome": "Workspace onboarding alerts",
+                    "product": "Product guidance and prompts",
+                    "chat": "Saved conversation events",
+                    "team": "Team and membership events",
+                },
+            ),
+            "supportStatusBreakdown": self._build_breakdown([item.status for item in requests], hints={}),
+            "paymentStatusBreakdown": self._build_breakdown([item.status for item in transactions], hints={}),
+            "weeklyTimeline": self._build_weekly_timeline(
+                messages=messages,
+                notifications=notifications,
+                teams=teams,
+                requests=requests,
+                transactions=transactions,
+                days=7,
+            ),
         }
 
     def list_threads(self, db: Session, *, user_id: str) -> list[dict]:
@@ -585,6 +713,83 @@ class WorkspaceHubService:
             key = day.isoformat()
             points.append({"label": day.strftime("%d %b"), "value": counts.get(key, 0)})
         return points
+
+    def _build_breakdown(self, values: list[str | None], *, hints: dict[str, str]) -> list[dict]:
+        counts: dict[str, int] = {}
+        for value in values:
+            label = (value or "unknown").strip() or "unknown"
+            counts[label] = counts.get(label, 0) + 1
+        return [
+            {
+                "label": key.replace("_", " ").title(),
+                "value": value,
+                "hint": hints.get(key.lower()),
+            }
+            for key, value in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        ]
+
+    def _build_weekly_timeline(
+        self,
+        *,
+        messages: list[WorkspaceChatMessage],
+        notifications: list[WorkspaceNotification],
+        teams: list[TeamWorkspace],
+        requests: list[ContactRequest],
+        transactions: list[SubscriptionTransaction],
+        days: int,
+    ) -> list[dict]:
+        today = datetime.now(timezone.utc).date()
+        chats_by_day = self._count_by_day([item.created_at for item in messages if item.role == "user"])
+        messages_by_day = self._count_by_day([item.created_at for item in messages])
+        notifications_by_day = self._count_by_day([item.created_at for item in notifications])
+        teams_by_day = self._count_by_day([item.created_at for item in teams])
+        requests_by_day = self._count_by_day([item.created_at for item in requests])
+        payments_by_day = self._count_by_day([item.created_at for item in transactions])
+        points = []
+        for offset in range(days - 1, -1, -1):
+            day = today - timedelta(days=offset)
+            key = day.isoformat()
+            points.append(
+                {
+                    "label": day.strftime("%d %b"),
+                    "chats": chats_by_day.get(key, 0),
+                    "messages": messages_by_day.get(key, 0),
+                    "notifications": notifications_by_day.get(key, 0),
+                    "teams": teams_by_day.get(key, 0),
+                    "supportRequests": requests_by_day.get(key, 0),
+                    "payments": payments_by_day.get(key, 0),
+                }
+            )
+        return points
+
+    def _count_by_day(self, dates: list[datetime | None]) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for value in dates:
+            if not value:
+                continue
+            key = self._ensure_utc(value).date().isoformat()
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def _serialize_dashboard_chat(self, db: Session, item: WorkspaceChatThread) -> dict:
+        serialized = self.serialize_thread(db, item)
+        return {
+            "id": item.id,
+            "title": item.title,
+            "detail": item.last_message_preview or "No preview yet.",
+            "meta": f"{serialized['messageCount']} messages",
+            "createdAt": self._serialize_datetime(item.last_message_at or item.updated_at or item.created_at),
+        }
+
+    def _serialize_dashboard_team(self, db: Session, item: TeamWorkspace) -> dict:
+        serialized = self.serialize_team(db, item)
+        return {
+            "id": item.id,
+            "title": item.name,
+            "detail": item.description or ("Personal workspace" if item.is_personal else "Shared workspace"),
+            "meta": f"{serialized['memberCount']} members",
+            "createdAt": self._serialize_datetime(item.updated_at or item.created_at),
+        }
 
     def _ensure_utc(self, value: datetime) -> datetime:
         if value.tzinfo is None:
