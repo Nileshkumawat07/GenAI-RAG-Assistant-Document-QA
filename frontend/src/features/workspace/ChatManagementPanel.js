@@ -231,7 +231,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     });
   }, [sendSocketPayload]);
 
-  const isConversationActive = useCallback((conversationType, conversationId, roomKey = "") => {
+  const isConversationActive = useCallback((conversationType, conversationId, roomKey = "", message = null) => {
     const activeConversation = selectedConversationRef.current;
     if (!activeConversation) return false;
     const currentUserId = currentUserIdRef.current;
@@ -241,6 +241,32 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       activeConversation.conversationId
     );
     const targetRoomKey = roomKey || buildConversationRoomKey(currentUserId, conversationType, conversationId);
+    if (
+      activeConversation.conversationType === "direct" &&
+      conversationType === "direct" &&
+      [
+        conversationId,
+        message?.conversationId,
+        message?.senderId,
+        message?.receiverId,
+      ].filter(Boolean).includes(activeConversation.conversationId)
+    ) {
+      return true;
+    }
+    if (
+      activeConversation.conversationType === "group" &&
+      conversationType === "group" &&
+      [conversationId, message?.conversationId, message?.groupId].filter(Boolean).includes(activeConversation.conversationId)
+    ) {
+      return true;
+    }
+    if (
+      activeConversation.conversationType === "community" &&
+      conversationType === "community" &&
+      [conversationId, message?.conversationId, message?.groupId].filter(Boolean).includes(activeConversation.conversationId)
+    ) {
+      return true;
+    }
     return (
       (conversationType === activeConversation.conversationType &&
         conversationId === activeConversation.conversationId) ||
@@ -337,7 +363,8 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
           const isActiveConversation = isConversationActive(
             payload.message.conversationType,
             payload.message.conversationId,
-            payload.roomKey
+            payload.roomKey,
+            payload.message
           );
 
           if (isActiveConversation) {
