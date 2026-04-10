@@ -20,7 +20,7 @@ export function getChatWebSocketUrl() {
   const configuredBase = (process.env.REACT_APP_API_BASE_URL || "").trim();
   const baseUrl = configuredBase || (window.location.hostname === "localhost" && window.location.port === "3000" ? "http://127.0.0.1:8000" : window.location.origin);
   const wsBase = baseUrl.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return `${wsBase}/chat/ws?token=${encodeURIComponent(token)}`;
+  return `wss://lyric-treasury-decisions-otherwise.trycloudflare.com/chat/ws`;
 }
 
 export async function getChatOverview() {
