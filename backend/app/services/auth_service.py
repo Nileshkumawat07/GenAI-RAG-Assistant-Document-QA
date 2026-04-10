@@ -38,6 +38,8 @@ class UserPayload:
     security_answer: str
     referral_code: str | None
     public_user_code: str | None
+    bio: str | None
+    profile_image_url: str | None
     is_management: bool
     management_access_suspended: bool
     management_granted_at: str | None
@@ -356,6 +358,7 @@ class AuthService:
         date_of_birth,
         gender: str,
         alternate_email: str | None,
+        bio: str | None = None,
     ) -> UserPayload:
         user = self._get_user_model_by_id(db, user_id)
         normalized_full_name = (full_name or "").strip()
@@ -378,6 +381,7 @@ class AuthService:
         user.date_of_birth = date_of_birth
         user.gender = normalized_gender
         user.alternate_email = normalized_alternate_email
+        user.bio = (bio or "").strip()[:280] or None
         db.commit()
         db.refresh(user)
         return self._serialize_user(user)
@@ -447,6 +451,8 @@ class AuthService:
             security_answer=user.security_answer,
             referral_code=user.referral_code,
             public_user_code=user.public_user_code,
+            bio=user.bio,
+            profile_image_url=user.profile_image_url,
             is_management=bool(user.is_management),
             management_access_suspended=bool(user.management_access_suspended),
             management_granted_at=user.management_granted_at.isoformat() if user.management_granted_at else None,

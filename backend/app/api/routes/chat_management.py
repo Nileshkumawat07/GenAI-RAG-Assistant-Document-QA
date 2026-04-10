@@ -6,9 +6,12 @@ from app.api.dependencies import require_authenticated_user_id
 from app.core.database import get_db
 from app.schemas.chat_management import (
     ChatListItemResponse,
+    ChatConversationPreferenceResponse,
+    ChatConversationSidebarResponse,
     ChatMessagePageResponse,
     ChatMessageResponse,
     ChatOverviewResponse,
+    ChatStorageSummaryResponse,
     ChatUserSummaryResponse,
     CommunityDetailResponse,
     CommunityGroupLinkRequest,
@@ -20,8 +23,10 @@ from app.schemas.chat_management import (
     FriendRequestResponse,
     GroupDetailResponse,
     GroupMembersRequest,
+    MessageReactionRequest,
     SendFriendRequestRequest,
     SendMessageRequest,
+    UpdateConversationPreferencesRequest,
     UpdateCommunityRequest,
     UpdateGroupMemberRoleRequest,
     UpdateGroupRequest,
@@ -280,6 +285,113 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.get("/conversations/{conversation_type}/{conversation_id}/sidebar", response_model=ChatConversationSidebarResponse)
+    async def get_conversation_sidebar(conversation_type: str, conversation_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
+        try:
+            return chat_management_service.get_conversation_sidebar(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.patch("/conversations/{conversation_type}/{conversation_id}/preferences", response_model=ChatConversationPreferenceResponse)
+    async def update_conversation_preferences(
+        conversation_type: str,
+        conversation_id: str,
+        payload: UpdateConversationPreferencesRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            result = chat_management_service.update_conversation_preferences(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+                is_muted=payload.isMuted,
+                is_pinned=payload.isPinned,
+                is_archived=payload.isArchived,
+                is_blocked=payload.isBlocked,
+                disappearing_mode=payload.disappearingMode,
+            )
+            await chat_management_service.emit_conversation_refresh(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/conversations/{conversation_type}/{conversation_id}/clear", response_model=ChatConversationPreferenceResponse)
+    async def clear_conversation(
+        conversation_type: str,
+        conversation_id: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            result = chat_management_service.clear_conversation(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            await chat_management_service.emit_conversation_refresh(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/conversations/{conversation_type}/{conversation_id}/storage", response_model=ChatStorageSummaryResponse)
+    async def get_conversation_storage(
+        conversation_type: str,
+        conversation_id: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            return chat_management_service.get_storage_summary(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/conversations/{conversation_type}/{conversation_id}/delete-media")
+    async def delete_conversation_media(
+        conversation_type: str,
+        conversation_id: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            result = chat_management_service.delete_conversation_media(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            await chat_management_service.emit_conversation_refresh(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.post("/conversations/{conversation_type}/{conversation_id}/background", response_model=ConversationBackgroundResponse)
     async def update_conversation_background(
         conversation_type: str,
@@ -342,7 +454,7 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
         try:
             conversation_type = payload.conversationType or "direct"
             conversation_id = payload.conversationId or payload.receiverId
-            if conversation_type == "direct" and not payload.receiverId:
+            if conversation_type == "direct" and not conversation_id:
                 raise ChatManagementServiceError("Receiver was not provided.")
             result = chat_management_service.send_conversation_text_message(db, current_user_id=authenticated_user_id, conversation_type=conversation_type, conversation_id=conversation_id or "", body=payload.body, reply_to_message_id=payload.replyToMessageId)
             await chat_management_service.emit_message_created(db, message_id=result["id"])
@@ -381,6 +493,51 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     async def edit_message(message_id: str, payload: EditMessageRequest, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         try:
             result = chat_management_service.edit_message(db, current_user_id=authenticated_user_id, message_id=message_id, body=payload.body)
+            await chat_management_service.emit_message_updated(db, message_id=message_id)
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/messages/{message_id}/reaction", response_model=ChatMessageResponse)
+    async def toggle_message_reaction(
+        message_id: str,
+        payload: MessageReactionRequest,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            result = chat_management_service.toggle_message_reaction(
+                db,
+                current_user_id=authenticated_user_id,
+                message_id=message_id,
+                emoji=payload.emoji,
+            )
+            await chat_management_service.emit_message_updated(db, message_id=message_id)
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/messages/{message_id}/star", response_model=ChatMessageResponse)
+    async def toggle_message_star(message_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
+        try:
+            result = chat_management_service.toggle_message_star(
+                db,
+                current_user_id=authenticated_user_id,
+                message_id=message_id,
+            )
+            await chat_management_service.emit_message_updated(db, message_id=message_id)
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/messages/{message_id}/pin", response_model=ChatMessageResponse)
+    async def toggle_message_pin(message_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
+        try:
+            result = chat_management_service.toggle_message_pin(
+                db,
+                current_user_id=authenticated_user_id,
+                message_id=message_id,
+            )
             await chat_management_service.emit_message_updated(db, message_id=message_id)
             return result
         except ChatManagementServiceError as exc:
@@ -427,6 +584,21 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    @router.post("/profile/photo")
+    async def upload_profile_photo(
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            return await chat_management_service.update_profile_photo(
+                db,
+                current_user_id=authenticated_user_id,
+                upload=file,
+            )
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.get("/conversation-assets/{conversation_type}/{conversation_key}/{file_name}")
     async def download_conversation_asset(conversation_type: str, conversation_key: str, file_name: str, token: str | None = Query(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
         current_user_id = resolve_download_user_id(authorization=authorization, token=token)
@@ -460,6 +632,13 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
                         conversation_type=(payload.get("conversationType") or "direct").strip(),
                         conversation_id=(payload.get("conversationId") or "").strip(),
                         is_typing=bool(payload.get("isTyping")),
+                    )
+                elif event_type == "stop_typing":
+                    await chat_management_service.handle_typing_event(
+                        user_id=authenticated_user_id,
+                        conversation_type=(payload.get("conversationType") or "direct").strip(),
+                        conversation_id=(payload.get("conversationId") or "").strip(),
+                        is_typing=False,
                     )
                 elif event_type == "active_chat":
                     await chat_management_service.handle_active_conversation(

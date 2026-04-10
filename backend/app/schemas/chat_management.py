@@ -6,6 +6,8 @@ class ChatUserSummaryResponse(BaseModel):
     username: str
     fullName: str
     avatarLabel: str
+    imageUrl: str | None = None
+    bio: str | None = None
     presenceStatus: str = "offline"
     lastSeenAt: str | None = None
     relationshipState: str = "none"
@@ -39,6 +41,8 @@ class ChatListItemResponse(BaseModel):
     memberCount: int = 0
     role: str | None = None
     isMuted: bool = False
+    isPinned: bool = False
+    isArchived: bool = False
     announcementGroupId: str | None = None
     linkedGroupCount: int = 0
     communityId: str | None = None
@@ -104,6 +108,12 @@ class ReplyPreviewResponse(BaseModel):
     messageType: str = "text"
 
 
+class ChatReactionResponse(BaseModel):
+    emoji: str
+    count: int = 0
+    reactedByCurrentUser: bool = False
+
+
 class ChatMessageResponse(BaseModel):
     id: str
     senderId: str
@@ -123,9 +133,13 @@ class ChatMessageResponse(BaseModel):
     editedAt: str | None = None
     deliveredAt: str | None = None
     readAt: str | None = None
+    expiresAt: str | None = None
     deletedForEveryone: bool = False
     replyToMessageId: str | None = None
     replyPreview: ReplyPreviewResponse | None = None
+    reactions: list[ChatReactionResponse] = Field(default_factory=list)
+    isStarred: bool = False
+    isPinned: bool = False
     canEdit: bool = False
     canDeleteForEveryone: bool = False
 
@@ -147,6 +161,47 @@ class ChatOverviewResponse(BaseModel):
     unreadNotificationCount: int = 0
 
 
+class ChatConversationPreferenceResponse(BaseModel):
+    isMuted: bool = False
+    isPinned: bool = False
+    isArchived: bool = False
+    isBlocked: bool = False
+    disappearingMode: str = "off"
+    lastClearedAt: str | None = None
+
+
+class ChatStorageSummaryResponse(BaseModel):
+    totalBytes: int = 0
+    totalFiles: int = 0
+    imageCount: int = 0
+    videoCount: int = 0
+    voiceCount: int = 0
+    fileCount: int = 0
+
+
+class ChatConversationSidebarResponse(BaseModel):
+    conversationType: str
+    conversationId: str
+    title: str
+    subtitle: str | None = None
+    avatarLabel: str
+    imageUrl: str | None = None
+    bio: str | None = None
+    statusText: str | None = None
+    presenceStatus: str | None = None
+    lastSeenAt: str | None = None
+    memberCount: int = 0
+    currentUserRole: str | None = None
+    backgroundUrl: str | None = None
+    preferences: ChatConversationPreferenceResponse = Field(default_factory=ChatConversationPreferenceResponse)
+    members: list[GroupMemberResponse] = Field(default_factory=list)
+    groups: list[CommunityGroupResponse] = Field(default_factory=list)
+    sharedMedia: list[ChatMessageResponse] = Field(default_factory=list)
+    starredMessages: list[ChatMessageResponse] = Field(default_factory=list)
+    pinnedMessages: list[ChatMessageResponse] = Field(default_factory=list)
+    storage: ChatStorageSummaryResponse = Field(default_factory=ChatStorageSummaryResponse)
+
+
 class SendFriendRequestRequest(BaseModel):
     receiverId: str
 
@@ -165,6 +220,18 @@ class EditMessageRequest(BaseModel):
 
 class DeleteMessageRequest(BaseModel):
     scope: str = "me"
+
+
+class UpdateConversationPreferencesRequest(BaseModel):
+    isMuted: bool | None = None
+    isPinned: bool | None = None
+    isArchived: bool | None = None
+    isBlocked: bool | None = None
+    disappearingMode: str | None = None
+
+
+class MessageReactionRequest(BaseModel):
+    emoji: str
 
 
 class CreateGroupRequest(BaseModel):

@@ -49,6 +49,7 @@ class UpdateProfileRequest(BaseModel):
     dateOfBirth: date
     gender: str
     alternateEmail: EmailStr | None = None
+    bio: str | None = None
 
 
 class UpdateMobileRequest(BaseModel):
@@ -147,6 +148,8 @@ class AuthUserResponse(BaseModel):
     securityAnswer: str
     referralCode: str | None = None
     publicUserCode: str | None = None
+    bio: str | None = None
+    profileImageUrl: str | None = None
     isManagement: bool = False
     managementAccessSuspended: bool = False
     managementGrantedAt: str | None = None

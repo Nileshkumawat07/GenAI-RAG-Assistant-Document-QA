@@ -56,8 +56,48 @@ export async function getConversationMessages({ conversationType, conversationId
   return requestJson(`/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/messages?${query.toString()}`, { method: "GET" }, "Failed to load messages.");
 }
 
+export async function getConversationSidebar({ conversationType, conversationId }) {
+  return requestJson(
+    `/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/sidebar`,
+    { method: "GET" },
+    "Failed to load conversation details."
+  );
+}
+
 export async function markConversationRead({ conversationType, conversationId }) {
   return requestJson(`/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/read`, { method: "POST" }, "Failed to update message status.");
+}
+
+export async function updateConversationPreferences({ conversationType, conversationId, ...payload }) {
+  return requestJson(
+    `/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/preferences`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    "Failed to update conversation settings."
+  );
+}
+
+export async function clearChatConversation({ conversationType, conversationId }) {
+  return requestJson(
+    `/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/clear`,
+    { method: "POST" },
+    "Failed to clear this chat."
+  );
+}
+
+export async function getConversationStorage({ conversationType, conversationId }) {
+  return requestJson(
+    `/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/storage`,
+    { method: "GET" },
+    "Failed to load storage usage."
+  );
+}
+
+export async function deleteConversationMedia({ conversationType, conversationId }) {
+  return requestJson(
+    `/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/delete-media`,
+    { method: "POST" },
+    "Failed to delete media from this chat."
+  );
 }
 
 export async function updateConversationBackground({ conversationType, conversationId, file }) {
@@ -97,6 +137,22 @@ export async function uploadChatAttachment({ receiverId, conversationType, conve
 
 export async function editChatMessage(messageId, body) {
   return requestJson(`/chat/messages/${encodeURIComponent(messageId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) }, "Failed to edit message.");
+}
+
+export async function toggleMessageReaction(messageId, emoji) {
+  return requestJson(
+    `/chat/messages/${encodeURIComponent(messageId)}/reaction`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ emoji }) },
+    "Failed to update reaction."
+  );
+}
+
+export async function toggleStarMessage(messageId) {
+  return requestJson(`/chat/messages/${encodeURIComponent(messageId)}/star`, { method: "POST" }, "Failed to update starred state.");
+}
+
+export async function togglePinMessage(messageId) {
+  return requestJson(`/chat/messages/${encodeURIComponent(messageId)}/pin`, { method: "POST" }, "Failed to update pinned state.");
 }
 
 export async function deleteChatMessage(messageId, scope) {
@@ -184,6 +240,17 @@ export async function addGroupToCommunity(communityId, groupId) {
 
 export async function removeGroupFromCommunity(communityId, groupId) {
   return requestJson(`/chat/communities/${encodeURIComponent(communityId)}/groups/${encodeURIComponent(groupId)}`, { method: "DELETE" }, "Failed to remove group from community.");
+}
+
+export async function uploadChatProfilePhoto(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(apiUrl("/chat/profile/photo"), {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+  return parseFormResponse(response, "Failed to upload profile photo.");
 }
 
 export function buildChatFileUrl(messageId) {

@@ -344,6 +344,7 @@ function App() {
           "message:new",
           "message:status",
           "message:deleted",
+          "notification:new",
           "overview:refresh",
           "group:refresh",
           "community:refresh",

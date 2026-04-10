@@ -45,6 +45,11 @@ SUPPORTED_SETTINGS_CATEGORIES = {
     "labs-beta-features",
     "data-export",
     "danger-zone",
+    "chat-security",
+    "chat-notifications",
+    "chat-privacy",
+    "chat-preferences",
+    "chat-storage",
 }
 
 SENSITIVE_SETTINGS_CATEGORIES = {
@@ -60,6 +65,8 @@ SENSITIVE_SETTINGS_CATEGORIES = {
     "consent",
     "legal",
     "danger-zone",
+    "chat-security",
+    "chat-privacy",
 }
 
 _SETTINGS_KEY_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
@@ -87,12 +94,44 @@ STRUCTURED_FORM_DEFAULTS = {
         "language": "English",
         "fontSize": "Medium",
     },
+    "chat-security": {
+        "twoStepEnabled": False,
+        "otpChannel": "sms",
+    },
+    "chat-notifications": {
+        "messageNotifications": True,
+        "groupNotifications": True,
+        "communityNotifications": True,
+        "inAppToasts": True,
+    },
+    "chat-privacy": {
+        "lastSeenVisibility": "contacts",
+        "profileVisibility": "contacts",
+        "readReceiptsEnabled": True,
+    },
+    "chat-preferences": {
+        "autoDownloadMedia": True,
+        "autoDownloadPhotos": True,
+        "autoDownloadVideos": False,
+        "autoDownloadFiles": False,
+    },
+    "chat-storage": {
+        "mediaCleanupWarnings": True,
+        "keepArchivedChatsVisible": False,
+    },
 }
 
 STRUCTURED_SELECT_OPTIONS = {
     "appearance": {
         "theme": {"Light", "Dark", "System"},
         "fontSize": {"Small", "Medium", "Large"},
+    },
+    "chat-security": {
+        "otpChannel": {"sms", "email"},
+    },
+    "chat-privacy": {
+        "lastSeenVisibility": {"everyone", "contacts", "nobody"},
+        "profileVisibility": {"everyone", "contacts", "nobody"},
     },
 }
 

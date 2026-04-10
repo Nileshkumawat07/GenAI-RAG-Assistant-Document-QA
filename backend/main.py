@@ -107,6 +107,8 @@ def ensure_user_subscription_schema() -> None:
     existing_columns = {column["name"] for column in inspector.get_columns("users")}
     required_statements = {
         "public_user_code": "ALTER TABLE users ADD COLUMN public_user_code VARCHAR(6) NULL",
+        "bio": "ALTER TABLE users ADD COLUMN bio TEXT NULL",
+        "profile_image_url": "ALTER TABLE users ADD COLUMN profile_image_url VARCHAR(500) NULL",
         "is_management": "ALTER TABLE users ADD COLUMN is_management BOOLEAN NOT NULL DEFAULT FALSE",
         "management_access_suspended": "ALTER TABLE users ADD COLUMN management_access_suspended BOOLEAN NOT NULL DEFAULT FALSE",
         "management_granted_at": "ALTER TABLE users ADD COLUMN management_granted_at DATETIME NULL",
@@ -295,6 +297,7 @@ def ensure_chat_management_schema() -> None:
                 "conversation_type": "ALTER TABLE chat_messages ADD COLUMN conversation_type VARCHAR(30) NOT NULL DEFAULT 'direct'",
                 "hidden_for_user_ids": "ALTER TABLE chat_messages ADD COLUMN hidden_for_user_ids TEXT NULL",
                 "edited_at": "ALTER TABLE chat_messages ADD COLUMN edited_at DATETIME NULL",
+                "expires_at": "ALTER TABLE chat_messages ADD COLUMN expires_at DATETIME NULL",
             }
             for column_name, statement in required_statements.items():
                 if column_name not in existing_columns:

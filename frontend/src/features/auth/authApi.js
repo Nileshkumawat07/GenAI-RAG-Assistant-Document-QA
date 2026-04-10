@@ -16,6 +16,8 @@ export function normalizeAuthUser(user) {
     securityAnswer: user.securityAnswer,
     referralCode: user.referralCode,
     publicUserCode: user.publicUserCode || null,
+    bio: user.bio || "",
+    profileImageUrl: user.profileImageUrl || null,
     isManagement: !!user.isManagement,
     managementAccessSuspended: !!user.managementAccessSuspended,
     managementGrantedAt: user.managementGrantedAt || null,

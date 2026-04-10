@@ -7,10 +7,14 @@ from app.models.chat_friend_request import ChatFriendRequest
 from app.models.chat_friendship import ChatFriendship
 from app.models.chat_community import ChatCommunity
 from app.models.chat_community_group import ChatCommunityGroup
+from app.models.chat_conversation_preference import ChatConversationPreference
 from app.models.chat_conversation_background import ChatConversationBackground
 from app.models.chat_group import ChatGroup
 from app.models.chat_group_member import ChatGroupMember
 from app.models.chat_message import ChatMessage
+from app.models.chat_message_pin import ChatMessagePin
+from app.models.chat_message_reaction import ChatMessageReaction
+from app.models.chat_message_star import ChatMessageStar
 from app.models.communication import CommunicationLog, CommunicationTemplate
 from app.models.contact_request import ContactRequest
 from app.models.content_entry import ContentEntry
@@ -52,8 +56,12 @@ __all__ = [
     "ChatGroupMember",
     "ChatCommunity",
     "ChatCommunityGroup",
+    "ChatConversationPreference",
     "ChatConversationBackground",
     "ChatMessage",
+    "ChatMessageReaction",
+    "ChatMessageStar",
+    "ChatMessagePin",
     "CommunicationTemplate",
     "CommunicationLog",
     "ContentEntry",

@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import UploadFile, WebSocket
@@ -12,16 +12,22 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import CHAT_UPLOAD_MAX_BYTES, CHAT_UPLOADS_DIR
+from app.core.settings_registry import build_default_settings_payload, normalize_settings_category_payload
 from app.core.database import SessionLocal
 from app.models.chat_community import ChatCommunity
 from app.models.chat_community_group import ChatCommunityGroup
+from app.models.chat_conversation_preference import ChatConversationPreference
 from app.models.chat_conversation_background import ChatConversationBackground
 from app.models.chat_friend_request import ChatFriendRequest
 from app.models.chat_friendship import ChatFriendship
 from app.models.chat_group import ChatGroup
 from app.models.chat_group_member import ChatGroupMember
 from app.models.chat_message import ChatMessage
+from app.models.chat_message_pin import ChatMessagePin
+from app.models.chat_message_reaction import ChatMessageReaction
+from app.models.chat_message_star import ChatMessageStar
 from app.models.user import User
+from app.models.user_setting import UserSetting
 from app.models.workspace_notification import WorkspaceNotification
 from app.services.auth_service import AuthService
 
@@ -83,6 +89,15 @@ class ChatManagementService:
         "image/png",
         "image/webp",
         "image/gif",
+        "video/mp4",
+        "video/webm",
+        "video/quicktime",
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/mp4",
+        "audio/wav",
+        "audio/webm",
+        "audio/ogg",
         "application/pdf",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -121,7 +136,15 @@ class ChatManagementService:
             current_user_id=current_user_id,
             other_user_ids=[item.id for item in users],
         )
-        return [self.serialize_user_summary(item, relationship_map.get(item.id, "none")) for item in users]
+        return [
+            self.serialize_user_summary(
+                db,
+                item,
+                relationship_map.get(item.id, "none"),
+                viewer_user_id=current_user_id,
+            )
+            for item in users
+        ]
 
     def search_friends(self, db: Session, *, current_user_id: str, query: str) -> list[dict]:
         cleaned_query = (query or "").strip().lower()
@@ -242,7 +265,7 @@ class ChatManagementService:
             .join(User, User.id == ChatFriendship.friend_user_id)
             .where(ChatFriendship.user_id == current_user_id, User.archived_at.is_(None))
         ).all()
-        serialized = [self.serialize_user_summary(row[1], "friends") for row in rows]
+        serialized = [self.serialize_user_summary(db, row[1], "friends", viewer_user_id=current_user_id) for row in rows]
         serialized.sort(key=lambda item: item["fullName"].lower())
         return serialized
 
@@ -304,18 +327,18 @@ class ChatManagementService:
             conversation_type=conversation_type,
             conversation_id=conversation_id,
         )
-        query = self._conversation_message_query(
+        visible_messages = self._visible_messages_for_conversation(
             db,
-            conversation_type=conversation["conversationType"],
+            conversation_type=conversation["apiConversationType"],
             conversation_id=conversation["apiConversationId"],
             current_user_id=current_user_id,
+            limit=500,
+            newest_first=True,
         )
-        messages = db.execute(query.order_by(ChatMessage.created_at.desc())).scalars().all()
         if before_message_id:
-            pivot = next((item for item in messages if item.id == before_message_id), None)
+            pivot = next((item for item in visible_messages if item.id == before_message_id), None)
             if pivot:
-                messages = [item for item in messages if item.created_at < pivot.created_at]
-        visible_messages = [item for item in messages if not self._message_hidden_for_user(item, current_user_id)]
+                visible_messages = [item for item in visible_messages if item.created_at < pivot.created_at]
         limited = visible_messages[: max(1, min(limit, 100))]
         limited.reverse()
         lookup = {item.id: item for item in visible_messages}
@@ -424,6 +447,411 @@ class ChatManagementService:
             "backgroundUrl": None,
         }
 
+    def get_conversation_sidebar(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> dict:
+        conversation = self._resolve_conversation(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        preference = self._conversation_preference_for_user(
+            db,
+            user_id=current_user_id,
+            conversation_type=conversation["apiConversationType"],
+            conversation_id=conversation["apiConversationId"],
+        )
+        shared_media = [
+            self.serialize_message(db, item, current_user_id=current_user_id)
+            for item in self._visible_messages_for_conversation(
+                db,
+                conversation_type=conversation["apiConversationType"],
+                conversation_id=conversation["apiConversationId"],
+                current_user_id=current_user_id,
+                limit=12,
+                media_only=True,
+                newest_first=True,
+            )
+        ]
+        starred_messages = [
+            self.serialize_message(db, item, current_user_id=current_user_id)
+            for item in self._starred_or_pinned_messages(
+                db,
+                current_user_id=current_user_id,
+                conversation=conversation,
+                starred=True,
+                pinned=False,
+            )
+        ]
+        pinned_messages = [
+            self.serialize_message(db, item, current_user_id=current_user_id)
+            for item in self._starred_or_pinned_messages(
+                db,
+                current_user_id=current_user_id,
+                conversation=conversation,
+                starred=False,
+                pinned=True,
+            )
+        ]
+        storage = self.get_storage_summary(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation["apiConversationType"],
+            conversation_id=conversation["apiConversationId"],
+        )
+
+        if conversation["conversationType"] == "direct":
+            other_user = self._require_user(db, conversation["otherUserId"])
+            summary = self.serialize_user_summary(db, other_user, "friends", viewer_user_id=current_user_id)
+            current_user = self._require_user(db, current_user_id)
+            return {
+                "conversationType": "direct",
+                "conversationId": conversation["apiConversationId"],
+                "title": summary["fullName"],
+                "subtitle": f"@{other_user.username}",
+                "avatarLabel": summary["avatarLabel"],
+                "imageUrl": summary["imageUrl"],
+                "bio": summary["bio"],
+                "statusText": summary["statusText"],
+                "presenceStatus": summary["presenceStatus"],
+                "lastSeenAt": summary["lastSeenAt"],
+                "memberCount": 2,
+                "currentUserRole": "member",
+                "backgroundUrl": self._conversation_background_url(
+                    db,
+                    conversation_type="direct",
+                    conversation_key=self._direct_conversation_key(current_user_id, other_user.id),
+                ),
+                "preferences": self._serialize_conversation_preference(preference),
+                "members": [
+                    {
+                        "id": f"direct-{current_user.id}",
+                        "userId": current_user.id,
+                        "role": "self",
+                        "isMuted": False,
+                        "joinedAt": None,
+                        "lastReadAt": None,
+                        "user": self.serialize_user_summary(db, current_user, "self", viewer_user_id=current_user_id),
+                    },
+                    {
+                        "id": f"direct-{other_user.id}",
+                        "userId": other_user.id,
+                        "role": "friend",
+                        "isMuted": bool(preference.is_muted) if preference else False,
+                        "joinedAt": None,
+                        "lastReadAt": None,
+                        "user": summary,
+                    },
+                ],
+                "groups": [],
+                "sharedMedia": shared_media,
+                "starredMessages": starred_messages,
+                "pinnedMessages": pinned_messages,
+                "storage": storage,
+            }
+
+        if conversation["conversationType"] == "group":
+            detail = self.serialize_group_detail(
+                db,
+                group=conversation["group"],
+                membership=conversation["membership"],
+                current_user_id=current_user_id,
+            )
+            return {
+                "conversationType": "group",
+                "conversationId": detail["id"],
+                "title": detail["name"],
+                "subtitle": detail["description"],
+                "avatarLabel": self._avatar_label(detail["name"]),
+                "imageUrl": detail["imageUrl"],
+                "bio": detail["description"],
+                "statusText": f"{detail['memberCount']} members",
+                "presenceStatus": None,
+                "lastSeenAt": None,
+                "memberCount": detail["memberCount"],
+                "currentUserRole": detail["currentUserRole"],
+                "backgroundUrl": detail["backgroundUrl"],
+                "preferences": self._serialize_conversation_preference(preference, fallback_muted=detail["isMuted"]),
+                "members": detail["members"],
+                "groups": [],
+                "sharedMedia": shared_media,
+                "starredMessages": starred_messages,
+                "pinnedMessages": pinned_messages,
+                "storage": storage,
+            }
+
+        detail = self.serialize_community_detail(
+            db,
+            community=conversation["community"],
+            announcement_group=conversation["group"],
+            membership=conversation["membership"],
+            current_user_id=current_user_id,
+        )
+        return {
+            "conversationType": "community",
+            "conversationId": detail["id"],
+            "title": detail["name"],
+            "subtitle": detail["description"],
+            "avatarLabel": self._avatar_label(detail["name"]),
+            "imageUrl": detail["imageUrl"],
+            "bio": detail["description"],
+            "statusText": f"{detail['memberCount']} members",
+            "presenceStatus": None,
+            "lastSeenAt": None,
+            "memberCount": detail["memberCount"],
+            "currentUserRole": detail["currentUserRole"],
+            "backgroundUrl": detail["backgroundUrl"],
+            "preferences": self._serialize_conversation_preference(preference, fallback_muted=detail["isMuted"]),
+            "members": detail["members"],
+            "groups": detail["groups"],
+            "sharedMedia": shared_media,
+            "starredMessages": starred_messages,
+            "pinnedMessages": pinned_messages,
+            "storage": storage,
+        }
+
+    def update_conversation_preferences(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        is_muted: bool | None = None,
+        is_pinned: bool | None = None,
+        is_archived: bool | None = None,
+        is_blocked: bool | None = None,
+        disappearing_mode: str | None = None,
+    ) -> dict:
+        conversation = self._resolve_conversation(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        preference = self._ensure_conversation_preference(
+            db,
+            user_id=current_user_id,
+            conversation_type=conversation["apiConversationType"],
+            conversation_id=conversation["apiConversationId"],
+        )
+        if is_muted is not None:
+            preference.is_muted = bool(is_muted)
+            if conversation["conversationType"] != "direct" and conversation["membership"]:
+                conversation["membership"].is_muted = bool(is_muted)
+        if is_pinned is not None:
+            preference.is_pinned = bool(is_pinned)
+        if is_archived is not None:
+            preference.is_archived = bool(is_archived)
+        if is_blocked is not None and conversation["conversationType"] == "direct":
+            preference.is_blocked = bool(is_blocked)
+        if disappearing_mode is not None:
+            normalized_mode = (disappearing_mode or "off").strip().lower()
+            if normalized_mode not in {"off", "24h", "7d", "90d"}:
+                raise ChatManagementServiceError("Unsupported disappearing mode.")
+            preference.disappearing_mode = normalized_mode
+        preference.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(preference)
+        return self._serialize_conversation_preference(preference)
+
+    def clear_conversation(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> dict:
+        conversation = self._resolve_conversation(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        preference = self._ensure_conversation_preference(
+            db,
+            user_id=current_user_id,
+            conversation_type=conversation["apiConversationType"],
+            conversation_id=conversation["apiConversationId"],
+        )
+        preference.last_cleared_at = datetime.now(timezone.utc)
+        preference.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(preference)
+        return self._serialize_conversation_preference(preference)
+
+    def get_storage_summary(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> dict:
+        items = self._visible_messages_for_conversation(
+            db,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+            current_user_id=current_user_id,
+            limit=200,
+            media_only=True,
+            newest_first=True,
+        )
+        summary = {
+            "totalBytes": sum(item.file_size or 0 for item in items),
+            "totalFiles": len(items),
+            "imageCount": len([item for item in items if item.message_type == "image"]),
+            "videoCount": len([item for item in items if item.message_type == "video"]),
+            "voiceCount": len([item for item in items if item.message_type == "voice"]),
+            "fileCount": len([item for item in items if item.message_type == "file"]),
+        }
+        return summary
+
+    def delete_conversation_media(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> dict:
+        conversation = self._resolve_conversation(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        messages = self._visible_messages_for_conversation(
+            db,
+            conversation_type=conversation["apiConversationType"],
+            conversation_id=conversation["apiConversationId"],
+            current_user_id=current_user_id,
+            limit=500,
+            media_only=True,
+            newest_first=True,
+        )
+        updated = 0
+        for item in messages:
+            if item.sender_user_id != current_user_id or not item.storage_path:
+                continue
+            try:
+                Path(item.storage_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+            item.storage_path = None
+            item.file_url = None
+            item.file_name = None
+            item.file_size = None
+            item.mime_type = None
+            if not item.body:
+                item.body = "Media removed."
+            item.message_type = "text"
+            updated += 1
+        db.commit()
+        return {"deletedCount": updated, **self.get_storage_summary(db, current_user_id=current_user_id, conversation_type=conversation["apiConversationType"], conversation_id=conversation["apiConversationId"])}
+
+    async def update_profile_photo(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        upload: UploadFile,
+    ) -> dict:
+        user = self._require_user(db, current_user_id)
+        content_type = (upload.content_type or "").lower().strip()
+        if content_type not in self.image_content_types:
+            raise ChatManagementServiceError("Profile photo must be an image file.")
+        content = await upload.read()
+        if not content:
+            raise ChatManagementServiceError("Uploaded profile photo is empty.")
+        if len(content) > CHAT_UPLOAD_MAX_BYTES:
+            raise ChatManagementServiceError("Profile photo exceeds the maximum upload size.")
+        safe_name = self._sanitize_filename(upload.filename or "profile.png")
+        folder = CHAT_UPLOADS_DIR / "entities" / "profile" / user.id
+        folder.mkdir(parents=True, exist_ok=True)
+        for existing in folder.glob("*"):
+            if existing.is_file():
+                existing.unlink(missing_ok=True)
+        file_path = folder / safe_name
+        file_path.write_bytes(content)
+        user.profile_image_url = f"/chat/assets/profile/{user.id}/{safe_name}"
+        db.commit()
+        db.refresh(user)
+        return {"imageUrl": user.profile_image_url}
+
+    def toggle_message_reaction(self, db: Session, *, current_user_id: str, message_id: str, emoji: str) -> dict:
+        message = self._require_message_access(db, current_user_id=current_user_id, message_id=message_id)
+        if message.deleted_for_everyone:
+            raise ChatManagementServiceError("Message was not found.")
+        normalized_emoji = (emoji or "").strip()[:8]
+        if not normalized_emoji:
+            raise ChatManagementServiceError("Reaction emoji is required.")
+        existing = db.execute(
+            select(ChatMessageReaction).where(
+                ChatMessageReaction.message_id == message.id,
+                ChatMessageReaction.user_id == current_user_id,
+            )
+        ).scalar_one_or_none()
+        if existing and existing.emoji == normalized_emoji:
+            db.delete(existing)
+        elif existing:
+            existing.emoji = normalized_emoji
+        else:
+            db.add(
+                ChatMessageReaction(
+                    id=str(uuid.uuid4()),
+                    message_id=message.id,
+                    user_id=current_user_id,
+                    emoji=normalized_emoji,
+                )
+            )
+        db.commit()
+        db.refresh(message)
+        return self.serialize_message(db, message, current_user_id=current_user_id)
+
+    def toggle_message_star(self, db: Session, *, current_user_id: str, message_id: str) -> dict:
+        message = self._require_message_access(db, current_user_id=current_user_id, message_id=message_id)
+        if message.deleted_for_everyone:
+            raise ChatManagementServiceError("Message was not found.")
+        existing = db.execute(
+            select(ChatMessageStar).where(
+                ChatMessageStar.message_id == message.id,
+                ChatMessageStar.user_id == current_user_id,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            db.delete(existing)
+        else:
+            db.add(ChatMessageStar(id=str(uuid.uuid4()), message_id=message.id, user_id=current_user_id))
+        db.commit()
+        db.refresh(message)
+        return self.serialize_message(db, message, current_user_id=current_user_id)
+
+    def toggle_message_pin(self, db: Session, *, current_user_id: str, message_id: str) -> dict:
+        message = self._require_message_access(db, current_user_id=current_user_id, message_id=message_id)
+        if message.deleted_for_everyone:
+            raise ChatManagementServiceError("Message was not found.")
+        existing = db.execute(
+            select(ChatMessagePin).where(
+                ChatMessagePin.message_id == message.id,
+                ChatMessagePin.user_id == current_user_id,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            db.delete(existing)
+        else:
+            db.add(ChatMessagePin(id=str(uuid.uuid4()), message_id=message.id, user_id=current_user_id))
+        db.commit()
+        db.refresh(message)
+        return self.serialize_message(db, message, current_user_id=current_user_id)
+
     def send_text_message(
         self,
         db: Session,
@@ -461,14 +889,17 @@ class ChatManagementService:
             conversation_type=conversation_type,
             conversation_id=conversation_id,
         )
+        if conversation["conversationType"] == "direct":
+            self._assert_direct_message_allowed(db, current_user_id=current_user_id, other_user_id=conversation["otherUserId"])
         message = self._build_message_record(
+            db=db,
             current_user_id=current_user_id,
             conversation=conversation,
             body=cleaned_body,
             message_type="text",
             reply_to_message_id=reply_to_message_id,
         )
-        self._apply_delivery_status(message, participant_ids=conversation["participantIds"], sender_user_id=current_user_id)
+        self._apply_delivery_status(db, message, participant_ids=conversation["participantIds"], sender_user_id=current_user_id)
         db.add(message)
         self._create_message_notifications(db, conversation=conversation, sender_user_id=current_user_id, message=message)
         db.commit()
@@ -496,6 +927,8 @@ class ChatManagementService:
             conversation_type=conversation_type,
             conversation_id=effective_conversation_id,
         )
+        if conversation["conversationType"] == "direct":
+            self._assert_direct_message_allowed(db, current_user_id=current_user_id, other_user_id=conversation["otherUserId"])
         content = await upload.read()
         if not content:
             raise ChatManagementServiceError("Uploaded file is empty.")
@@ -506,10 +939,11 @@ class ChatManagementService:
             raise ChatManagementServiceError("Unsupported file type.")
         safe_name = self._sanitize_filename(upload.filename or "attachment")
         message = self._build_message_record(
+            db=db,
             current_user_id=current_user_id,
             conversation=conversation,
             body=(body or "").strip() or None,
-            message_type="image" if content_type.startswith("image/") else "file",
+            message_type=self._detect_upload_message_type(content_type),
             reply_to_message_id=reply_to_message_id,
         )
         db.add(message)
@@ -520,7 +954,7 @@ class ChatManagementService:
         message.mime_type = content_type
         message.storage_path = str(storage_path)
         message.file_url = f"/chat/files/{message.id}"
-        self._apply_delivery_status(message, participant_ids=conversation["participantIds"], sender_user_id=current_user_id)
+        self._apply_delivery_status(db, message, participant_ids=conversation["participantIds"], sender_user_id=current_user_id)
         self._create_message_notifications(db, conversation=conversation, sender_user_id=current_user_id, message=message)
         db.commit()
         db.refresh(message)
@@ -569,7 +1003,13 @@ class ChatManagementService:
                 )
             ).scalars().all()
             for item in messages:
-                if self._message_hidden_for_user(item, current_user_id):
+                if not self._message_visible_for_user_in_conversation(
+                    db,
+                    item,
+                    current_user_id=current_user_id,
+                    conversation_type="direct",
+                    conversation_id=conversation["otherUserId"],
+                ):
                     continue
                 item.status = "read"
                 if not item.delivered_at:
@@ -586,7 +1026,18 @@ class ChatManagementService:
                     current_user_id=current_user_id,
                 )
             ).scalars().all()
-            updated_ids = [item.id for item in group_messages if item.sender_user_id != current_user_id]
+            updated_ids = [
+                item.id
+                for item in group_messages
+                if item.sender_user_id != current_user_id
+                and self._message_visible_for_user_in_conversation(
+                    db,
+                    item,
+                    current_user_id=current_user_id,
+                    conversation_type=conversation["apiConversationType"],
+                    conversation_id=conversation["apiConversationId"],
+                )
+            ]
         db.commit()
         return {"updatedIds": updated_ids, "readAt": self._serialize_datetime(now)}
 
@@ -635,7 +1086,7 @@ class ChatManagementService:
             self._require_group_membership(db, group_id=message.group_id, user_id=current_user_id)
         elif message.sender_user_id != current_user_id and message.receiver_user_id != current_user_id:
             raise ChatManagementServiceError("File was not found.")
-        if self._message_hidden_for_user(message, current_user_id):
+        if self._message_hidden_for_user(message, current_user_id) or self._message_is_expired(message):
             raise ChatManagementServiceError("File was not found.")
         file_path = Path(message.storage_path)
         if not file_path.exists():
@@ -653,12 +1104,17 @@ class ChatManagementService:
     ) -> tuple[Path, str | None]:
         safe_entity_type = (entity_type or "").strip().lower()
         safe_file_name = self._sanitize_filename(file_name or "")
-        if safe_entity_type not in {"group", "community"} or not safe_file_name:
+        if safe_entity_type not in {"group", "community", "profile"} or not safe_file_name:
             raise ChatManagementServiceError("Asset was not found.")
         if safe_entity_type == "group":
             self._require_group_membership(db, group_id=entity_id, user_id=current_user_id)
-        else:
+        elif safe_entity_type == "community":
             self._require_community_membership(db, community_id=entity_id, user_id=current_user_id)
+        else:
+            if current_user_id != entity_id and not self._users_are_friends(db, first_user_id=current_user_id, second_user_id=entity_id):
+                raise ChatManagementServiceError("Asset was not found.")
+            if current_user_id != entity_id and not self._profile_visible_to(db, target_user_id=entity_id, viewer_user_id=current_user_id):
+                raise ChatManagementServiceError("Asset was not found.")
         file_path = CHAT_UPLOADS_DIR / "entities" / safe_entity_type / entity_id / safe_file_name
         if not file_path.exists():
             raise ChatManagementServiceError("Asset was not found.")
@@ -760,6 +1216,14 @@ class ChatManagementService:
         group, membership = self._require_group_membership(db, group_id=group_id, user_id=current_user_id)
         if is_muted is not None:
             membership.is_muted = bool(is_muted)
+            preference = self._ensure_conversation_preference(
+                db,
+                user_id=current_user_id,
+                conversation_type="group",
+                conversation_id=group_id,
+            )
+            preference.is_muted = bool(is_muted)
+            preference.updated_at = datetime.now(timezone.utc)
         if name is not None or description is not None or image_file is not None:
             self._ensure_group_admin(membership)
             if name is not None:
@@ -900,6 +1364,14 @@ class ChatManagementService:
         community, _, membership = self._require_community_membership(db, community_id=community_id, user_id=current_user_id)
         if is_muted is not None:
             membership.is_muted = bool(is_muted)
+            preference = self._ensure_conversation_preference(
+                db,
+                user_id=current_user_id,
+                conversation_type="community",
+                conversation_id=community_id,
+            )
+            preference.is_muted = bool(is_muted)
+            preference.updated_at = datetime.now(timezone.utc)
         if name is not None or description is not None or image_file is not None:
             self._ensure_group_admin(membership)
             if name is not None:
@@ -995,8 +1467,11 @@ class ChatManagementService:
                 conversation_type=effective_type,
                 conversation_id=effective_id,
             )
+            share_read_receipts = effective_type != "direct" or self._read_receipts_enabled(db, user_id=user_id)
         for participant_id in conversation["participantIds"]:
             if participant_id == user_id:
+                continue
+            if not share_read_receipts:
                 continue
             for message_id in result["updatedIds"]:
                 await self.manager.send_event(
@@ -1012,8 +1487,10 @@ class ChatManagementService:
                 conversation_type=conversation_type,
                 conversation_id=conversation_id,
             )
+            if conversation["conversationType"] == "direct":
+                self._assert_direct_message_allowed(db, current_user_id=user_id, other_user_id=conversation["otherUserId"])
         payload = {
-            "type": "typing",
+            "type": "typing" if is_typing else "stop_typing",
             "userId": user_id,
             "conversationType": conversation["apiConversationType"],
             "conversationId": conversation["apiConversationId"],
@@ -1038,18 +1515,62 @@ class ChatManagementService:
     async def emit_message_created(self, db: Session, *, message_id: str) -> None:
         message = db.execute(select(ChatMessage).where(ChatMessage.id == message_id)).scalar_one()
         for participant_id in self._participant_ids_for_message(db, message):
+            conversation_id = self._serialize_message_conversation_id(db, message, current_user_id=participant_id)
             await self.manager.send_event(
                 participant_id,
                 {"type": "message:new", "message": self.serialize_message(db, message, current_user_id=participant_id)},
             )
             await self.manager.send_event(participant_id, {"type": "overview:refresh"})
+            await self.manager.send_event(
+                participant_id,
+                {
+                    "type": "conversation:refresh",
+                    "conversationType": message.conversation_type or "direct",
+                    "conversationId": conversation_id,
+                },
+            )
+            if participant_id != message.sender_user_id:
+                preference = self._conversation_preference_for_user(
+                    db,
+                    user_id=participant_id,
+                    conversation_type=message.conversation_type or "direct",
+                    conversation_id=conversation_id,
+                )
+                recipient_membership = None
+                if message.group_id:
+                    recipient_membership = self._group_member_record(db, group_id=message.group_id, user_id=participant_id)
+                if (
+                    not (preference and preference.is_muted)
+                    and not (recipient_membership and recipient_membership.is_muted)
+                    and self._notifications_enabled_for_conversation(db, user_id=participant_id, conversation_type=message.conversation_type or "direct")
+                    and bool(self._chat_settings_form(db, user_id=participant_id, category="chat-notifications").get("inAppToasts", True))
+                    and self.manager.get_active_conversation(participant_id) != self._conversation_key(message.conversation_type or "direct", conversation_id)
+                ):
+                    await self.manager.send_event(
+                        participant_id,
+                        {
+                            "type": "notification:new",
+                            "conversationType": message.conversation_type or "direct",
+                            "conversationId": conversation_id,
+                            "messageId": message.id,
+                        },
+                    )
 
     async def emit_message_updated(self, db: Session, *, message_id: str) -> None:
         message = db.execute(select(ChatMessage).where(ChatMessage.id == message_id)).scalar_one()
         for participant_id in self._participant_ids_for_message(db, message):
+            conversation_id = self._serialize_message_conversation_id(db, message, current_user_id=participant_id)
             await self.manager.send_event(
                 participant_id,
                 {"type": "message:updated", "message": self.serialize_message(db, message, current_user_id=participant_id)},
+            )
+            await self.manager.send_event(
+                participant_id,
+                {
+                    "type": "conversation:refresh",
+                    "conversationType": message.conversation_type or "direct",
+                    "conversationId": conversation_id,
+                },
             )
 
     async def emit_message_deleted(self, db: Session, *, message_id: str, payload: dict) -> None:
@@ -1058,8 +1579,17 @@ class ChatManagementService:
             return
         event = {"type": "message:deleted", "messageId": message_id, **payload}
         for participant_id in self._participant_ids_for_message(db, message):
+            conversation_id = self._serialize_message_conversation_id(db, message, current_user_id=participant_id)
             await self.manager.send_event(participant_id, event)
             await self.manager.send_event(participant_id, {"type": "overview:refresh"})
+            await self.manager.send_event(
+                participant_id,
+                {
+                    "type": "conversation:refresh",
+                    "conversationType": message.conversation_type or "direct",
+                    "conversationId": conversation_id,
+                },
+            )
 
     async def emit_group_refresh(self, *, group_id: str) -> None:
         with SessionLocal() as db:
@@ -1086,6 +1616,14 @@ class ChatManagementService:
         normalized_type = (conversation_type or "").strip().lower()
         for user_id in participant_ids:
             await self.manager.send_event(user_id, {"type": "overview:refresh"})
+            await self.manager.send_event(
+                user_id,
+                {
+                    "type": "conversation:refresh",
+                    "conversationType": normalized_type,
+                    "conversationId": conversation_id,
+                },
+            )
             if normalized_type == "group":
                 await self.manager.send_event(user_id, {"type": "group:refresh", "groupId": conversation_id})
             elif normalized_type == "community":
@@ -1105,55 +1643,77 @@ class ChatManagementService:
         relationship_map = self._relationship_state_map(db, current_user_id=current_user_id, other_user_ids=[sender.id, receiver.id])
         return {
             "id": item.id,
-            "sender": self.serialize_user_summary(sender, "self" if sender.id == current_user_id else relationship_map.get(sender.id, "none")),
-            "receiver": self.serialize_user_summary(receiver, "self" if receiver.id == current_user_id else relationship_map.get(receiver.id, "none")),
+            "sender": self.serialize_user_summary(
+                db,
+                sender,
+                "self" if sender.id == current_user_id else relationship_map.get(sender.id, "none"),
+                viewer_user_id=current_user_id,
+            ),
+            "receiver": self.serialize_user_summary(
+                db,
+                receiver,
+                "self" if receiver.id == current_user_id else relationship_map.get(receiver.id, "none"),
+                viewer_user_id=current_user_id,
+            ),
             "status": item.status,
             "createdAt": self._serialize_datetime(item.created_at),
             "respondedAt": self._serialize_datetime(item.responded_at),
         }
 
-    def serialize_user_summary(self, user: User, relationship_state: str) -> dict:
+    def serialize_user_summary(
+        self,
+        db: Session,
+        user: User,
+        relationship_state: str,
+        *,
+        viewer_user_id: str | None = None,
+    ) -> dict:
+        viewer_id = viewer_user_id or user.id
         is_online = self.manager.is_online(user.id)
         last_seen_at = self.manager.get_last_seen_at(user.id) or user.last_login_at
         full_name = self._display_name(user)
+        can_view_last_seen = viewer_id == user.id or self._last_seen_visible_to(db, target_user_id=user.id, viewer_user_id=viewer_id)
+        can_view_profile = viewer_id == user.id or self._profile_visible_to(db, target_user_id=user.id, viewer_user_id=viewer_id)
         return {
             "id": user.id,
             "username": user.username,
             "fullName": full_name,
             "avatarLabel": self._avatar_label(full_name),
-            "presenceStatus": "online" if is_online else "offline",
-            "lastSeenAt": self._serialize_datetime(last_seen_at),
+            "imageUrl": user.profile_image_url if can_view_profile else None,
+            "bio": user.bio if can_view_profile else None,
+            "presenceStatus": "online" if is_online and can_view_last_seen else "offline",
+            "lastSeenAt": self._serialize_datetime(last_seen_at) if can_view_last_seen else None,
             "relationshipState": relationship_state,
-            "statusText": "Online" if is_online else "Offline",
+            "statusText": "Online" if is_online and can_view_last_seen else ("Offline" if can_view_last_seen else "Hidden"),
         }
 
     def serialize_direct_chat_item(self, db: Session, *, friend_user_id: str, current_user_id: str) -> dict:
         friend = self._require_user(db, friend_user_id)
+        preference = self._conversation_preference_for_user(
+            db,
+            user_id=current_user_id,
+            conversation_type="direct",
+            conversation_id=friend_user_id,
+        )
         background_url = self._conversation_background_url(
             db,
             conversation_type="direct",
             conversation_key=self._direct_conversation_key(current_user_id, friend_user_id),
         )
-        latest_message = db.execute(
-            self._conversation_message_query(db, conversation_type="direct", conversation_id=friend_user_id, current_user_id=current_user_id)
-            .order_by(ChatMessage.created_at.desc())
-        ).scalars().first()
-        unread_count = db.execute(
-            select(func.count()).select_from(ChatMessage).where(
-                ChatMessage.sender_user_id == friend_user_id,
-                ChatMessage.receiver_user_id == current_user_id,
-                ChatMessage.group_id.is_(None),
-                ChatMessage.read_at.is_(None),
-                ChatMessage.deleted_for_everyone.is_(False),
-            )
-        ).scalar_one()
-        summary = self.serialize_user_summary(friend, "friends")
+        latest_message = self._latest_visible_conversation_message(
+            db,
+            conversation_type="direct",
+            conversation_id=friend_user_id,
+            current_user_id=current_user_id,
+        )
+        unread_count = self._direct_unread_count(db, friend_user_id=friend_user_id, current_user_id=current_user_id)
+        summary = self.serialize_user_summary(db, friend, "friends", viewer_user_id=current_user_id)
         return {
             "id": friend.id,
             "title": summary["fullName"],
-            "subtitle": f"@{friend.username}",
+            "subtitle": summary["bio"] or f"@{friend.username}",
             "avatarLabel": summary["avatarLabel"],
-            "imageUrl": None,
+            "imageUrl": summary["imageUrl"],
             "conversationType": "direct",
             "entityType": "chat",
             "unreadCount": unread_count,
@@ -1165,7 +1725,9 @@ class ChatManagementService:
             "statusText": summary["statusText"],
             "memberCount": 2,
             "role": "friend",
-            "isMuted": False,
+            "isMuted": bool(preference.is_muted) if preference else False,
+            "isPinned": bool(preference.is_pinned) if preference else False,
+            "isArchived": bool(preference.is_archived) if preference else False,
             "announcementGroupId": None,
             "linkedGroupCount": 0,
             "communityId": None,
@@ -1173,11 +1735,19 @@ class ChatManagementService:
         }
 
     def serialize_group_list_item(self, db: Session, *, group: ChatGroup, membership: ChatGroupMember, current_user_id: str) -> dict:
+        preference = self._conversation_preference_for_user(
+            db,
+            user_id=current_user_id,
+            conversation_type="group",
+            conversation_id=group.id,
+        )
         background_url = self._conversation_background_url(db, conversation_type="group", conversation_key=group.id)
-        latest_message = db.execute(
-            self._conversation_message_query(db, conversation_type="group", conversation_id=group.id, current_user_id=current_user_id)
-            .order_by(ChatMessage.created_at.desc())
-        ).scalars().first()
+        latest_message = self._latest_visible_conversation_message(
+            db,
+            conversation_type="group",
+            conversation_id=group.id,
+            current_user_id=current_user_id,
+        )
         return {
             "id": group.id,
             "title": group.name,
@@ -1186,7 +1756,12 @@ class ChatManagementService:
             "imageUrl": group.image_url,
             "conversationType": "group",
             "entityType": "group",
-            "unreadCount": self._group_unread_count(db, group_id=group.id, current_user_id=current_user_id),
+            "unreadCount": self._conversation_unread_count(
+                db,
+                current_user_id=current_user_id,
+                conversation_type="group",
+                conversation_id=group.id,
+            ),
             "lastMessagePreview": self._message_preview(latest_message),
             "lastMessageAt": self._serialize_datetime(latest_message.created_at if latest_message else None),
             "lastMessageStatus": latest_message.status if latest_message and latest_message.sender_user_id == current_user_id else None,
@@ -1195,7 +1770,9 @@ class ChatManagementService:
             "statusText": f"{self._group_member_count(db, group_id=group.id)} members",
             "memberCount": self._group_member_count(db, group_id=group.id),
             "role": membership.role,
-            "isMuted": bool(membership.is_muted),
+            "isMuted": bool(preference.is_muted if preference else membership.is_muted),
+            "isPinned": bool(preference.is_pinned) if preference else False,
+            "isArchived": bool(preference.is_archived) if preference else False,
             "announcementGroupId": None,
             "linkedGroupCount": 0,
             "communityId": None,
@@ -1203,11 +1780,19 @@ class ChatManagementService:
         }
 
     def serialize_community_list_item(self, db: Session, *, community: ChatCommunity, membership: ChatGroupMember, current_user_id: str) -> dict:
+        preference = self._conversation_preference_for_user(
+            db,
+            user_id=current_user_id,
+            conversation_type="community",
+            conversation_id=community.id,
+        )
         background_url = self._conversation_background_url(db, conversation_type="community", conversation_key=community.id)
-        latest_message = db.execute(
-            self._conversation_message_query(db, conversation_type="community", conversation_id=community.id, current_user_id=current_user_id)
-            .order_by(ChatMessage.created_at.desc())
-        ).scalars().first()
+        latest_message = self._latest_visible_conversation_message(
+            db,
+            conversation_type="community",
+            conversation_id=community.id,
+            current_user_id=current_user_id,
+        )
         linked_group_count = db.execute(
             select(func.count()).select_from(ChatCommunityGroup).where(ChatCommunityGroup.community_id == community.id)
         ).scalar_one()
@@ -1219,7 +1804,12 @@ class ChatManagementService:
             "imageUrl": community.image_url,
             "conversationType": "community",
             "entityType": "community",
-            "unreadCount": self._group_unread_count(db, group_id=community.announcement_group_id, current_user_id=current_user_id),
+            "unreadCount": self._conversation_unread_count(
+                db,
+                current_user_id=current_user_id,
+                conversation_type="community",
+                conversation_id=community.id,
+            ),
             "lastMessagePreview": self._message_preview(latest_message),
             "lastMessageAt": self._serialize_datetime(latest_message.created_at if latest_message else None),
             "lastMessageStatus": latest_message.status if latest_message and latest_message.sender_user_id == current_user_id else None,
@@ -1228,7 +1818,9 @@ class ChatManagementService:
             "statusText": f"{self._group_member_count(db, group_id=community.announcement_group_id)} members",
             "memberCount": self._group_member_count(db, group_id=community.announcement_group_id),
             "role": membership.role,
-            "isMuted": bool(membership.is_muted),
+            "isMuted": bool(preference.is_muted if preference else membership.is_muted),
+            "isPinned": bool(preference.is_pinned) if preference else False,
+            "isArchived": bool(preference.is_archived) if preference else False,
             "announcementGroupId": community.announcement_group_id,
             "linkedGroupCount": linked_group_count,
             "communityId": community.id,
@@ -1248,7 +1840,7 @@ class ChatManagementService:
             "isMuted": bool(membership.is_muted),
             "currentUserRole": membership.role,
             "backgroundUrl": self._conversation_background_url(db, conversation_type="group", conversation_key=group.id),
-            "members": [self.serialize_group_member(row[0], row[1]) for row in member_rows],
+            "members": [self.serialize_group_member(db, row[0], row[1], viewer_user_id=current_user_id) for row in member_rows],
         }
 
     def serialize_community_detail(self, db: Session, *, community: ChatCommunity, announcement_group: ChatGroup, membership: ChatGroupMember, current_user_id: str) -> dict:
@@ -1270,10 +1862,17 @@ class ChatManagementService:
             "isMuted": bool(membership.is_muted),
             "backgroundUrl": self._conversation_background_url(db, conversation_type="community", conversation_key=community.id),
             "groups": [{"id": group.id, "name": group.name, "description": group.description, "imageUrl": group.image_url, "memberCount": self._group_member_count(db, group_id=group.id)} for _, group in group_links],
-            "members": [self.serialize_group_member(row[0], row[1]) for row in member_rows],
+            "members": [self.serialize_group_member(db, row[0], row[1], viewer_user_id=current_user_id) for row in member_rows],
         }
 
-    def serialize_group_member(self, membership: ChatGroupMember, user: User) -> dict:
+    def serialize_group_member(
+        self,
+        db: Session,
+        membership: ChatGroupMember,
+        user: User,
+        *,
+        viewer_user_id: str | None = None,
+    ) -> dict:
         return {
             "id": membership.id,
             "userId": user.id,
@@ -1281,7 +1880,7 @@ class ChatManagementService:
             "isMuted": bool(membership.is_muted),
             "joinedAt": self._serialize_datetime(membership.joined_at),
             "lastReadAt": self._serialize_datetime(membership.last_read_at),
-            "user": self.serialize_user_summary(user, "friends"),
+            "user": self.serialize_user_summary(db, user, "friends", viewer_user_id=viewer_user_id),
         }
 
     def serialize_message(self, db: Session, item: ChatMessage, *, current_user_id: str, lookup: dict[str, ChatMessage] | None = None) -> dict:
@@ -1298,6 +1897,17 @@ class ChatManagementService:
                 "messageType": reply_source.message_type,
             }
         body = "This message was removed." if item.deleted_for_everyone else item.body
+        visible_status = item.status
+        visible_read_at = item.read_at
+        if (
+            item.group_id is None
+            and current_user_id == item.sender_user_id
+            and item.receiver_user_id
+            and not self._read_receipts_enabled(db, user_id=item.receiver_user_id)
+            and item.status == "read"
+        ):
+            visible_status = "delivered" if item.delivered_at else "sent"
+            visible_read_at = None
         return {
             "id": item.id,
             "senderId": item.sender_user_id,
@@ -1312,14 +1922,18 @@ class ChatManagementService:
             "fileName": None if item.deleted_for_everyone else item.file_name,
             "fileSize": None if item.deleted_for_everyone else item.file_size,
             "mimeType": None if item.deleted_for_everyone else item.mime_type,
-            "status": item.status,
+            "status": visible_status,
             "createdAt": self._serialize_datetime(item.created_at),
             "editedAt": self._serialize_datetime(item.edited_at),
             "deliveredAt": self._serialize_datetime(item.delivered_at),
-            "readAt": self._serialize_datetime(item.read_at),
+            "readAt": self._serialize_datetime(visible_read_at),
+            "expiresAt": self._serialize_datetime(item.expires_at),
             "deletedForEveryone": bool(item.deleted_for_everyone),
             "replyToMessageId": item.reply_to_message_id,
             "replyPreview": reply_preview,
+            "reactions": self._serialize_message_reactions(db, message_id=item.id, current_user_id=current_user_id),
+            "isStarred": self._message_is_starred(db, message_id=item.id, current_user_id=current_user_id),
+            "isPinned": self._message_is_pinned(db, message_id=item.id, current_user_id=current_user_id),
             "canEdit": item.sender_user_id == current_user_id and item.message_type == "text" and not item.deleted_for_everyone,
             "canDeleteForEveryone": item.sender_user_id == current_user_id,
         }
@@ -1338,7 +1952,16 @@ class ChatManagementService:
             return {"conversationType": "community", "apiConversationType": "community", "apiConversationId": community.id, "participantIds": self._group_member_ids(db, group_id=announcement_group.id), "group": announcement_group, "community": community, "membership": membership}
         raise ChatManagementServiceError("Conversation type is not supported.")
 
-    def _build_message_record(self, *, current_user_id: str, conversation: dict, body: str | None, message_type: str, reply_to_message_id: str | None) -> ChatMessage:
+    def _build_message_record(
+        self,
+        *,
+        db: Session,
+        current_user_id: str,
+        conversation: dict,
+        body: str | None,
+        message_type: str,
+        reply_to_message_id: str | None,
+    ) -> ChatMessage:
         return ChatMessage(
             id=str(uuid.uuid4()),
             sender_user_id=current_user_id,
@@ -1349,17 +1972,26 @@ class ChatManagementService:
             message_type=message_type,
             reply_to_message_id=reply_to_message_id,
             status="sent",
+            expires_at=self._conversation_expiration_at(
+                db,
+                user_id=current_user_id,
+                conversation_type=conversation["apiConversationType"],
+                conversation_id=conversation["apiConversationId"],
+            ),
         )
 
-    def _apply_delivery_status(self, message: ChatMessage, *, participant_ids: list[str], sender_user_id: str) -> None:
+    def _apply_delivery_status(self, db: Session, message: ChatMessage, *, participant_ids: list[str], sender_user_id: str) -> None:
         now = datetime.now(timezone.utc)
         recipients = [item for item in participant_ids if item != sender_user_id]
         if message.group_id is None and recipients:
             receiver_user_id = recipients[0]
             if self.manager.get_active_conversation(receiver_user_id) == self._conversation_key("direct", sender_user_id):
-                message.status = "read"
                 message.delivered_at = now
-                message.read_at = now
+                if self._read_receipts_enabled(db, user_id=receiver_user_id):
+                    message.status = "read"
+                    message.read_at = now
+                else:
+                    message.status = "delivered"
             elif self.manager.is_online(receiver_user_id):
                 message.status = "delivered"
                 message.delivered_at = now
@@ -1373,6 +2005,16 @@ class ChatManagementService:
             if recipient_id == sender_user_id:
                 continue
             if self.manager.get_active_conversation(recipient_id) == self._conversation_key(conversation["apiConversationType"], conversation["apiConversationId"]):
+                continue
+            if not self._notifications_enabled_for_conversation(db, user_id=recipient_id, conversation_type=conversation["conversationType"]):
+                continue
+            preference = self._conversation_preference_for_user(
+                db,
+                user_id=recipient_id,
+                conversation_type=conversation["apiConversationType"],
+                conversation_id=conversation["apiConversationId"],
+            )
+            if preference and preference.is_muted:
                 continue
             if conversation.get("group"):
                 recipient_member = self._group_member_record(db, group_id=conversation["group"].id, user_id=recipient_id)
@@ -1510,14 +2152,453 @@ class ChatManagementService:
     def _group_member_count(self, db: Session, *, group_id: str) -> int:
         return db.execute(select(func.count()).select_from(ChatGroupMember).where(ChatGroupMember.group_id == group_id)).scalar_one()
 
+    def _conversation_preference_for_user(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> ChatConversationPreference | None:
+        return db.execute(
+            select(ChatConversationPreference).where(
+                ChatConversationPreference.user_id == user_id,
+                ChatConversationPreference.conversation_type == (conversation_type or "").strip().lower(),
+                ChatConversationPreference.conversation_id == (conversation_id or "").strip(),
+            )
+        ).scalar_one_or_none()
+
+    def _ensure_conversation_preference(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> ChatConversationPreference:
+        existing = self._conversation_preference_for_user(
+            db,
+            user_id=user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        if existing:
+            return existing
+        item = ChatConversationPreference(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            conversation_type=(conversation_type or "").strip().lower(),
+            conversation_id=(conversation_id or "").strip(),
+        )
+        db.add(item)
+        db.flush()
+        return item
+
+    def _serialize_conversation_preference(
+        self,
+        preference: ChatConversationPreference | None,
+        *,
+        fallback_muted: bool = False,
+    ) -> dict:
+        return {
+            "isMuted": bool(preference.is_muted) if preference else bool(fallback_muted),
+            "isPinned": bool(preference.is_pinned) if preference else False,
+            "isArchived": bool(preference.is_archived) if preference else False,
+            "isBlocked": bool(preference.is_blocked) if preference else False,
+            "disappearingMode": preference.disappearing_mode if preference else "off",
+            "lastClearedAt": self._serialize_datetime(preference.last_cleared_at if preference else None),
+        }
+
+    def _chat_settings_form(self, db: Session, *, user_id: str, category: str) -> dict:
+        payload = build_default_settings_payload(category)
+        item = db.execute(
+            select(UserSetting).where(
+                UserSetting.user_id == user_id,
+                UserSetting.category == category,
+            )
+        ).scalar_one_or_none()
+        if not item:
+            return payload.get("form", payload.get("values", {}))
+        try:
+            payload = normalize_settings_category_payload(category, json.loads(item.payload_json or "{}"))
+        except (ValueError, json.JSONDecodeError):
+            payload = build_default_settings_payload(category)
+        return payload.get("form", payload.get("values", {}))
+
+    def _users_are_friends(self, db: Session, *, first_user_id: str, second_user_id: str) -> bool:
+        if first_user_id == second_user_id:
+            return True
+        return bool(
+            db.execute(
+                select(ChatFriendship).where(
+                    ChatFriendship.user_id == first_user_id,
+                    ChatFriendship.friend_user_id == second_user_id,
+                )
+            ).scalar_one_or_none()
+        )
+
+    def _last_seen_visible_to(self, db: Session, *, target_user_id: str, viewer_user_id: str) -> bool:
+        settings = self._chat_settings_form(db, user_id=target_user_id, category="chat-privacy")
+        visibility = (settings.get("lastSeenVisibility") or "contacts").strip().lower()
+        if visibility == "everyone":
+            return True
+        if visibility == "nobody":
+            return False
+        return self._users_are_friends(db, first_user_id=target_user_id, second_user_id=viewer_user_id)
+
+    def _profile_visible_to(self, db: Session, *, target_user_id: str, viewer_user_id: str) -> bool:
+        settings = self._chat_settings_form(db, user_id=target_user_id, category="chat-privacy")
+        visibility = (settings.get("profileVisibility") or "contacts").strip().lower()
+        if visibility == "everyone":
+            return True
+        if visibility == "nobody":
+            return False
+        return self._users_are_friends(db, first_user_id=target_user_id, second_user_id=viewer_user_id)
+
+    def _read_receipts_enabled(self, db: Session, *, user_id: str) -> bool:
+        settings = self._chat_settings_form(db, user_id=user_id, category="chat-privacy")
+        return bool(settings.get("readReceiptsEnabled", True))
+
+    def _notifications_enabled_for_conversation(self, db: Session, *, user_id: str, conversation_type: str) -> bool:
+        settings = self._chat_settings_form(db, user_id=user_id, category="chat-notifications")
+        if conversation_type == "group":
+            return bool(settings.get("groupNotifications", True))
+        if conversation_type == "community":
+            return bool(settings.get("communityNotifications", True))
+        return bool(settings.get("messageNotifications", True))
+
+    def _conversation_clear_cutoff(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> datetime | None:
+        preference = self._conversation_preference_for_user(
+            db,
+            user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        return preference.last_cleared_at if preference else None
+
+    def _message_is_expired(self, message: ChatMessage) -> bool:
+        if not message.expires_at:
+            return False
+        expires_at = message.expires_at.replace(tzinfo=timezone.utc) if message.expires_at.tzinfo is None else message.expires_at.astimezone(timezone.utc)
+        return expires_at <= datetime.now(timezone.utc)
+
+    def _message_visible_for_user_in_conversation(
+        self,
+        db: Session,
+        message: ChatMessage,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> bool:
+        if self._message_hidden_for_user(message, current_user_id):
+            return False
+        if self._message_is_expired(message):
+            return False
+        cleared_at = self._conversation_clear_cutoff(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        if cleared_at and message.created_at and message.created_at <= cleared_at:
+            return False
+        return True
+
+    def _visible_messages_for_conversation(
+        self,
+        db: Session,
+        *,
+        conversation_type: str,
+        conversation_id: str,
+        current_user_id: str,
+        limit: int = 200,
+        media_only: bool = False,
+        newest_first: bool = False,
+    ) -> list[ChatMessage]:
+        query = self._conversation_message_query(
+            db,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+            current_user_id=current_user_id,
+        )
+        ordered = db.execute(
+            query.order_by(ChatMessage.created_at.desc() if newest_first else ChatMessage.created_at.asc())
+        ).scalars().all()
+        visible = [
+            item
+            for item in ordered
+            if self._message_visible_for_user_in_conversation(
+                db,
+                item,
+                current_user_id=current_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            and (not media_only or bool(item.file_url))
+        ]
+        return visible[: max(1, min(limit, 500))]
+
+    def _latest_visible_conversation_message(
+        self,
+        db: Session,
+        *,
+        conversation_type: str,
+        conversation_id: str,
+        current_user_id: str,
+    ) -> ChatMessage | None:
+        items = self._visible_messages_for_conversation(
+            db,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+            current_user_id=current_user_id,
+            limit=1,
+            newest_first=True,
+        )
+        return items[0] if items else None
+
+    def _direct_unread_count(self, db: Session, *, friend_user_id: str, current_user_id: str) -> int:
+        messages = db.execute(
+            select(ChatMessage).where(
+                ChatMessage.sender_user_id == friend_user_id,
+                ChatMessage.receiver_user_id == current_user_id,
+                ChatMessage.group_id.is_(None),
+                ChatMessage.read_at.is_(None),
+                ChatMessage.deleted_for_everyone.is_(False),
+            )
+        ).scalars().all()
+        return len(
+            [
+                item
+                for item in messages
+                if self._message_visible_for_user_in_conversation(
+                    db,
+                    item,
+                    current_user_id=current_user_id,
+                    conversation_type="direct",
+                    conversation_id=friend_user_id,
+                )
+            ]
+        )
+
+    def _conversation_unread_count(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> int:
+        if conversation_type == "direct":
+            return self._direct_unread_count(db, friend_user_id=conversation_id, current_user_id=current_user_id)
+        if conversation_type == "group":
+            return self._group_unread_count(db, group_id=conversation_id, current_user_id=current_user_id)
+        if conversation_type == "community":
+            community, announcement_group, membership = self._require_community_membership(
+                db,
+                community_id=conversation_id,
+                user_id=current_user_id,
+            )
+            messages = db.execute(
+                select(ChatMessage).where(
+                    ChatMessage.group_id == announcement_group.id,
+                    ChatMessage.sender_user_id != current_user_id,
+                    ChatMessage.deleted_for_everyone.is_(False),
+                )
+            ).scalars().all()
+            cleared_at = self._conversation_clear_cutoff(
+                db,
+                current_user_id=current_user_id,
+                conversation_type="community",
+                conversation_id=community.id,
+            )
+            cutoff = max([value for value in [membership.last_read_at, cleared_at] if value is not None], default=None)
+            return len(
+                [
+                    item
+                    for item in messages
+                    if (not cutoff or item.created_at > cutoff)
+                    and self._message_visible_for_user_in_conversation(
+                        db,
+                        item,
+                        current_user_id=current_user_id,
+                        conversation_type="community",
+                        conversation_id=community.id,
+                    )
+                ]
+            )
+        return 0
+
     def _group_unread_count(self, db: Session, *, group_id: str, current_user_id: str) -> int:
         membership = self._group_member_record(db, group_id=group_id, user_id=current_user_id)
         if not membership:
             return 0
-        query = select(func.count()).select_from(ChatMessage).where(ChatMessage.group_id == group_id, ChatMessage.sender_user_id != current_user_id, ChatMessage.deleted_for_everyone.is_(False))
-        if membership.last_read_at:
-            query = query.where(ChatMessage.created_at > membership.last_read_at)
-        return db.execute(query).scalar_one()
+        messages = db.execute(
+            select(ChatMessage).where(
+                ChatMessage.group_id == group_id,
+                ChatMessage.sender_user_id != current_user_id,
+                ChatMessage.deleted_for_everyone.is_(False),
+            )
+        ).scalars().all()
+        cleared_at = self._conversation_clear_cutoff(
+            db,
+            current_user_id=current_user_id,
+            conversation_type="group",
+            conversation_id=group_id,
+        )
+        cutoff = max([value for value in [membership.last_read_at, cleared_at] if value is not None], default=None)
+        return len(
+            [
+                item
+                for item in messages
+                if (not cutoff or item.created_at > cutoff)
+                and self._message_visible_for_user_in_conversation(
+                    db,
+                    item,
+                    current_user_id=current_user_id,
+                    conversation_type="group",
+                    conversation_id=group_id,
+                )
+            ]
+        )
+
+    def _message_is_starred(self, db: Session, *, message_id: str, current_user_id: str) -> bool:
+        return bool(
+            db.execute(
+                select(ChatMessageStar).where(
+                    ChatMessageStar.message_id == message_id,
+                    ChatMessageStar.user_id == current_user_id,
+                )
+            ).scalar_one_or_none()
+        )
+
+    def _message_is_pinned(self, db: Session, *, message_id: str, current_user_id: str) -> bool:
+        return bool(
+            db.execute(
+                select(ChatMessagePin).where(
+                    ChatMessagePin.message_id == message_id,
+                    ChatMessagePin.user_id == current_user_id,
+                )
+            ).scalar_one_or_none()
+        )
+
+    def _serialize_message_reactions(self, db: Session, *, message_id: str, current_user_id: str) -> list[dict]:
+        reactions = db.execute(select(ChatMessageReaction).where(ChatMessageReaction.message_id == message_id)).scalars().all()
+        grouped: dict[str, dict] = {}
+        for item in reactions:
+            grouped.setdefault(item.emoji, {"emoji": item.emoji, "count": 0, "reactedByCurrentUser": False})
+            grouped[item.emoji]["count"] += 1
+            if item.user_id == current_user_id:
+                grouped[item.emoji]["reactedByCurrentUser"] = True
+        return sorted(grouped.values(), key=lambda item: (-item["count"], item["emoji"]))
+
+    def _starred_or_pinned_messages(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation: dict,
+        starred: bool,
+        pinned: bool,
+    ) -> list[ChatMessage]:
+        table = ChatMessageStar if starred else ChatMessagePin
+        rows = db.execute(
+            select(ChatMessage)
+            .join(table, table.message_id == ChatMessage.id)
+            .where(table.user_id == current_user_id)
+            .order_by(ChatMessage.created_at.desc())
+        ).scalars().all()
+        return [
+            item
+            for item in rows
+            if item.conversation_type == conversation["conversationType"]
+            and self._serialize_message_conversation_id(db, item, current_user_id=current_user_id) == conversation["apiConversationId"]
+            and self._message_visible_for_user_in_conversation(
+                db,
+                item,
+                current_user_id=current_user_id,
+                conversation_type=conversation["apiConversationType"],
+                conversation_id=conversation["apiConversationId"],
+            )
+        ][:12]
+
+    def _require_message_access(self, db: Session, *, current_user_id: str, message_id: str) -> ChatMessage:
+        message = db.execute(select(ChatMessage).where(ChatMessage.id == message_id)).scalar_one_or_none()
+        if not message:
+            raise ChatManagementServiceError("Message was not found.")
+        if message.group_id:
+            if message.conversation_type == "community":
+                community = db.execute(select(ChatCommunity).where(ChatCommunity.announcement_group_id == message.group_id)).scalar_one_or_none()
+                if community:
+                    self._require_community_membership(db, community_id=community.id, user_id=current_user_id)
+                else:
+                    self._require_group_membership(db, group_id=message.group_id, user_id=current_user_id)
+            else:
+                self._require_group_membership(db, group_id=message.group_id, user_id=current_user_id)
+        elif current_user_id not in {message.sender_user_id, message.receiver_user_id}:
+            raise ChatManagementServiceError("Message was not found.")
+        if self._message_is_expired(message):
+            raise ChatManagementServiceError("Message was not found.")
+        return message
+
+    def _conversation_expiration_at(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> datetime | None:
+        preference = self._conversation_preference_for_user(
+            db,
+            user_id=user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        mode = (preference.disappearing_mode if preference else "off").strip().lower()
+        if mode == "24h":
+            return datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=1)
+        if mode == "7d":
+            return datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=7)
+        if mode == "90d":
+            return datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=90)
+        return None
+
+    def _detect_upload_message_type(self, content_type: str) -> str:
+        if (content_type or "").startswith("image/"):
+            return "image"
+        if (content_type or "").startswith("video/"):
+            return "video"
+        if (content_type or "").startswith("audio/"):
+            return "voice"
+        return "file"
+
+    def _assert_direct_message_allowed(self, db: Session, *, current_user_id: str, other_user_id: str) -> None:
+        if any(
+            bool(item and item.is_blocked)
+            for item in [
+                self._conversation_preference_for_user(
+                    db,
+                    user_id=current_user_id,
+                    conversation_type="direct",
+                    conversation_id=other_user_id,
+                ),
+                self._conversation_preference_for_user(
+                    db,
+                    user_id=other_user_id,
+                    conversation_type="direct",
+                    conversation_id=current_user_id,
+                ),
+            ]
+        ):
+            raise ChatManagementServiceError("This direct conversation is blocked.")
 
     def _message_preview(self, message: ChatMessage | None) -> str | None:
         if not message:
@@ -1528,6 +2609,10 @@ class ChatManagementService:
             return message.body[:120]
         if message.message_type == "image":
             return "Image"
+        if message.message_type == "video":
+            return "Video"
+        if message.message_type == "voice":
+            return "Voice message"
         if message.file_name:
             return message.file_name
         return "Attachment"

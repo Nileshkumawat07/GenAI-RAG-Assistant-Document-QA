@@ -21,6 +21,8 @@ class User(Base):
     security_answer: Mapped[str] = mapped_column(Text, nullable=False)
     referral_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     public_user_code: Mapped[str | None] = mapped_column(String(6), nullable=True, unique=True, index=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_management: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     management_access_suspended: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

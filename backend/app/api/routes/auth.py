@@ -770,6 +770,8 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
             securityAnswer=user.security_answer,
             referralCode=user.referral_code,
             publicUserCode=user.public_user_code,
+            bio=getattr(user, "bio", None),
+            profileImageUrl=getattr(user, "profile_image_url", None),
             isManagement=is_management,
             managementAccessSuspended=bool(getattr(user, "management_access_suspended", False)),
             managementGrantedAt=getattr(user, "management_granted_at", None),
@@ -921,6 +923,7 @@ def build_auth_router(otp_service: OTPService, auth_service: AuthService) -> API
                 date_of_birth=payload.dateOfBirth,
                 gender=payload.gender,
                 alternate_email=payload.alternateEmail,
+                bio=payload.bio,
             )
             log_security_event(
                 db,

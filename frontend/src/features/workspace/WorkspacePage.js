@@ -4440,7 +4440,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 onRefresh={loadWorkspaceHubData}
               />
             ) : activeSection === "chat" ? (
-              <ChatManagementPanel currentUser={currentUser} />
+              <ChatManagementPanel currentUser={currentUser} onUserUpdate={onUserUpdate} />
             ) : activeSection === "chat-history" ? (
               <ChatHistoryPanel
                 threads={workspaceThreads}

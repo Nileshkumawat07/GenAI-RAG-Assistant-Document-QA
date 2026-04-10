@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildChatAuthenticatedUrl, buildChatFileUrl } from "./chatManagementApi";
 
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "🙏"];
+
 function formatDate(value, options) {
   if (!value) return "";
   try {
@@ -105,6 +107,9 @@ function ChatConversationPane({
   handleSendMessage,
   handleDeleteMessage,
   handleSaveEdit,
+  handleToggleReaction,
+  handleToggleStar,
+  handleTogglePin,
   isSending,
   loadOlderMessages,
   handleUpdateConversationBackground,
@@ -113,8 +118,8 @@ function ChatConversationPane({
   const groupedMessages = buildConversationGroups(messages || []);
   const messageIndex = useMemo(() => new Map((messages || []).map((message) => [message.id, message])), [messages]);
   const chatTitle = selectedItem?.title || "Select a chat";
-  const chatPresence = selectedItem?.subtitle || selectedItem?.statusText || "Tap a conversation to start chatting";
-  const attachmentAccept = "image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip";
+  const chatPresence = selectedTyping ? "Typing..." : selectedItem?.subtitle || selectedItem?.statusText || "Tap a conversation to start chatting";
+  const attachmentAccept = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip";
   const streamRef = useRef(null);
   const wallpaperInputRef = useRef(null);
   const popupRef = useRef(null);
@@ -123,6 +128,7 @@ function ChatConversationPane({
   const [messageInfo, setMessageInfo] = useState(null);
 
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
+  const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
   const streamBackgroundStyle = backgroundImageUrl ? { "--workspace-chat-custom-bg": `url("${backgroundImageUrl}")` } : undefined;
   const composerActionLabel = !messageDraft.trim() && !selectedAttachment ? "Voice message" : isSending ? "Sending" : "Send message";
 
@@ -215,7 +221,9 @@ function ChatConversationPane({
         </button>
 
         <div className="workspace-chat-contact-row">
-          <div className="workspace-chat-avatar workspace-chat-avatar-large">{getAvatarLabel(chatTitle)}</div>
+          <div className="workspace-chat-avatar workspace-chat-avatar-large">
+            {headerAvatarImage ? <img src={headerAvatarImage} alt={chatTitle} className="workspace-chat-avatar-image" /> : getAvatarLabel(chatTitle)}
+          </div>
           <div className="workspace-chat-contact-copy">
             <strong>{chatTitle}</strong>
             <span>{chatPresence}</span>
@@ -263,6 +271,8 @@ function ChatConversationPane({
               {group.items.map((message) => {
                 const mine = message.senderId === currentUser?.id;
                 const isImage = message.messageType === "image";
+                const isVideo = message.messageType === "video";
+                const isVoice = message.messageType === "voice";
 
                 return (
                   <article
@@ -318,6 +328,14 @@ function ChatConversationPane({
                             >
                               <img src={buildChatFileUrl(message.id)} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
                             </a>
+                          ) : isVideo ? (
+                            <video className="workspace-chat-image-preview workspace-chat-video-preview" controls preload="metadata">
+                              <source src={buildChatFileUrl(message.id)} type={message.mimeType || "video/mp4"} />
+                            </video>
+                          ) : isVoice ? (
+                            <audio className="workspace-chat-audio-preview" controls preload="metadata">
+                              <source src={buildChatFileUrl(message.id)} type={message.mimeType || "audio/mpeg"} />
+                            </audio>
                           ) : (
                             <a
                               href={buildChatFileUrl(message.id)}
@@ -338,6 +356,20 @@ function ChatConversationPane({
                       <span>{formatBubbleTime(message.createdAt)}{message.editedAt ? " edited" : ""}</span>
                       {mine ? <span>{statusTicks(message.status)}</span> : null}
                     </div>
+                    {message.reactions?.length ? (
+                      <div className="workspace-chat-reaction-row">
+                        {message.reactions.map((reaction) => (
+                          <button
+                            key={`${message.id}-${reaction.emoji}`}
+                            type="button"
+                            className={`workspace-chat-reaction-chip ${reaction.reactedByCurrentUser ? "is-active" : ""}`}
+                            onClick={() => handleToggleReaction(message.id, reaction.emoji)}
+                          >
+                            {reaction.emoji} {reaction.count}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </article>
                 );
               })}
@@ -355,11 +387,24 @@ function ChatConversationPane({
             className="workspace-chat-popup-menu"
             style={{ left: `${messageMenu.x}px`, top: `${messageMenu.y}px` }}
           >
+            <div className="workspace-chat-reaction-row workspace-chat-popup-reactions">
+              {REACTION_EMOJIS.map((emoji) => (
+                <button key={emoji} type="button" className="workspace-chat-reaction-chip" onClick={() => { handleToggleReaction(messageMenu.message.id, emoji); setMessageMenu(null); }}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
             <button type="button" className="workspace-chat-popup-item" onClick={() => { setMessageInfo(messageMenu.message); setMessageMenu(null); }}>
               Message info
             </button>
             <button type="button" className="workspace-chat-popup-item" onClick={() => { setReplyToMessage(messageMenu.message); setMessageMenu(null); }}>
               Reply
+            </button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { handleToggleStar(messageMenu.message.id); setMessageMenu(null); }}>
+              {messageMenu.message.isStarred ? "Unstar" : "Star"}
+            </button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { handleTogglePin(messageMenu.message.id); setMessageMenu(null); }}>
+              {messageMenu.message.isPinned ? "Unpin" : "Pin"}
             </button>
             <button type="button" className="workspace-chat-popup-item" onClick={() => handleCopyMessage(messageMenu.message)}>
               Copy
