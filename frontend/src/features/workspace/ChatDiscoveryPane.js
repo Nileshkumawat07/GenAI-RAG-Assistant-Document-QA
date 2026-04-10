@@ -31,6 +31,7 @@ function ChatDiscoveryPane({
   searchResults,
   searchLoading,
   handleSendFriendRequest,
+  handleOpenSearchMessage,
   createGroupState,
   setCreateGroupState,
   handleCreateGroup,
@@ -216,13 +217,30 @@ function ChatDiscoveryPane({
 
       <div className="workspace-chat-discovery-scroll">
         <div className="workspace-chat-discovery-list">
-          {searchResults.map((user) => (
+          {(searchResults?.users || []).map((user) => (
             <article key={user.id} className="workspace-chat-discovery-card">
               <div className="workspace-chat-avatar">{user.imageUrl ? <img src={buildChatAuthenticatedUrl(user.imageUrl)} alt={user.fullName} className="workspace-chat-avatar-image" /> : user.avatarLabel}</div>
               <div><strong>{user.fullName}</strong><p>@{user.username} | {user.presenceStatus}</p></div>
               <button type="button" className="admin-table-action-button" disabled={user.relationshipState !== "none"} onClick={() => handleSendFriendRequest(user.id)}>{user.relationshipState === "none" ? "Add Friend" : user.relationshipState.replace("_", " ")}</button>
             </article>
           ))}
+          {(searchResults?.messages || []).map((item) => (
+            <article key={item.messageId} className="workspace-chat-discovery-card workspace-chat-search-message-card">
+              <div>
+                <strong>{item.conversationTitle}</strong>
+                <p>{item.senderName}</p>
+                <p>{item.snippet}</p>
+              </div>
+              <button
+                type="button"
+                className="admin-table-action-button"
+                onClick={() => handleOpenSearchMessage?.({ conversationType: item.conversationType, conversationId: item.conversationId, messageId: item.messageId })}
+              >
+                Jump to message
+              </button>
+            </article>
+          ))}
+          {searchQuery.trim() && !searchLoading && !(searchResults?.users?.length || searchResults?.messages?.length) ? <p className="status-item status-info">No people or messages matched this search.</p> : null}
         </div>
 
         <div className="workspace-chat-side-section">

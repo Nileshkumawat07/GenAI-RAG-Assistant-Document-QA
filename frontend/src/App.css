@@ -5671,6 +5671,10 @@ body.workspace-body-mode .contact-request-empty-card p {
   box-shadow: 0 1px 1px rgba(17, 27, 33, 0.16);
 }
 
+.workspace-chat-whatsapp-shell .workspace-direct-message.is-highlighted {
+  box-shadow: 0 0 0 2px rgba(15, 108, 189, 0.22), 0 8px 18px rgba(17, 27, 33, 0.14);
+}
+
 .workspace-chat-whatsapp-shell .workspace-chat-bubble.is-user {
   margin-left: auto;
   background: #d9fdd3;
@@ -5728,6 +5732,10 @@ body.workspace-body-mode .contact-request-empty-card p {
   color: #667781;
 }
 
+.workspace-chat-status-ticks.is-read {
+  color: #0f6cbd;
+}
+
 .workspace-chat-whatsapp-shell .workspace-chat-image-preview {
   max-width: 320px;
   border-radius: 10px;
@@ -5744,6 +5752,10 @@ body.workspace-body-mode .contact-request-empty-card p {
   background: rgba(17, 27, 33, 0.05);
   border: none;
   color: #0b6f5d;
+}
+
+.workspace-chat-search-message-card {
+  align-items: flex-start;
 }
 
 .workspace-chat-mobile-composer {

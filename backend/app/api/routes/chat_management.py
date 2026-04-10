@@ -6,11 +6,13 @@ from app.api.dependencies import require_authenticated_user_id
 from app.core.database import get_db
 from app.schemas.chat_management import (
     ChatListItemResponse,
+    ChatMessageContextResponse,
     ChatConversationPreferenceResponse,
     ChatConversationSidebarResponse,
     ChatMessagePageResponse,
     ChatMessageResponse,
     ChatOverviewResponse,
+    ChatSearchResponse,
     ChatStorageSummaryResponse,
     ChatUserSummaryResponse,
     CommunityDetailResponse,
@@ -53,6 +55,10 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     @router.get("/users/search", response_model=list[ChatUserSummaryResponse])
     async def search_users(q: str = Query(default=""), db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         return chat_management_service.search_users(db, current_user_id=authenticated_user_id, query=q)
+
+    @router.get("/search", response_model=ChatSearchResponse)
+    async def search_chat(q: str = Query(default=""), db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
+        return chat_management_service.search_chat(db, current_user_id=authenticated_user_id, query=q)
 
     @router.get("/friends/search", response_model=list[ChatUserSummaryResponse])
     async def search_friends(q: str = Query(default=""), db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
@@ -282,6 +288,27 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     async def get_conversation_messages(conversation_type: str, conversation_id: str, before_message_id: str | None = Query(default=None), limit: int = Query(default=40), db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         try:
             return chat_management_service.get_conversation_messages(db, current_user_id=authenticated_user_id, conversation_type=conversation_type, conversation_id=conversation_id, limit=limit, before_message_id=before_message_id)
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/conversations/{conversation_type}/{conversation_id}/messages/{message_id}/context", response_model=ChatMessageContextResponse)
+    async def get_conversation_message_context(
+        conversation_type: str,
+        conversation_id: str,
+        message_id: str,
+        window: int = Query(default=14),
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            return chat_management_service.get_message_context(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+                message_id=message_id,
+                window=window,
+            )
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -646,6 +673,26 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
                         conversation_type=(payload.get("conversationType") or "").strip() or None,
                         conversation_id=(payload.get("conversationId") or "").strip() or None,
                     )
+                elif event_type == "seen":
+                    try:
+                        await chat_management_service.handle_seen_event(
+                            user_id=authenticated_user_id,
+                            conversation_type=(payload.get("conversationType") or "direct").strip(),
+                            conversation_id=(payload.get("conversationId") or "").strip(),
+                        )
+                    except ChatManagementServiceError as exc:
+                        await websocket.send_json({"type": "message:error", "detail": str(exc)})
+                elif event_type == "send_message":
+                    try:
+                        await chat_management_service.handle_socket_send_message(
+                            user_id=authenticated_user_id,
+                            conversation_type=(payload.get("conversationType") or "direct").strip(),
+                            conversation_id=((payload.get("conversationId") or payload.get("receiverId")) or "").strip(),
+                            body=payload.get("body"),
+                            reply_to_message_id=(payload.get("replyToMessageId") or "").strip() or None,
+                        )
+                    except ChatManagementServiceError as exc:
+                        await websocket.send_json({"type": "message:error", "detail": str(exc)})
         except WebSocketDisconnect:
             await chat_management_service.disconnect_websocket(authenticated_user_id, websocket)
 

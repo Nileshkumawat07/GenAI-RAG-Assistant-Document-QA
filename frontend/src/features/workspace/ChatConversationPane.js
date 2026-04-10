@@ -93,6 +93,7 @@ function ChatConversationPane({
   hasMoreMessages,
   conversationStreamRef,
   selectedTyping,
+  highlightedMessageId,
   editingMessageId,
   editingDraft,
   setEditingDraft,
@@ -137,6 +138,13 @@ function ChatConversationPane({
     setBackgroundMenu(null);
     setMessageInfo(null);
   }, [selectedConversation]);
+
+  useEffect(() => {
+    if (!highlightedMessageId) return;
+    const target = streamRef.current?.querySelector(`[data-chat-message-id="${highlightedMessageId}"]`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedMessageId, messages]);
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
@@ -278,7 +286,7 @@ function ChatConversationPane({
                   <article
                     key={message.id}
                     data-chat-message-id={message.id}
-                    className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message`}
+                    className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message ${highlightedMessageId === message.id ? "is-highlighted" : ""}`}
                   >
                     {!mine && selectedConversation.conversationType !== "direct" ? (
                       <strong className="workspace-chat-sender-line">{message.senderName}</strong>
@@ -354,7 +362,7 @@ function ChatConversationPane({
 
                     <div className="workspace-chat-bubble-foot">
                       <span>{formatBubbleTime(message.createdAt)}{message.editedAt ? " edited" : ""}</span>
-                      {mine ? <span>{statusTicks(message.status)}</span> : null}
+                      {mine ? <span className={`workspace-chat-status-ticks ${message.status === "read" ? "is-read" : ""}`}>{statusTicks(message.status)}</span> : null}
                     </div>
                     {message.reactions?.length ? (
                       <div className="workspace-chat-reaction-row">

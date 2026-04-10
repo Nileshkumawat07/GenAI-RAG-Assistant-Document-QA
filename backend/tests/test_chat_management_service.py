@@ -92,3 +92,47 @@ def test_message_read_and_delete_flow():
     assert messages_for_receiver[0]["status"] == "read"
     assert delete_result["deletedForEveryone"] is True
     assert messages_after_delete[0]["deletedForEveryone"] is True
+
+
+def test_search_chat_and_message_context_for_direct_conversation():
+    db = build_session()
+    db.add_all(
+        [
+            build_user("user-1", "one@example.com", "userone", "User One"),
+            build_user("user-2", "two@example.com", "usertwo", "User Two"),
+        ]
+    )
+    db.commit()
+    service = ChatManagementService(AuthService())
+
+    request = service.send_friend_request(db, current_user_id="user-1", receiver_user_id="user-2")
+    service.accept_friend_request(db, current_user_id="user-2", request_id=request["id"])
+
+    first = service.send_text_message(
+        db,
+        current_user_id="user-1",
+        receiver_user_id="user-2",
+        body="Alpha kickoff",
+        reply_to_message_id=None,
+    )
+    service.send_text_message(
+        db,
+        current_user_id="user-2",
+        receiver_user_id="user-1",
+        body="Replying to alpha",
+        reply_to_message_id=first["id"],
+    )
+
+    search_result = service.search_chat(db, current_user_id="user-1", query="alpha")
+    context = service.get_message_context(
+        db,
+        current_user_id="user-1",
+        conversation_type="direct",
+        conversation_id="user-2",
+        message_id=first["id"],
+    )
+
+    assert search_result["messages"][0]["conversationType"] == "direct"
+    assert search_result["messages"][0]["conversationId"] == "user-2"
+    assert context["focusMessageId"] == first["id"]
+    assert any(item["id"] == first["id"] for item in context["items"])

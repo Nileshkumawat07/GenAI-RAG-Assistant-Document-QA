@@ -41,6 +41,7 @@ class ChatConnectionManager:
         self._connections: dict[str, set[WebSocket]] = defaultdict(set)
         self._last_seen_at: dict[str, datetime] = {}
         self._active_conversations: dict[str, str] = {}
+        self._conversation_rooms: dict[str, set[str]] = defaultdict(set)
 
     async def connect(self, user_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -54,7 +55,7 @@ class ChatConnectionManager:
         if sockets and len(sockets) == 0:
             self._connections.pop(user_id, None)
             self._last_seen_at[user_id] = datetime.now(timezone.utc)
-            self._active_conversations.pop(user_id, None)
+            self.set_active_conversation(user_id, None)
 
     def is_online(self, user_id: str) -> bool:
         return bool(self._connections.get(user_id))
@@ -63,13 +64,22 @@ class ChatConnectionManager:
         return self._last_seen_at.get(user_id)
 
     def set_active_conversation(self, user_id: str, conversation_key: str | None) -> None:
+        previous_key = self._active_conversations.get(user_id)
+        if previous_key and user_id in self._conversation_rooms.get(previous_key, set()):
+            self._conversation_rooms[previous_key].discard(user_id)
+            if not self._conversation_rooms[previous_key]:
+                self._conversation_rooms.pop(previous_key, None)
         if conversation_key:
             self._active_conversations[user_id] = conversation_key
+            self._conversation_rooms[conversation_key].add(user_id)
         else:
             self._active_conversations.pop(user_id, None)
 
     def get_active_conversation(self, user_id: str) -> str | None:
         return self._active_conversations.get(user_id)
+
+    def get_room_members(self, conversation_key: str) -> set[str]:
+        return set(self._conversation_rooms.get(conversation_key, set()))
 
     async def send_event(self, user_id: str, payload: dict) -> None:
         sockets = list(self._connections.get(user_id, set()))
@@ -81,6 +91,12 @@ class ChatConnectionManager:
                 disconnected.append(socket)
         for socket in disconnected:
             self.disconnect(user_id, socket)
+
+    async def send_room_event(self, conversation_key: str, payload: dict, *, exclude_user_id: str | None = None) -> None:
+        for user_id in self.get_room_members(conversation_key):
+            if exclude_user_id and user_id == exclude_user_id:
+                continue
+            await self.send_event(user_id, payload)
 
 
 class ChatManagementService:
@@ -156,6 +172,48 @@ class ChatManagementService:
             for item in friends
             if cleaned_query in (item["fullName"] or "").lower() or cleaned_query in (item["username"] or "").lower()
         ]
+
+    def search_chat(self, db: Session, *, current_user_id: str, query: str) -> dict:
+        cleaned_query = (query or "").strip().lower()
+        if len(cleaned_query) < 1:
+            return {"users": [], "messages": []}
+
+        user_results = self.search_users(db, current_user_id=current_user_id, query=query)
+        message_candidates = db.execute(
+            select(ChatMessage)
+            .where(
+                ChatMessage.deleted_for_everyone.is_(False),
+                or_(
+                    func.lower(func.coalesce(ChatMessage.body, "")).like(f"%{cleaned_query}%"),
+                    func.lower(func.coalesce(ChatMessage.file_name, "")).like(f"%{cleaned_query}%"),
+                ),
+            )
+            .order_by(ChatMessage.created_at.desc())
+            .limit(200)
+        ).scalars().all()
+
+        message_results: list[dict] = []
+        for item in message_candidates:
+            scoped = self._search_visible_message(db, current_user_id=current_user_id, message=item)
+            if not scoped:
+                continue
+            snippet_source = item.body or item.file_name or self._message_preview(item) or "Message"
+            message_results.append(
+                {
+                    "messageId": item.id,
+                    "conversationType": scoped["conversationType"],
+                    "conversationId": scoped["conversationId"],
+                    "conversationTitle": scoped["conversationTitle"],
+                    "senderName": self._display_name(self._require_user(db, item.sender_user_id)),
+                    "snippet": snippet_source[:160],
+                    "createdAt": self._serialize_datetime(item.created_at),
+                    "messageType": item.message_type,
+                }
+            )
+            if len(message_results) >= 20:
+                break
+
+        return {"users": user_results[:12], "messages": message_results}
 
     def get_overview(self, db: Session, *, current_user_id: str) -> dict:
         friends = self.search_friends(db, current_user_id=current_user_id, query="")
@@ -345,6 +403,45 @@ class ChatManagementService:
         return {
             "items": [self.serialize_message(db, item, current_user_id=current_user_id, lookup=lookup) for item in limited],
             "hasMore": len(visible_messages) > len(limited),
+        }
+
+    def get_message_context(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        message_id: str,
+        window: int = 14,
+    ) -> dict:
+        conversation = self._resolve_conversation(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        visible_messages = self._visible_messages_for_conversation(
+            db,
+            conversation_type=conversation["apiConversationType"],
+            conversation_id=conversation["apiConversationId"],
+            current_user_id=current_user_id,
+            limit=500,
+            newest_first=False,
+        )
+        focus_index = next((index for index, item in enumerate(visible_messages) if item.id == message_id), None)
+        if focus_index is None:
+            raise ChatManagementServiceError("Message was not found in this conversation.")
+
+        window_size = max(4, min(window, 40))
+        start = max(0, focus_index - window_size)
+        end = min(len(visible_messages), focus_index + window_size + 1)
+        lookup = {item.id: item for item in visible_messages}
+        return {
+            "items": [self.serialize_message(db, item, current_user_id=current_user_id, lookup=lookup) for item in visible_messages[start:end]],
+            "focusMessageId": message_id,
+            "hasBefore": start > 0,
+            "hasAfter": end < len(visible_messages),
         }
 
     async def update_conversation_background(
@@ -1448,36 +1545,24 @@ class ChatManagementService:
     async def handle_active_conversation(self, *, user_id: str, conversation_type: str | None, conversation_id: str | None) -> None:
         effective_type = (conversation_type or "").strip().lower()
         effective_id = (conversation_id or "").strip()
-        self.manager.set_active_conversation(
-            user_id,
-            self._conversation_key(effective_type, effective_id) if effective_type and effective_id else None,
-        )
         if not effective_type or not effective_id:
+            self.manager.set_active_conversation(user_id, None)
             return
         with SessionLocal() as db:
-            result = self.mark_entity_read(
-                db,
-                current_user_id=user_id,
-                conversation_type=effective_type,
-                conversation_id=effective_id,
-            )
             conversation = self._resolve_conversation(
                 db,
                 current_user_id=user_id,
                 conversation_type=effective_type,
                 conversation_id=effective_id,
             )
-            share_read_receipts = effective_type != "direct" or self._read_receipts_enabled(db, user_id=user_id)
-        for participant_id in conversation["participantIds"]:
-            if participant_id == user_id:
-                continue
-            if not share_read_receipts:
-                continue
-            for message_id in result["updatedIds"]:
-                await self.manager.send_event(
-                    participant_id,
-                    {"type": "message:status", "messageId": message_id, "status": "read", "readAt": result["readAt"]},
-                )
+            self.manager.set_active_conversation(user_id, self._conversation_room_key_from_conversation(conversation))
+            result = self.mark_entity_read(
+                db,
+                current_user_id=user_id,
+                conversation_type=conversation["apiConversationType"],
+                conversation_id=conversation["apiConversationId"],
+            )
+            await self._emit_seen_receipts(db, conversation=conversation, seen_user_id=user_id, result=result)
 
     async def handle_typing_event(self, *, user_id: str, conversation_type: str, conversation_id: str, is_typing: bool) -> None:
         with SessionLocal() as db:
@@ -1494,11 +1579,39 @@ class ChatManagementService:
             "userId": user_id,
             "conversationType": conversation["apiConversationType"],
             "conversationId": conversation["apiConversationId"],
+            "roomKey": self._conversation_room_key_from_conversation(conversation),
             "isTyping": bool(is_typing),
         }
-        for participant_id in conversation["participantIds"]:
-            if participant_id != user_id:
-                await self.manager.send_event(participant_id, payload)
+        await self.manager.send_room_event(self._conversation_room_key_from_conversation(conversation), payload, exclude_user_id=user_id)
+
+    async def handle_seen_event(self, *, user_id: str, conversation_type: str, conversation_id: str) -> None:
+        await self.handle_active_conversation(
+            user_id=user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+
+    async def handle_socket_send_message(
+        self,
+        *,
+        user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        body: str | None,
+        reply_to_message_id: str | None,
+    ) -> None:
+        if not (body or "").strip():
+            raise ChatManagementServiceError("Message cannot be empty.")
+        with SessionLocal() as db:
+            message = self.send_conversation_text_message(
+                db,
+                current_user_id=user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+                body=body,
+                reply_to_message_id=reply_to_message_id,
+            )
+            await self.emit_message_created(db, message_id=message["id"])
 
     async def emit_friend_request_update(self, *, sender_user_id: str, receiver_user_id: str) -> None:
         await self.manager.send_event(receiver_user_id, {"type": "friend_request:new", "fromUserId": sender_user_id})
@@ -1514,11 +1627,17 @@ class ChatManagementService:
 
     async def emit_message_created(self, db: Session, *, message_id: str) -> None:
         message = db.execute(select(ChatMessage).where(ChatMessage.id == message_id)).scalar_one()
+        room_key = self._message_room_key(message)
         for participant_id in self._participant_ids_for_message(db, message):
             conversation_id = self._serialize_message_conversation_id(db, message, current_user_id=participant_id)
+            serialized_message = self.serialize_message(db, message, current_user_id=participant_id)
             await self.manager.send_event(
                 participant_id,
-                {"type": "message:new", "message": self.serialize_message(db, message, current_user_id=participant_id)},
+                {"type": "message:new", "message": serialized_message, "roomKey": room_key},
+            )
+            await self.manager.send_event(
+                participant_id,
+                {"type": "receive_message", "message": serialized_message, "roomKey": room_key},
             )
             await self.manager.send_event(participant_id, {"type": "overview:refresh"})
             await self.manager.send_event(
@@ -1527,6 +1646,7 @@ class ChatManagementService:
                     "type": "conversation:refresh",
                     "conversationType": message.conversation_type or "direct",
                     "conversationId": conversation_id,
+                    "roomKey": room_key,
                 },
             )
             if participant_id != message.sender_user_id:
@@ -1544,7 +1664,7 @@ class ChatManagementService:
                     and not (recipient_membership and recipient_membership.is_muted)
                     and self._notifications_enabled_for_conversation(db, user_id=participant_id, conversation_type=message.conversation_type or "direct")
                     and bool(self._chat_settings_form(db, user_id=participant_id, category="chat-notifications").get("inAppToasts", True))
-                    and self.manager.get_active_conversation(participant_id) != self._conversation_key(message.conversation_type or "direct", conversation_id)
+                    and self.manager.get_active_conversation(participant_id) != room_key
                 ):
                     await self.manager.send_event(
                         participant_id,
@@ -1553,16 +1673,18 @@ class ChatManagementService:
                             "conversationType": message.conversation_type or "direct",
                             "conversationId": conversation_id,
                             "messageId": message.id,
+                            "roomKey": room_key,
                         },
                     )
 
     async def emit_message_updated(self, db: Session, *, message_id: str) -> None:
         message = db.execute(select(ChatMessage).where(ChatMessage.id == message_id)).scalar_one()
+        room_key = self._message_room_key(message)
         for participant_id in self._participant_ids_for_message(db, message):
             conversation_id = self._serialize_message_conversation_id(db, message, current_user_id=participant_id)
             await self.manager.send_event(
                 participant_id,
-                {"type": "message:updated", "message": self.serialize_message(db, message, current_user_id=participant_id)},
+                {"type": "message:updated", "message": self.serialize_message(db, message, current_user_id=participant_id), "roomKey": room_key},
             )
             await self.manager.send_event(
                 participant_id,
@@ -1570,6 +1692,7 @@ class ChatManagementService:
                     "type": "conversation:refresh",
                     "conversationType": message.conversation_type or "direct",
                     "conversationId": conversation_id,
+                    "roomKey": room_key,
                 },
             )
 
@@ -1577,7 +1700,8 @@ class ChatManagementService:
         message = db.execute(select(ChatMessage).where(ChatMessage.id == message_id)).scalar_one_or_none()
         if not message:
             return
-        event = {"type": "message:deleted", "messageId": message_id, **payload}
+        room_key = self._message_room_key(message)
+        event = {"type": "message:deleted", "messageId": message_id, "roomKey": room_key, **payload}
         for participant_id in self._participant_ids_for_message(db, message):
             conversation_id = self._serialize_message_conversation_id(db, message, current_user_id=participant_id)
             await self.manager.send_event(participant_id, event)
@@ -1588,6 +1712,7 @@ class ChatManagementService:
                     "type": "conversation:refresh",
                     "conversationType": message.conversation_type or "direct",
                     "conversationId": conversation_id,
+                    "roomKey": room_key,
                 },
             )
 
@@ -1985,7 +2110,7 @@ class ChatManagementService:
         recipients = [item for item in participant_ids if item != sender_user_id]
         if message.group_id is None and recipients:
             receiver_user_id = recipients[0]
-            if self.manager.get_active_conversation(receiver_user_id) == self._conversation_key("direct", sender_user_id):
+            if self.manager.get_active_conversation(receiver_user_id) == self._message_room_key(message):
                 message.delivered_at = now
                 if self._read_receipts_enabled(db, user_id=receiver_user_id):
                     message.status = "read"
@@ -2001,10 +2126,11 @@ class ChatManagementService:
 
     def _create_message_notifications(self, db: Session, *, conversation: dict, sender_user_id: str, message: ChatMessage) -> None:
         sender = self._require_user(db, sender_user_id)
+        room_key = self._conversation_room_key_from_conversation(conversation)
         for recipient_id in conversation["participantIds"]:
             if recipient_id == sender_user_id:
                 continue
-            if self.manager.get_active_conversation(recipient_id) == self._conversation_key(conversation["apiConversationType"], conversation["apiConversationId"]):
+            if self.manager.get_active_conversation(recipient_id) == room_key:
                 continue
             if not self._notifications_enabled_for_conversation(db, user_id=recipient_id, conversation_type=conversation["conversationType"]):
                 continue
@@ -2770,6 +2896,105 @@ class ChatManagementService:
     @staticmethod
     def _conversation_key(conversation_type: str, conversation_id: str) -> str:
         return f"{conversation_type}:{conversation_id}"
+
+    def _conversation_room_key(self, *, current_user_id: str | None, conversation_type: str, conversation_id: str) -> str:
+        normalized_type = (conversation_type or "").strip().lower()
+        normalized_id = (conversation_id or "").strip()
+        if normalized_type == "direct":
+            direct_key = normalized_id
+            if "__" in normalized_id:
+                parts = [part for part in normalized_id.split("__") if part]
+                if len(parts) == 2:
+                    direct_key = self._direct_conversation_key(parts[0], parts[1])
+            elif current_user_id:
+                direct_key = self._direct_conversation_key(current_user_id, normalized_id)
+            return self._conversation_key("direct", direct_key)
+        return self._conversation_key(normalized_type, normalized_id)
+
+    def _conversation_room_key_from_conversation(self, conversation: dict) -> str:
+        if conversation["apiConversationType"] == "direct":
+            return self._conversation_key(
+                "direct",
+                self._direct_conversation_key(conversation["participantIds"][0], conversation["participantIds"][1]),
+            )
+        return self._conversation_key(conversation["apiConversationType"], conversation["apiConversationId"])
+
+    def _message_room_key(self, message: ChatMessage) -> str:
+        if message.conversation_type == "direct" or message.group_id is None:
+            return self._conversation_key("direct", self._direct_conversation_key(message.sender_user_id, message.receiver_user_id))
+        return self._conversation_key(message.conversation_type or "group", message.group_id or "")
+
+    async def _emit_seen_receipts(self, db: Session, *, conversation: dict, seen_user_id: str, result: dict) -> None:
+        share_read_receipts = conversation["conversationType"] != "direct" or self._read_receipts_enabled(db, user_id=seen_user_id)
+        if not share_read_receipts:
+            return
+        room_key = self._conversation_room_key_from_conversation(conversation)
+        for participant_id in conversation["participantIds"]:
+            if participant_id == seen_user_id:
+                continue
+            for message_id in result["updatedIds"]:
+                await self.manager.send_event(
+                    participant_id,
+                    {"type": "message:status", "messageId": message_id, "status": "read", "readAt": result["readAt"], "roomKey": room_key},
+                )
+                await self.manager.send_event(
+                    participant_id,
+                    {
+                        "type": "seen",
+                        "messageId": message_id,
+                        "conversationType": conversation["apiConversationType"],
+                        "conversationId": conversation["apiConversationId"],
+                        "readAt": result["readAt"],
+                        "seenByUserId": seen_user_id,
+                        "roomKey": room_key,
+                    },
+                )
+
+    def _search_visible_message(self, db: Session, *, current_user_id: str, message: ChatMessage) -> dict | None:
+        if message.group_id is None:
+            if current_user_id not in {message.sender_user_id, message.receiver_user_id}:
+                return None
+            other_user_id = message.receiver_user_id if message.sender_user_id == current_user_id else message.sender_user_id
+            if not db.execute(
+                select(ChatFriendship).where(ChatFriendship.user_id == current_user_id, ChatFriendship.friend_user_id == other_user_id)
+            ).scalar_one_or_none():
+                return None
+            if not self._message_visible_for_user_in_conversation(
+                db,
+                message,
+                current_user_id=current_user_id,
+                conversation_type="direct",
+                conversation_id=other_user_id,
+            ):
+                return None
+            return {"conversationType": "direct", "conversationId": other_user_id, "conversationTitle": self._display_name(self._require_user(db, other_user_id))}
+
+        if message.conversation_type == "community":
+            community = db.execute(select(ChatCommunity).where(ChatCommunity.announcement_group_id == message.group_id)).scalar_one_or_none()
+            if not community or not self._group_member_record(db, group_id=community.announcement_group_id, user_id=current_user_id):
+                return None
+            if not self._message_visible_for_user_in_conversation(
+                db,
+                message,
+                current_user_id=current_user_id,
+                conversation_type="community",
+                conversation_id=community.id,
+            ):
+                return None
+            return {"conversationType": "community", "conversationId": community.id, "conversationTitle": community.name}
+
+        if not self._group_member_record(db, group_id=message.group_id, user_id=current_user_id):
+            return None
+        group = self._require_group(db, group_id=message.group_id)
+        if not self._message_visible_for_user_in_conversation(
+            db,
+            message,
+            current_user_id=current_user_id,
+            conversation_type="group",
+            conversation_id=group.id,
+        ):
+            return None
+        return {"conversationType": "group", "conversationId": group.id, "conversationTitle": group.name}
 
     @staticmethod
     def _serialize_datetime(value: datetime | None) -> str | None:

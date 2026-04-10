@@ -17,6 +17,7 @@ import {
   editChatMessage,
   exitGroup,
   getChatOverview,
+  getConversationMessageContext,
   getConversationSidebar,
   getChatWebSocketUrl,
   getConversationMessages,
@@ -27,6 +28,7 @@ import {
   removeGroupFromCommunity,
   removeGroupMember,
   searchChatUsers,
+  searchChatDirectory,
   sendFriendRequest,
   sendTextMessage,
   clearConversationBackground,
@@ -64,11 +66,12 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const [selectedAttachment, setSelectedAttachment] = useState(null);
   const [replyToMessage, setReplyToMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState({ users: [], messages: [] });
   const [searchLoading, setSearchLoading] = useState(false);
   const [panelError, setPanelError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [typingState, setTypingState] = useState({ userId: "", conversationType: "", conversationId: "" });
+  const [highlightedMessageId, setHighlightedMessageId] = useState("");
   const [details, setDetails] = useState(null);
   const [requestFocus, setRequestFocus] = useState(false);
   const [createGroupState, setCreateGroupState] = useState({ name: "", description: "", image: null, memberIds: [] });
@@ -83,6 +86,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const selectedConversationRef = useRef(null);
   const overviewRef = useRef(overview);
   const toastIdRef = useRef(0);
+  const pendingJumpRef = useRef(null);
 
   const currentItems = useMemo(() => {
     const source = activeTab === "groups" ? overview.groups : activeTab === "communities" ? overview.communities : overview.directChats;
@@ -147,6 +151,13 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     );
   }, []);
 
+  const openConversationAtMessage = useCallback(({ conversationType, conversationId, messageId }) => {
+    if (!conversationType || !conversationId || !messageId) return;
+    pendingJumpRef.current = { conversationType, conversationId, messageId };
+    setActiveTab(conversationType === "group" ? "groups" : conversationType === "community" ? "communities" : "chats");
+    setSelectedConversation({ conversationType, conversationId });
+  }, []);
+
   const applyNavigationTarget = () => {
     try {
       const raw = window.sessionStorage.getItem("genai_chat_navigation_target");
@@ -201,12 +212,36 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
   useEffect(() => {
     if (!selectedConversation) return;
-    loadConversation(selectedConversation).catch((error) => setPanelError(error.message || "Failed to load messages."));
-    loadDetails(selectedConversation).catch(() => setDetails(null));
+    const pendingJump = pendingJumpRef.current;
+    if (
+      pendingJump &&
+      pendingJump.conversationType === selectedConversation.conversationType &&
+      pendingJump.conversationId === selectedConversation.conversationId
+    ) {
+      pendingJumpRef.current = null;
+      getConversationMessageContext({
+        conversationType: pendingJump.conversationType,
+        conversationId: pendingJump.conversationId,
+        messageId: pendingJump.messageId,
+      })
+        .then(async (data) => {
+          setMessages(data.items || []);
+          setHasMoreMessages(Boolean(data.hasBefore));
+          setHighlightedMessageId(data.focusMessageId || pendingJump.messageId);
+          await markConversationRead({ conversationType: pendingJump.conversationType, conversationId: pendingJump.conversationId });
+          await loadDetails(selectedConversation).catch(() => setDetails(null));
+          await loadOverview();
+        })
+        .catch((error) => setPanelError(error.message || "Failed to open this message."));
+    } else {
+      setHighlightedMessageId("");
+      loadConversation(selectedConversation).catch((error) => setPanelError(error.message || "Failed to load messages."));
+      loadDetails(selectedConversation).catch(() => setDetails(null));
+    }
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: "active_chat", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId }));
     }
-  }, [loadConversation, loadDetails, selectedConversation?.conversationType, selectedConversation?.conversationId]);
+  }, [loadConversation, loadDetails, loadOverview, selectedConversation?.conversationType, selectedConversation?.conversationId]);
 
   useEffect(() => {
     if (!currentUser?.authToken) return undefined;
@@ -223,10 +258,19 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         if (payload.type === "typing" || payload.type === "stop_typing") {
           return setTypingState(payload.isTyping ? payload : { userId: "", conversationType: "", conversationId: "" });
         }
-        if (payload.type === "message:new" && payload.message) {
+        if (payload.type === "message:error") {
+          setIsSending(false);
+          setPanelError(payload.detail || "Failed to send message.");
+          return;
+        }
+        if ((payload.type === "message:new" || payload.type === "receive_message") && payload.message) {
+          setIsSending(false);
           const activeConversation = selectedConversationRef.current;
           if (activeConversation && payload.message.conversationType === activeConversation.conversationType && payload.message.conversationId === activeConversation.conversationId) {
             setMessages((current) => mergeMessageList(current, payload.message));
+            if (payload.message.senderId !== currentUser?.id && socketRef.current?.readyState === WebSocket.OPEN) {
+              socketRef.current.send(JSON.stringify({ type: "seen", conversationType: activeConversation.conversationType, conversationId: activeConversation.conversationId }));
+            }
           } else {
             const sourceItems = [
               ...(overviewRef.current?.directChats || []),
@@ -247,7 +291,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
           setMessages((current) => current.map((item) => (item.id === payload.message.id ? { ...item, ...payload.message } : item)));
           return loadDetails(selectedConversationRef.current).catch(() => setDetails(null));
         }
-        if (payload.type === "message:status") {
+        if (payload.type === "message:status" || payload.type === "seen") {
           setMessages((current) => current.map((item) => (item.id === payload.messageId ? { ...item, status: payload.status, readAt: payload.readAt || item.readAt, deliveredAt: payload.deliveredAt || item.deliveredAt } : item)));
           return loadOverview();
         }
@@ -287,18 +331,25 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       socket.close();
       socketRef.current = null;
     };
-  }, [currentUser?.authToken, loadConversation, loadDetails, loadOverview, pushToast, selectedConversation?.conversationType, selectedConversation?.conversationId]);
+  }, [currentUser?.authToken, currentUser?.id, loadConversation, loadDetails, loadOverview, pushToast, selectedConversation?.conversationType, selectedConversation?.conversationId]);
 
   useEffect(() => {
     const query = searchQuery.trim();
     if (!query) {
-      setSearchResults([]);
+      setSearchResults({ users: [], messages: [] });
       return undefined;
     }
     const timeout = window.setTimeout(async () => {
       try {
         setSearchLoading(true);
-        setSearchResults((await searchChatUsers(query)) || []);
+        const [directory, users] = await Promise.all([
+          searchChatDirectory(query),
+          searchChatUsers(query),
+        ]);
+        setSearchResults({
+          users: directory?.users?.length ? directory.users : users || [],
+          messages: directory?.messages || [],
+        });
       } catch (error) {
         setPanelError(error.message || "Failed to search users.");
       } finally {
@@ -311,6 +362,12 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   useEffect(() => {
     if (conversationStreamRef.current) conversationStreamRef.current.scrollTop = conversationStreamRef.current.scrollHeight;
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!highlightedMessageId) return undefined;
+    const timeout = window.setTimeout(() => setHighlightedMessageId(""), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [highlightedMessageId]);
 
   const sendTypingSignal = (isTyping) => {
     if (!selectedConversation || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
@@ -335,17 +392,23 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         body: messageDraft.trim(),
         replyToMessageId: replyToMessage?.id || null,
       };
-      const sent = selectedAttachment ? await uploadChatAttachment({ ...payload, file: selectedAttachment }) : await sendTextMessage(payload);
-      setMessages((current) => mergeMessageList(current, sent));
+      if (!selectedAttachment && socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({ type: "send_message", ...payload }));
+      } else {
+        const sent = selectedAttachment ? await uploadChatAttachment({ ...payload, file: selectedAttachment }) : await sendTextMessage(payload);
+        setMessages((current) => mergeMessageList(current, sent));
+      }
       setMessageDraft("");
       setSelectedAttachment(null);
       setReplyToMessage(null);
       sendTypingSignal(false);
       await loadOverview();
       await loadDetails(selectedConversation).catch(() => setDetails(null));
+      if (selectedAttachment || socketRef.current?.readyState !== WebSocket.OPEN) {
+        setIsSending(false);
+      }
     } catch (error) {
       setPanelError(error.message || "Failed to send message.");
-    } finally {
       setIsSending(false);
     }
   };
@@ -548,8 +611,8 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
       <section className="workspace-chat-management-grid">
         <ChatRecentListPane activeTab={activeTab} items={currentItems} listFilter={listFilter} recentSearch={recentSearch} selectedConversation={selectedConversation} typingState={typingState} setActiveTab={setActiveTab} setListFilter={setListFilter} setRecentSearch={setRecentSearch} setSelectedConversation={setSelectedConversation} />
-        <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} handleToggleReaction={handleToggleReaction} handleToggleStar={handleToggleStar} handleTogglePin={handleTogglePin} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} handleUpdateConversationBackground={handleUpdateConversationBackground} handleClearConversationBackground={handleClearConversationBackground} />
-        <ChatDiscoveryPane overview={overview} searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} handleCreateGroup={handleCreateGroup} createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} selectedConversation={selectedConversation} details={details} canManageMembers={canManageMembers} memberInviteIds={memberInviteIds} setMemberInviteIds={setMemberInviteIds} communityGroupId={communityGroupId} setCommunityGroupId={setCommunityGroupId} currentUser={currentUser} onUserUpdate={onUserUpdate} requestsRef={requestsRef} requestFocus={requestFocus} handleRequestAction={handleRequestAction} handleUpdateConversationPreference={handleUpdateConversationPreference} handleClearConversation={handleClearConversation} handleDeleteConversationMedia={handleDeleteConversationMedia} handleChatProfileUpdated={handleChatProfileUpdated} refreshSelectedConversation={refreshSelectedConversation} setDetails={setDetails} setPanelError={setPanelError} loadOverview={loadOverview} addGroupMembers={addGroupMembers} addGroupToCommunity={addGroupToCommunity} deleteGroup={deleteGroup} exitGroup={exitGroup} joinCommunity={joinCommunity} leaveCommunity={leaveCommunity} overviewGroups={overview.groups} overviewFriends={overview.friends} removeGroupFromCommunity={removeGroupFromCommunity} removeGroupMember={removeGroupMember} updateCommunity={updateCommunity} updateGroup={updateGroup} updateGroupMemberRole={updateGroupMemberRole} clearSelection={() => { setSelectedConversation(null); setDetails(null); }} />
+        <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} highlightedMessageId={highlightedMessageId} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} handleToggleReaction={handleToggleReaction} handleToggleStar={handleToggleStar} handleTogglePin={handleTogglePin} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} handleUpdateConversationBackground={handleUpdateConversationBackground} handleClearConversationBackground={handleClearConversationBackground} />
+        <ChatDiscoveryPane overview={overview} searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} handleOpenSearchMessage={openConversationAtMessage} createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} handleCreateGroup={handleCreateGroup} createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} selectedConversation={selectedConversation} details={details} canManageMembers={canManageMembers} memberInviteIds={memberInviteIds} setMemberInviteIds={setMemberInviteIds} communityGroupId={communityGroupId} setCommunityGroupId={setCommunityGroupId} currentUser={currentUser} onUserUpdate={onUserUpdate} requestsRef={requestsRef} requestFocus={requestFocus} handleRequestAction={handleRequestAction} handleUpdateConversationPreference={handleUpdateConversationPreference} handleClearConversation={handleClearConversation} handleDeleteConversationMedia={handleDeleteConversationMedia} handleChatProfileUpdated={handleChatProfileUpdated} refreshSelectedConversation={refreshSelectedConversation} setDetails={setDetails} setPanelError={setPanelError} loadOverview={loadOverview} addGroupMembers={addGroupMembers} addGroupToCommunity={addGroupToCommunity} deleteGroup={deleteGroup} exitGroup={exitGroup} joinCommunity={joinCommunity} leaveCommunity={leaveCommunity} overviewGroups={overview.groups} overviewFriends={overview.friends} removeGroupFromCommunity={removeGroupFromCommunity} removeGroupMember={removeGroupMember} updateCommunity={updateCommunity} updateGroup={updateGroup} updateGroupMemberRole={updateGroupMemberRole} clearSelection={() => { setSelectedConversation(null); setDetails(null); }} />
       </section>
     </div>
   );

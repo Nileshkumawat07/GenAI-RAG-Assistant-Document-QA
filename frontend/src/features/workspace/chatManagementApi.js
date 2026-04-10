@@ -31,6 +31,10 @@ export async function searchChatUsers(query) {
   return requestJson(`/chat/users/search?q=${encodeURIComponent(query)}`, { method: "GET" }, "Failed to search users.");
 }
 
+export async function searchChatDirectory(query) {
+  return requestJson(`/chat/search?q=${encodeURIComponent(query)}`, { method: "GET" }, "Failed to search chats.");
+}
+
 export async function searchFriends(query) {
   return requestJson(`/chat/friends/search?q=${encodeURIComponent(query)}`, { method: "GET" }, "Failed to search friends.");
 }
@@ -54,6 +58,16 @@ export async function getConversationMessages({ conversationType, conversationId
     query.set("before_message_id", beforeMessageId);
   }
   return requestJson(`/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/messages?${query.toString()}`, { method: "GET" }, "Failed to load messages.");
+}
+
+export async function getConversationMessageContext({ conversationType, conversationId, messageId, window = 14 }) {
+  const query = new URLSearchParams();
+  query.set("window", String(window));
+  return requestJson(
+    `/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/context?${query.toString()}`,
+    { method: "GET" },
+    "Failed to load message context."
+  );
 }
 
 export async function getConversationSidebar({ conversationType, conversationId }) {

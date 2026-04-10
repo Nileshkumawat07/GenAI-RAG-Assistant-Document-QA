@@ -149,6 +149,13 @@ class ChatMessagePageResponse(BaseModel):
     hasMore: bool = False
 
 
+class ChatMessageContextResponse(BaseModel):
+    items: list[ChatMessageResponse] = Field(default_factory=list)
+    focusMessageId: str
+    hasBefore: bool = False
+    hasAfter: bool = False
+
+
 class ChatOverviewResponse(BaseModel):
     friends: list[ChatUserSummaryResponse] = Field(default_factory=list)
     directChats: list[ChatListItemResponse] = Field(default_factory=list)
@@ -200,6 +207,22 @@ class ChatConversationSidebarResponse(BaseModel):
     starredMessages: list[ChatMessageResponse] = Field(default_factory=list)
     pinnedMessages: list[ChatMessageResponse] = Field(default_factory=list)
     storage: ChatStorageSummaryResponse = Field(default_factory=ChatStorageSummaryResponse)
+
+
+class ChatSearchMessageResult(BaseModel):
+    messageId: str
+    conversationType: str
+    conversationId: str
+    conversationTitle: str
+    senderName: str
+    snippet: str
+    createdAt: str | None = None
+    messageType: str = "text"
+
+
+class ChatSearchResponse(BaseModel):
+    users: list[ChatUserSummaryResponse] = Field(default_factory=list)
+    messages: list[ChatSearchMessageResult] = Field(default_factory=list)
 
 
 class SendFriendRequestRequest(BaseModel):
