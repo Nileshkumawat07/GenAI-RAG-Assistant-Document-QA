@@ -21,11 +21,71 @@ class FriendRequestResponse(BaseModel):
     respondedAt: str | None = None
 
 
-class ChatFriendItemResponse(ChatUserSummaryResponse):
+class ChatListItemResponse(BaseModel):
+    id: str
+    title: str
+    subtitle: str | None = None
+    avatarLabel: str
+    imageUrl: str | None = None
+    conversationType: str = "direct"
+    entityType: str = "chat"
     unreadCount: int = 0
     lastMessagePreview: str | None = None
     lastMessageAt: str | None = None
     lastMessageStatus: str | None = None
+    presenceStatus: str | None = None
+    lastSeenAt: str | None = None
+    statusText: str | None = None
+    memberCount: int = 0
+    role: str | None = None
+    isMuted: bool = False
+    announcementGroupId: str | None = None
+    linkedGroupCount: int = 0
+    communityId: str | None = None
+
+
+class GroupMemberResponse(BaseModel):
+    id: str
+    userId: str
+    role: str
+    isMuted: bool = False
+    joinedAt: str | None = None
+    lastReadAt: str | None = None
+    user: ChatUserSummaryResponse
+
+
+class GroupDetailResponse(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    imageUrl: str | None = None
+    conversationType: str = "group"
+    groupType: str = "group"
+    memberCount: int = 0
+    isMuted: bool = False
+    currentUserRole: str | None = None
+    members: list[GroupMemberResponse] = Field(default_factory=list)
+
+
+class CommunityGroupResponse(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    imageUrl: str | None = None
+    memberCount: int = 0
+
+
+class CommunityDetailResponse(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    imageUrl: str | None = None
+    announcementGroupId: str
+    memberCount: int = 0
+    currentUserRole: str | None = None
+    isMuted: bool = False
+    groups: list[CommunityGroupResponse] = Field(default_factory=list)
+    members: list[GroupMemberResponse] = Field(default_factory=list)
 
 
 class ReplyPreviewResponse(BaseModel):
@@ -38,7 +98,11 @@ class ReplyPreviewResponse(BaseModel):
 class ChatMessageResponse(BaseModel):
     id: str
     senderId: str
-    receiverId: str
+    senderName: str
+    receiverId: str | None = None
+    groupId: str | None = None
+    conversationType: str = "direct"
+    conversationId: str
     body: str | None = None
     messageType: str = "text"
     fileUrl: str | None = None
@@ -47,19 +111,31 @@ class ChatMessageResponse(BaseModel):
     mimeType: str | None = None
     status: str = "sent"
     createdAt: str | None = None
+    editedAt: str | None = None
     deliveredAt: str | None = None
     readAt: str | None = None
     deletedForEveryone: bool = False
     replyToMessageId: str | None = None
     replyPreview: ReplyPreviewResponse | None = None
+    canEdit: bool = False
+    canDeleteForEveryone: bool = False
+
+
+class ChatMessagePageResponse(BaseModel):
+    items: list[ChatMessageResponse] = Field(default_factory=list)
+    hasMore: bool = False
 
 
 class ChatOverviewResponse(BaseModel):
-    friends: list[ChatFriendItemResponse] = Field(default_factory=list)
+    friends: list[ChatUserSummaryResponse] = Field(default_factory=list)
+    directChats: list[ChatListItemResponse] = Field(default_factory=list)
+    groups: list[ChatListItemResponse] = Field(default_factory=list)
+    communities: list[ChatListItemResponse] = Field(default_factory=list)
     sentRequests: list[FriendRequestResponse] = Field(default_factory=list)
     receivedRequests: list[FriendRequestResponse] = Field(default_factory=list)
     unreadMessageCount: int = 0
     unreadRequestCount: int = 0
+    unreadNotificationCount: int = 0
 
 
 class SendFriendRequestRequest(BaseModel):
@@ -67,10 +143,51 @@ class SendFriendRequestRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    receiverId: str
+    receiverId: str | None = None
+    conversationType: str = "direct"
+    conversationId: str | None = None
     body: str | None = None
     replyToMessageId: str | None = None
 
 
+class EditMessageRequest(BaseModel):
+    body: str
+
+
 class DeleteMessageRequest(BaseModel):
     scope: str = "me"
+
+
+class CreateGroupRequest(BaseModel):
+    name: str
+    description: str | None = None
+    memberIds: list[str] = Field(default_factory=list)
+
+
+class UpdateGroupRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    isMuted: bool | None = None
+
+
+class GroupMembersRequest(BaseModel):
+    userIds: list[str] = Field(default_factory=list)
+
+
+class UpdateGroupMemberRoleRequest(BaseModel):
+    role: str
+
+
+class CreateCommunityRequest(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class UpdateCommunityRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    isMuted: bool | None = None
+
+
+class CommunityGroupLinkRequest(BaseModel):
+    groupId: str

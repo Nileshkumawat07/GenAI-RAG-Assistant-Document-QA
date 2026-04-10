@@ -12,6 +12,8 @@ class ChatMessage(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     sender_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     receiver_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    group_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_groups.id"), nullable=True, index=True)
+    conversation_type: Mapped[str] = mapped_column(String(30), nullable=False, default="direct")
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     message_type: Mapped[str] = mapped_column(String(30), nullable=False, default="text")
     file_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -24,10 +26,12 @@ class ChatMessage(Base):
     deleted_for_everyone: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_by_sender: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_by_receiver: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    hidden_for_user_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

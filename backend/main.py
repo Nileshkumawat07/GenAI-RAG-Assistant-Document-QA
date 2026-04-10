@@ -270,6 +270,49 @@ def ensure_workspace_hub_schema() -> None:
         Base.metadata.create_all(bind=engine, tables=tables_to_create)
 
 
+def ensure_chat_management_schema() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    required_tables = {
+        "chat_groups",
+        "chat_group_members",
+        "chat_communities",
+        "chat_community_groups",
+    }
+    tables_to_create = [
+        table
+        for table in Base.metadata.sorted_tables
+        if table.name in required_tables and table.name not in table_names
+    ]
+    if tables_to_create:
+        Base.metadata.create_all(bind=engine, tables=tables_to_create)
+
+    with engine.begin() as connection:
+        if "chat_messages" in table_names:
+            existing_columns = {column["name"] for column in inspector.get_columns("chat_messages")}
+            required_statements = {
+                "group_id": "ALTER TABLE chat_messages ADD COLUMN group_id VARCHAR(36) NULL",
+                "conversation_type": "ALTER TABLE chat_messages ADD COLUMN conversation_type VARCHAR(30) NOT NULL DEFAULT 'direct'",
+                "hidden_for_user_ids": "ALTER TABLE chat_messages ADD COLUMN hidden_for_user_ids TEXT NULL",
+                "edited_at": "ALTER TABLE chat_messages ADD COLUMN edited_at DATETIME NULL",
+            }
+            for column_name, statement in required_statements.items():
+                if column_name not in existing_columns:
+                    connection.execute(text(statement))
+
+        if "workspace_notifications" in table_names:
+            existing_columns = {column["name"] for column in inspector.get_columns("workspace_notifications")}
+            required_statements = {
+                "action_type": "ALTER TABLE workspace_notifications ADD COLUMN action_type VARCHAR(80) NULL",
+                "action_entity_id": "ALTER TABLE workspace_notifications ADD COLUMN action_entity_id VARCHAR(36) NULL",
+                "action_entity_kind": "ALTER TABLE workspace_notifications ADD COLUMN action_entity_kind VARCHAR(40) NULL",
+                "action_context": "ALTER TABLE workspace_notifications ADD COLUMN action_context TEXT NULL",
+            }
+            for column_name, statement in required_statements.items():
+                if column_name not in existing_columns:
+                    connection.execute(text(statement))
+
+
 def ensure_reply_template_seed(management_service: ManagementService) -> None:
     with Session(engine) as db:
         management_service.ensure_default_reply_templates(db)
@@ -453,6 +496,7 @@ def create_app() -> FastAPI:
     ensure_user_login_sessions_schema()
     ensure_subscription_transaction_schema()
     ensure_workspace_hub_schema()
+    ensure_chat_management_schema()
     ensure_public_codes()
     ensure_contact_request_code_schema()
     rag_service = RAGService()

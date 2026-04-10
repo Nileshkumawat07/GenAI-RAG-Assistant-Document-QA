@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -633,12 +634,24 @@ class WorkspaceHubService:
         return self.serialize_team(db, team)
 
     def serialize_notification(self, item: WorkspaceNotification) -> dict:
+        action_context = {}
+        if item.action_context:
+            try:
+                parsed = json.loads(item.action_context)
+                if isinstance(parsed, dict):
+                    action_context = parsed
+            except Exception:
+                action_context = {}
         return {
             "id": item.id,
             "category": item.category,
             "title": item.title,
             "message": item.message,
             "actionUrl": item.action_url,
+            "actionType": item.action_type,
+            "actionEntityId": item.action_entity_id,
+            "actionEntityKind": item.action_entity_kind,
+            "actionContext": action_context,
             "isRead": bool(item.is_read),
             "createdAt": self._serialize_datetime(item.created_at),
             "readAt": self._serialize_datetime(item.read_at),

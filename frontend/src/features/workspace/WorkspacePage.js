@@ -1238,6 +1238,27 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   }, [selectedInfoPage, currentUser?.id]);
 
   useEffect(() => {
+    const handleOpenChatManagement = () => {
+      setActiveSection("chat");
+    };
+
+    let hasPendingChatTarget = false;
+    try {
+      hasPendingChatTarget = !!window.sessionStorage.getItem("genai_chat_navigation_target");
+    } catch {
+      hasPendingChatTarget = false;
+    }
+    if (hasPendingChatTarget) {
+      setActiveSection("chat");
+    }
+
+    window.addEventListener("genai-open-chat-management", handleOpenChatManagement);
+    return () => {
+      window.removeEventListener("genai-open-chat-management", handleOpenChatManagement);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!selectedInfoPage && activeSection === "chat-history") {
       loadWorkspaceThreadMessages(activeWorkspaceThreadId);
     }

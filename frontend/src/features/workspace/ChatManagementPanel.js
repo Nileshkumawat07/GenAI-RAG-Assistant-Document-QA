@@ -1,187 +1,208 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+import ChatConversationPane from "./ChatConversationPane";
+import ChatDiscoveryPane from "./ChatDiscoveryPane";
+import ChatRecentListPane from "./ChatRecentListPane";
 import {
   acceptFriendRequest,
-  buildChatFileUrl,
+  addGroupMembers,
+  addGroupToCommunity,
+  createCommunity,
+  createGroup,
   deleteChatMessage,
+  deleteGroup,
+  editChatMessage,
+  exitGroup,
   getChatOverview,
   getChatWebSocketUrl,
+  getCommunityDetail,
   getConversationMessages,
+  getGroupDetail,
+  joinCommunity,
+  leaveCommunity,
   markConversationRead,
   rejectFriendRequest,
+  removeGroupFromCommunity,
+  removeGroupMember,
   searchChatUsers,
   sendFriendRequest,
   sendTextMessage,
+  updateCommunity,
+  updateGroup,
+  updateGroupMemberRole,
   uploadChatAttachment,
 } from "./chatManagementApi";
-
-const QUICK_EMOJIS = ["😀", "👍", "🔥", "🎯", "🙏"];
-
-function formatDate(value) {
-  if (!value) return "Just now";
-  try {
-    return new Date(value).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "Just now";
-  }
-}
-
-function formatStatus(friend) {
-  if (!friend) return "Select a chat";
-  if (friend.presenceStatus === "online") return "Online";
-  return friend.lastSeenAt ? `Last seen ${formatDate(friend.lastSeenAt)}` : "Offline";
-}
-
-function statusTicks(status) {
-  if (status === "read") return "✓✓";
-  if (status === "delivered") return "✓✓";
-  return "✓";
-}
 
 function mergeMessageList(current, incoming) {
   const next = [...current];
   const index = next.findIndex((item) => item.id === incoming.id);
-  if (index >= 0) {
-    next[index] = { ...next[index], ...incoming };
-  } else {
-    next.push(incoming);
-  }
+  if (index >= 0) next[index] = { ...next[index], ...incoming };
+  else next.push(incoming);
   next.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
   return next;
 }
 
 function ChatManagementPanel({ currentUser }) {
-  const [overview, setOverview] = useState({ friends: [], sentRequests: [], receivedRequests: [], unreadMessageCount: 0, unreadRequestCount: 0 });
-  const [selectedFriendId, setSelectedFriendId] = useState("");
+  const [overview, setOverview] = useState({ friends: [], directChats: [], groups: [], communities: [], sentRequests: [], receivedRequests: [], unreadMessageCount: 0, unreadRequestCount: 0, unreadNotificationCount: 0 });
+  const [activeTab, setActiveTab] = useState("chats");
+  const [recentSearch, setRecentSearch] = useState("");
+  const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState("");
+  const [editingDraft, setEditingDraft] = useState("");
+  const [selectedAttachment, setSelectedAttachment] = useState(null);
+  const [replyToMessage, setReplyToMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [panelError, setPanelError] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [typingUserId, setTypingUserId] = useState("");
-  const [selectedAttachment, setSelectedAttachment] = useState(null);
-  const [replyToMessage, setReplyToMessage] = useState(null);
+  const [typingState, setTypingState] = useState({ userId: "", conversationType: "", conversationId: "" });
   const [socketReady, setSocketReady] = useState(false);
+  const [details, setDetails] = useState(null);
+  const [requestFocus, setRequestFocus] = useState(false);
+  const [createGroupState, setCreateGroupState] = useState({ name: "", description: "", image: null, memberIds: [] });
+  const [createCommunityState, setCreateCommunityState] = useState({ name: "", description: "", image: null });
+  const [memberInviteIds, setMemberInviteIds] = useState([]);
+  const [communityGroupId, setCommunityGroupId] = useState("");
   const typingTimeoutRef = useRef(null);
   const socketRef = useRef(null);
+  const conversationStreamRef = useRef(null);
+  const requestsRef = useRef(null);
 
-  const selectedFriend = useMemo(
-    () => overview.friends.find((item) => item.id === selectedFriendId) || overview.friends[0] || null,
-    [overview.friends, selectedFriendId]
-  );
+  const currentItems = useMemo(() => {
+    const source = activeTab === "groups" ? overview.groups : activeTab === "communities" ? overview.communities : overview.directChats;
+    const query = recentSearch.trim().toLowerCase();
+    return query ? source.filter((item) => `${item.title} ${item.subtitle || ""}`.toLowerCase().includes(query)) : source;
+  }, [activeTab, overview, recentSearch]);
+
+  const selectedItem = useMemo(() => {
+    if (!selectedConversation) return null;
+    return [...overview.directChats, ...overview.groups, ...overview.communities].find((item) => item.conversationType === selectedConversation.conversationType && item.id === selectedConversation.conversationId) || null;
+  }, [overview, selectedConversation]);
 
   const attachmentPreviewUrl = useMemo(() => {
     if (!selectedAttachment || !selectedAttachment.type?.startsWith("image/")) return "";
     return URL.createObjectURL(selectedAttachment);
   }, [selectedAttachment]);
 
-  useEffect(() => () => {
-    if (attachmentPreviewUrl) {
-      URL.revokeObjectURL(attachmentPreviewUrl);
-    }
-  }, [attachmentPreviewUrl]);
+  useEffect(() => () => { if (attachmentPreviewUrl) window.URL.revokeObjectURL(attachmentPreviewUrl); }, [attachmentPreviewUrl]);
 
   const loadOverview = async () => {
-    try {
-      const data = await getChatOverview();
-      setOverview(data);
-      setSelectedFriendId((current) => (
-        data.friends.some((item) => item.id === current) ? current : data.friends[0]?.id || ""
-      ));
-    } catch (error) {
-      setPanelError(error.message || "Failed to load chat.");
-    }
+    const data = await getChatOverview();
+    setOverview(data);
+    setSelectedConversation((current) => {
+      if (current && [...data.directChats, ...data.groups, ...data.communities].some((item) => item.conversationType === current.conversationType && item.id === current.conversationId)) return current;
+      const fallback = data.directChats[0] || data.groups[0] || data.communities[0] || null;
+      return fallback ? { conversationType: fallback.conversationType, conversationId: fallback.id } : null;
+    });
   };
 
-  const loadConversation = async (friendId) => {
-    if (!friendId) {
+  const loadConversation = async (conversation, options = {}) => {
+    if (!conversation?.conversationId) {
       setMessages([]);
+      setHasMoreMessages(false);
       return;
     }
+    const data = await getConversationMessages({ conversationType: conversation.conversationType, conversationId: conversation.conversationId, beforeMessageId: options.beforeMessageId, limit: 40 });
+    if (options.prepend) setMessages((current) => [...(data.items || []), ...current.filter((item) => !(data.items || []).some((candidate) => candidate.id === item.id))]);
+    else setMessages(data.items || []);
+    setHasMoreMessages(Boolean(data.hasMore));
+    await markConversationRead({ conversationType: conversation.conversationType, conversationId: conversation.conversationId });
+  };
+
+  const loadDetails = async (conversation) => {
+    if (!conversation) return setDetails(null);
+    if (conversation.conversationType === "group") return setDetails(await getGroupDetail(conversation.conversationId));
+    if (conversation.conversationType === "community") return setDetails(await getCommunityDetail(conversation.conversationId));
+    setDetails(null);
+  };
+
+  const applyNavigationTarget = () => {
     try {
-      const data = await getConversationMessages(friendId);
-      setMessages(data || []);
-      await markConversationRead(friendId);
-      await loadOverview();
-    } catch (error) {
-      setPanelError(error.message || "Failed to load messages.");
+      const raw = window.sessionStorage.getItem("genai_chat_navigation_target");
+      if (!raw) return;
+      const target = JSON.parse(raw);
+      window.sessionStorage.removeItem("genai_chat_navigation_target");
+      if (target.actionType === "open_chat_requests") {
+        setRequestFocus(true);
+        window.setTimeout(() => requestsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      } else if (target.actionContext?.conversationType && target.actionContext?.conversationId) {
+        setActiveTab(target.actionContext.conversationType === "group" ? "groups" : target.actionContext.conversationType === "community" ? "communities" : "chats");
+        setSelectedConversation({ conversationType: target.actionContext.conversationType, conversationId: target.actionContext.conversationId });
+      }
+    } catch {
+      // Ignore malformed navigation state.
     }
   };
 
   useEffect(() => {
-    loadOverview();
+    loadOverview().catch((error) => setPanelError(error.message || "Failed to load chat."));
+    applyNavigationTarget();
   }, []);
 
   useEffect(() => {
-    loadConversation(selectedFriendId);
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: "active_chat", targetUserId: selectedFriendId || "" }));
-    }
-  }, [selectedFriendId]);
+    const handleOpen = () => applyNavigationTarget();
+    window.addEventListener("genai-open-chat-management", handleOpen);
+    return () => window.removeEventListener("genai-open-chat-management", handleOpen);
+  }, []);
 
   useEffect(() => {
-    if (!currentUser?.authToken) {
-      return undefined;
+    if (!selectedConversation) return;
+    loadConversation(selectedConversation).catch((error) => setPanelError(error.message || "Failed to load messages."));
+    loadDetails(selectedConversation).catch(() => setDetails(null));
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "active_chat", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId }));
     }
+  }, [selectedConversation?.conversationType, selectedConversation?.conversationId]);
 
+  useEffect(() => {
+    if (!currentUser?.authToken) return undefined;
     const socket = new WebSocket(getChatWebSocketUrl());
     socketRef.current = socket;
-
     socket.onopen = () => {
       setSocketReady(true);
-      socket.send(JSON.stringify({ type: "active_chat", targetUserId: selectedFriendId || "" }));
+      if (selectedConversation) socket.send(JSON.stringify({ type: "active_chat", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId }));
     };
     socket.onclose = () => setSocketReady(false);
     socket.onerror = () => setSocketReady(false);
     socket.onmessage = async (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.type === "typing") {
-          setTypingUserId(payload.isTyping ? payload.userId : "");
-          return;
+        if (payload.type === "typing") return setTypingState(payload.isTyping ? payload : { userId: "", conversationType: "", conversationId: "" });
+        if (payload.type === "message:new" && payload.message) {
+          if (selectedConversation && payload.message.conversationType === selectedConversation.conversationType && payload.message.conversationId === selectedConversation.conversationId) setMessages((current) => mergeMessageList(current, payload.message));
+          return loadOverview();
         }
-        if (payload.type === "message:new") {
-          const incoming = payload.message;
-          if (incoming.senderId === selectedFriendId || incoming.receiverId === selectedFriendId) {
-            setMessages((current) => mergeMessageList(current, incoming));
-          }
-          await loadOverview();
-          return;
-        }
+        if (payload.type === "message:updated" && payload.message) return setMessages((current) => current.map((item) => (item.id === payload.message.id ? { ...item, ...payload.message } : item)));
         if (payload.type === "message:status") {
-          setMessages((current) => current.map((item) => item.id === payload.messageId ? { ...item, status: payload.status, deliveredAt: payload.deliveredAt || item.deliveredAt, readAt: payload.readAt || item.readAt } : item));
-          await loadOverview();
-          return;
+          setMessages((current) => current.map((item) => (item.id === payload.messageId ? { ...item, status: payload.status, readAt: payload.readAt || item.readAt, deliveredAt: payload.deliveredAt || item.deliveredAt } : item)));
+          return loadOverview();
         }
         if (payload.type === "message:deleted") {
-          await loadConversation(selectedFriendId);
-          return;
+          if (selectedConversation) await loadConversation(selectedConversation);
+          return loadOverview();
         }
-        if (payload.type === "overview:refresh" || payload.type === "friends:refresh" || payload.type === "friend_request:new" || payload.type === "presence") {
+        if (["overview:refresh", "group:refresh", "community:refresh", "friends:refresh", "friend_request:new", "presence"].includes(payload.type)) {
           await loadOverview();
+          if (selectedConversation && (payload.type === "group:refresh" || payload.type === "community:refresh")) await loadDetails(selectedConversation).catch(() => setDetails(null));
         }
       } catch {
         // Ignore malformed socket payloads.
       }
     };
-
     return () => {
       try {
-        socket.send(JSON.stringify({ type: "active_chat", targetUserId: "" }));
+        socket.send(JSON.stringify({ type: "active_chat", conversationType: "", conversationId: "" }));
       } catch {
-        // Ignore send failure during cleanup.
+        // Ignore cleanup errors.
       }
       socket.close();
       socketRef.current = null;
     };
-  }, [currentUser?.authToken, selectedFriendId]);
+  }, [currentUser?.authToken, selectedConversation?.conversationType, selectedConversation?.conversationId]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -192,8 +213,7 @@ function ChatManagementPanel({ currentUser }) {
     const timeout = window.setTimeout(async () => {
       try {
         setSearchLoading(true);
-        const results = await searchChatUsers(query);
-        setSearchResults(results || []);
+        setSearchResults((await searchChatUsers(query)) || []);
       } catch (error) {
         setPanelError(error.message || "Failed to search users.");
       } finally {
@@ -203,9 +223,13 @@ function ChatManagementPanel({ currentUser }) {
     return () => window.clearTimeout(timeout);
   }, [searchQuery]);
 
+  useEffect(() => {
+    if (conversationStreamRef.current) conversationStreamRef.current.scrollTop = conversationStreamRef.current.scrollHeight;
+  }, [messages.length]);
+
   const sendTypingSignal = (isTyping) => {
-    if (!selectedFriendId || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-    socketRef.current.send(JSON.stringify({ type: "typing", targetUserId: selectedFriendId, isTyping }));
+    if (!selectedConversation || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    socketRef.current.send(JSON.stringify({ type: "typing", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId, isTyping }));
   };
 
   const handleDraftChange = (value) => {
@@ -216,25 +240,11 @@ function ChatManagementPanel({ currentUser }) {
   };
 
   const handleSendMessage = async () => {
-    if (!selectedFriendId || (!messageDraft.trim() && !selectedAttachment)) return;
+    if (!selectedConversation || (!messageDraft.trim() && !selectedAttachment)) return;
     try {
       setIsSending(true);
-      setPanelError("");
-      let sent;
-      if (selectedAttachment) {
-        sent = await uploadChatAttachment({
-          receiverId: selectedFriendId,
-          body: messageDraft.trim(),
-          replyToMessageId: replyToMessage?.id || "",
-          file: selectedAttachment,
-        });
-      } else {
-        sent = await sendTextMessage({
-          receiverId: selectedFriendId,
-          body: messageDraft.trim(),
-          replyToMessageId: replyToMessage?.id || null,
-        });
-      }
+      const payload = { conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId, body: messageDraft.trim(), replyToMessageId: replyToMessage?.id || null };
+      const sent = selectedAttachment ? await uploadChatAttachment({ ...payload, file: selectedAttachment }) : await sendTextMessage(payload);
       setMessages((current) => mergeMessageList(current, sent));
       setMessageDraft("");
       setSelectedAttachment(null);
@@ -251,21 +261,27 @@ function ChatManagementPanel({ currentUser }) {
   const handleDeleteMessage = async (messageId, scope) => {
     try {
       await deleteChatMessage(messageId, scope);
-      await loadConversation(selectedFriendId);
+      if (selectedConversation) await loadConversation(selectedConversation);
     } catch (error) {
       setPanelError(error.message || "Failed to delete message.");
     }
   };
 
-  const selectedFriendTyping = typingUserId && typingUserId === selectedFriendId;
+  const handleSaveEdit = async (messageId) => {
+    try {
+      const updated = await editChatMessage(messageId, editingDraft);
+      setMessages((current) => current.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+      setEditingMessageId("");
+      setEditingDraft("");
+    } catch (error) {
+      setPanelError(error.message || "Failed to edit message.");
+    }
+  };
 
   const handleRequestAction = async (requestId, action) => {
     try {
-      if (action === "accept") {
-        await acceptFriendRequest(requestId);
-      } else {
-        await rejectFriendRequest(requestId);
-      }
+      if (action === "accept") await acceptFriendRequest(requestId);
+      else await rejectFriendRequest(requestId);
       await loadOverview();
     } catch (error) {
       setPanelError(error.message || `Failed to ${action} request.`);
@@ -276,12 +292,35 @@ function ChatManagementPanel({ currentUser }) {
     try {
       await sendFriendRequest(userId);
       await loadOverview();
-      const refreshed = await searchChatUsers(searchQuery);
-      setSearchResults(refreshed || []);
     } catch (error) {
       setPanelError(error.message || "Failed to send request.");
     }
   };
+
+  const handleCreateGroup = async () => {
+    try {
+      await createGroup(createGroupState);
+      setCreateGroupState({ name: "", description: "", image: null, memberIds: [] });
+      await loadOverview();
+      setActiveTab("groups");
+    } catch (error) {
+      setPanelError(error.message || "Failed to create group.");
+    }
+  };
+
+  const handleCreateCommunity = async () => {
+    try {
+      await createCommunity(createCommunityState);
+      setCreateCommunityState({ name: "", description: "", image: null });
+      await loadOverview();
+      setActiveTab("communities");
+    } catch (error) {
+      setPanelError(error.message || "Failed to create community.");
+    }
+  };
+
+  const selectedTyping = selectedConversation && typingState.conversationType === selectedConversation.conversationType && typingState.conversationId === selectedConversation.conversationId;
+  const canManageMembers = details?.currentUserRole === "admin";
 
   return (
     <div className="workspace-premium-shell">
@@ -290,29 +329,23 @@ function ChatManagementPanel({ currentUser }) {
           <div className="workspace-command-topline">
             <div>
               <span className="workspace-command-kicker">Chat Management</span>
-              <h3 className="workspace-command-title">Full messaging, friend discovery, requests, and direct chat inside the workspace.</h3>
-              <p className="workspace-command-lede">Facebook-style discovery, WhatsApp-style messaging, unread tracking, attachments, typing, presence, and live delivery status in one module.</p>
+              <h3 className="workspace-command-title">Real-time chats, groups, communities, discovery, and notifications inside the same workspace shell.</h3>
+              <p className="workspace-command-lede">The same three-column layout now supports direct chat, group collaboration, community announcements, file sharing, edit/delete/reply actions, typing state, and richer notification routing.</p>
             </div>
-            <div className="workspace-chat-hero-pill">
-              <span>Unread</span>
-              <strong>{overview.unreadMessageCount}</strong>
-            </div>
+            <div className="workspace-chat-hero-pill"><span>Unread</span><strong>{overview.unreadMessageCount}</strong></div>
           </div>
           <div className="workspace-command-badge-row">
-            <article className="workspace-command-badge"><span>Friends</span><strong>{overview.friends.length}</strong><p>Accepted contacts ready for direct messaging.</p></article>
-            <article className="workspace-command-badge"><span>Requests</span><strong>{overview.unreadRequestCount}</strong><p>Pending incoming requests waiting for action.</p></article>
-            <article className="workspace-command-badge"><span>Realtime</span><strong>{socketReady ? "Live" : "Idle"}</strong><p>Presence, typing, delivery, and read updates.</p></article>
+            <article className="workspace-command-badge"><span>Chats</span><strong>{overview.directChats.length}</strong><p>Direct conversations with live presence and delivery state.</p></article>
+            <article className="workspace-command-badge"><span>Groups</span><strong>{overview.groups.length}</strong><p>Shared spaces with admins, members, and media.</p></article>
+            <article className="workspace-command-badge"><span>Communities</span><strong>{overview.communities.length}</strong><p>Announcement channels and linked groups in one layer.</p></article>
           </div>
         </article>
         <aside className="workspace-command-sidebar">
           <section className="workspace-hub-card workspace-spotlight-panel">
             <div className="workspace-spotlight-head"><span className="workspace-spotlight-tag">Active chat</span></div>
-            <strong>{selectedFriend?.fullName || "No conversation selected"}</strong>
-            <p>{selectedFriend ? formatStatus(selectedFriend) : "Choose a friend to open a direct conversation."}</p>
-            <div className="workspace-focus-meta">
-              <span>{selectedFriend?.username ? `@${selectedFriend.username}` : "Discovery available"}</span>
-              <span>{socketReady ? "Socket connected" : "Socket disconnected"}</span>
-            </div>
+            <strong>{selectedItem?.title || "No conversation selected"}</strong>
+            <p>{selectedItem?.statusText || "Choose a recent chat, group, or community to continue."}</p>
+            <div className="workspace-focus-meta"><span>{selectedItem?.subtitle || "Discovery and requests available"}</span><span>{socketReady ? "Socket connected" : "Socket disconnected"}</span></div>
           </section>
         </aside>
       </section>
@@ -320,169 +353,9 @@ function ChatManagementPanel({ currentUser }) {
       {panelError ? <p className="error-text">{panelError}</p> : null}
 
       <section className="workspace-chat-management-grid">
-        <aside className="workspace-hub-card workspace-chat-column">
-          <div className="workspace-section-heading">
-            <div><span className="workspace-hub-eyebrow">Recent chats</span><h4>Friends</h4></div>
-            <span className="workspace-section-summary">{overview.friends.length}</span>
-          </div>
-          <div className="workspace-chat-list">
-            {overview.friends.length > 0 ? overview.friends.map((friend) => (
-              <button key={friend.id} type="button" className={`workspace-chat-list-item ${selectedFriend?.id === friend.id ? "is-active" : ""}`} onClick={() => setSelectedFriendId(friend.id)}>
-                <div className="workspace-chat-avatar">{friend.avatarLabel}</div>
-                <div className="workspace-chat-list-copy">
-                  <div className="workspace-chat-list-head">
-                    <strong>{friend.fullName}</strong>
-                    <span>{friend.lastMessageAt ? formatDate(friend.lastMessageAt) : ""}</span>
-                  </div>
-                  <p>{friend.lastMessagePreview || `@${friend.username}`}</p>
-                </div>
-                {friend.unreadCount > 0 ? <span className="workspace-chat-unread-badge">{friend.unreadCount}</span> : null}
-              </button>
-            )) : <p className="status-item status-info">No friends yet.</p>}
-          </div>
-        </aside>
-
-        <section className="workspace-hub-card workspace-chat-conversation-card">
-          <div className="workspace-section-heading">
-            <div>
-              <span className="workspace-hub-eyebrow">Conversation</span>
-              <h4>{selectedFriend?.fullName || "Select a friend"}</h4>
-            </div>
-            <span className="workspace-section-summary">{selectedFriend ? formatStatus(selectedFriend) : "Direct messaging"}</span>
-          </div>
-
-          <div className="workspace-chat-conversation-stream">
-            {selectedFriend ? messages.map((message) => {
-              const mine = message.senderId === currentUser?.id;
-              const isImage = message.messageType === "image";
-              return (
-                <article key={message.id} className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message`}>
-                  {message.replyPreview ? (
-                    <div className="workspace-chat-reply-preview">
-                      <strong>{message.replyPreview.senderName}</strong>
-                      <p>{message.replyPreview.body}</p>
-                    </div>
-                  ) : null}
-                  {message.body ? <p>{message.body}</p> : null}
-                  {message.fileUrl ? (
-                    isImage ? (
-                      <a href={buildChatFileUrl(message.id)} target="_blank" rel="noreferrer" className="workspace-chat-media-link">
-                        <img src={buildChatFileUrl(message.id)} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
-                      </a>
-                    ) : (
-                      <a href={buildChatFileUrl(message.id)} target="_blank" rel="noreferrer" className="workspace-chat-file-chip">
-                        {message.fileName || "Download file"}
-                      </a>
-                    )
-                  ) : null}
-                  <div className="workspace-chat-bubble-foot">
-                    <span>{formatDate(message.createdAt)}</span>
-                    {mine ? <span>{statusTicks(message.status)} {message.status}</span> : null}
-                  </div>
-                  <div className="workspace-chat-inline-actions">
-                    <button type="button" className="inline-text-button" onClick={() => setReplyToMessage(message)}>Reply</button>
-                    <button type="button" className="inline-text-button" onClick={() => handleDeleteMessage(message.id, "me")}>Delete for me</button>
-                    {mine ? <button type="button" className="inline-text-button" onClick={() => handleDeleteMessage(message.id, "everyone")}>Delete for everyone</button> : null}
-                  </div>
-                </article>
-              );
-            }) : <p className="status-item status-info">Select a friend to start chatting.</p>}
-            {selectedFriendTyping ? <p className="status-item status-info">{selectedFriend?.fullName} is typing...</p> : null}
-          </div>
-
-          {replyToMessage ? (
-            <div className="workspace-chat-compose-preview">
-              <span>Replying to {replyToMessage.senderId === currentUser?.id ? "yourself" : selectedFriend?.fullName}</span>
-              <strong>{replyToMessage.body || replyToMessage.fileName || "Attachment"}</strong>
-              <button type="button" className="inline-text-button" onClick={() => setReplyToMessage(null)}>Clear</button>
-            </div>
-          ) : null}
-
-          {selectedAttachment ? (
-            <div className="workspace-chat-compose-preview">
-              <span>Attachment ready</span>
-              <strong>{selectedAttachment.name}</strong>
-              <button type="button" className="inline-text-button" onClick={() => setSelectedAttachment(null)}>Remove</button>
-            </div>
-          ) : null}
-
-          {attachmentPreviewUrl ? <img src={attachmentPreviewUrl} alt="attachment preview" className="workspace-chat-image-preview workspace-chat-compose-image" /> : null}
-
-          <div className="workspace-chat-composer">
-            <div className="workspace-chat-emoji-row">
-              {QUICK_EMOJIS.map((emoji) => (
-                <button key={emoji} type="button" className="workspace-chat-emoji-button" onClick={() => handleDraftChange(`${messageDraft}${emoji}`)}>{emoji}</button>
-              ))}
-              <label className="workspace-chat-attach-button">
-                Attach
-                <input type="file" onChange={(event) => setSelectedAttachment(event.target.files?.[0] || null)} />
-              </label>
-            </div>
-            <textarea
-              className="question-input workspace-chat-composer-input"
-              rows={4}
-              value={messageDraft}
-              onChange={(event) => handleDraftChange(event.target.value)}
-              placeholder={selectedFriend ? `Message ${selectedFriend.fullName}` : "Select a friend to message"}
-              disabled={!selectedFriend}
-            />
-            <button type="button" className="hero-button hero-button-primary" onClick={handleSendMessage} disabled={!selectedFriend || isSending || (!messageDraft.trim() && !selectedAttachment)}>
-              {isSending ? "Sending..." : "Send Message"}
-            </button>
-          </div>
-        </section>
-
-        <aside className="workspace-hub-card workspace-chat-column">
-          <div className="workspace-section-heading">
-            <div><span className="workspace-hub-eyebrow">Discovery</span><h4>Find users</h4></div>
-            <span className="workspace-section-summary">{searchLoading ? "Searching" : "Live search"}</span>
-          </div>
-          <input className="workspace-input workspace-command-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by username or name" />
-          <div className="workspace-chat-discovery-list">
-            {searchResults.map((user) => (
-              <article key={user.id} className="workspace-chat-discovery-card">
-                <div className="workspace-chat-avatar">{user.avatarLabel}</div>
-                <div>
-                  <strong>{user.fullName}</strong>
-                  <p>@{user.username} · {user.presenceStatus}</p>
-                </div>
-                <button type="button" className="admin-table-action-button" disabled={user.relationshipState !== "none"} onClick={() => handleSendFriendRequest(user.id)}>
-                  {user.relationshipState === "none" ? "Add Friend" : user.relationshipState.replace("_", " ")}
-                </button>
-              </article>
-            ))}
-          </div>
-
-          <div className="workspace-section-heading workspace-chat-side-section">
-            <div><span className="workspace-hub-eyebrow">Requests</span><h4>Received</h4></div>
-            <span className="workspace-section-summary">{overview.receivedRequests.length}</span>
-          </div>
-          <div className="workspace-chat-request-list">
-            {overview.receivedRequests.length > 0 ? overview.receivedRequests.map((item) => (
-              <article key={item.id} className="workspace-chat-request-card">
-                <strong>{item.sender.fullName}</strong>
-                <p>@{item.sender.username}</p>
-                <div className="workspace-hub-actions">
-                  <button type="button" className="admin-table-action-button" onClick={() => handleRequestAction(item.id, "accept")}>Accept</button>
-                  <button type="button" className="admin-table-action-button" onClick={() => handleRequestAction(item.id, "reject")}>Reject</button>
-                </div>
-              </article>
-            )) : <p className="status-item status-info">No received requests.</p>}
-          </div>
-
-          <div className="workspace-section-heading workspace-chat-side-section">
-            <div><span className="workspace-hub-eyebrow">Requests</span><h4>Sent</h4></div>
-            <span className="workspace-section-summary">{overview.sentRequests.length}</span>
-          </div>
-          <div className="workspace-chat-request-list">
-            {overview.sentRequests.length > 0 ? overview.sentRequests.map((item) => (
-              <article key={item.id} className="workspace-chat-request-card">
-                <strong>{item.receiver.fullName}</strong>
-                <p>@{item.receiver.username}</p>
-              </article>
-            )) : <p className="status-item status-info">No sent requests.</p>}
-          </div>
-        </aside>
+        <ChatRecentListPane activeTab={activeTab} items={currentItems} recentSearch={recentSearch} selectedConversation={selectedConversation} setActiveTab={setActiveTab} setRecentSearch={setRecentSearch} setSelectedConversation={setSelectedConversation} />
+        <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} />
+        <ChatDiscoveryPane overview={overview} searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} handleCreateGroup={handleCreateGroup} createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} details={details} canManageMembers={canManageMembers} memberInviteIds={memberInviteIds} setMemberInviteIds={setMemberInviteIds} communityGroupId={communityGroupId} setCommunityGroupId={setCommunityGroupId} currentUser={currentUser} requestsRef={requestsRef} requestFocus={requestFocus} handleRequestAction={handleRequestAction} setDetails={setDetails} setPanelError={setPanelError} loadOverview={loadOverview} addGroupMembers={addGroupMembers} addGroupToCommunity={addGroupToCommunity} deleteGroup={deleteGroup} exitGroup={exitGroup} joinCommunity={joinCommunity} leaveCommunity={leaveCommunity} overviewGroups={overview.groups} overviewFriends={overview.friends} removeGroupFromCommunity={removeGroupFromCommunity} removeGroupMember={removeGroupMember} updateCommunity={updateCommunity} updateGroup={updateGroup} updateGroupMemberRole={updateGroupMemberRole} clearSelection={() => { setSelectedConversation(null); setDetails(null); }} />
       </section>
     </div>
   );

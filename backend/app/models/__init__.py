@@ -5,6 +5,10 @@ from app.models.automation_rule import AutomationRule
 from app.models.billing_note import BillingNote
 from app.models.chat_friend_request import ChatFriendRequest
 from app.models.chat_friendship import ChatFriendship
+from app.models.chat_community import ChatCommunity
+from app.models.chat_community_group import ChatCommunityGroup
+from app.models.chat_group import ChatGroup
+from app.models.chat_group_member import ChatGroupMember
 from app.models.chat_message import ChatMessage
 from app.models.communication import CommunicationLog, CommunicationTemplate
 from app.models.contact_request import ContactRequest
@@ -43,6 +47,10 @@ __all__ = [
     "BillingNote",
     "ChatFriendRequest",
     "ChatFriendship",
+    "ChatGroup",
+    "ChatGroupMember",
+    "ChatCommunity",
+    "ChatCommunityGroup",
     "ChatMessage",
     "CommunicationTemplate",
     "CommunicationLog",

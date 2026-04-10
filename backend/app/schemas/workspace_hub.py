@@ -49,6 +49,10 @@ class WorkspaceNotificationResponse(BaseModel):
     title: str
     message: str
     actionUrl: str | None = None
+    actionType: str | None = None
+    actionEntityId: str | None = None
+    actionEntityKind: str | None = None
+    actionContext: dict = Field(default_factory=dict)
     isRead: bool = False
     createdAt: str | None = None
     readAt: str | None = None

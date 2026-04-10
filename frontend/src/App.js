@@ -237,6 +237,31 @@ function App() {
     }
   };
 
+  const handleHeaderNotificationOpen = async (notification) => {
+    if (!notification) return;
+    await handleHeaderNotificationRead(notification.id);
+    if (!notification.actionType) {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(
+        "genai_chat_navigation_target",
+        JSON.stringify({
+          actionType: notification.actionType,
+          actionEntityId: notification.actionEntityId || "",
+          actionEntityKind: notification.actionEntityKind || "",
+          actionContext: notification.actionContext || {},
+        })
+      );
+    } catch {
+      // Ignore storage failures.
+    }
+    navigateTo("workspace", null);
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("genai-open-chat-management"));
+    }, 0);
+  };
+
   const handleHeaderNotificationsReadAll = async () => {
     try {
       await markAllWorkspaceNotificationsRead();
@@ -464,7 +489,7 @@ function App() {
                                   key={item.id}
                                   className={`header-dropdown-item header-notification-item ${item.isRead ? "is-read" : ""}`}
                                   type="button"
-                                  onClick={() => handleHeaderNotificationRead(item.id)}
+                                  onClick={() => handleHeaderNotificationOpen(item)}
                                 >
                                   <span className="header-dropdown-title">{item.title}</span>
                                   <span className="header-dropdown-copy">{item.message}</span>
