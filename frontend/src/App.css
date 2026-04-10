@@ -5259,6 +5259,10 @@ body.workspace-body-mode .contact-request-empty-card p {
   min-height: 100%;
 }
 
+.workspace-chat-column {
+  min-height: 0;
+}
+
 .workspace-chat-list,
 .workspace-chat-discovery-list,
 .workspace-chat-request-list,
@@ -5269,6 +5273,18 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-list {
   margin-top: 10px;
+}
+
+.workspace-chat-discovery-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  max-height: 680px;
+}
+
+.workspace-chat-discovery-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .workspace-chat-tab-row,
@@ -5600,11 +5616,14 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: grid;
   gap: 10px;
   background:
-    linear-gradient(rgba(229, 221, 213, 0.92), rgba(229, 221, 213, 0.92)),
+    linear-gradient(rgba(229, 221, 213, 0.72), rgba(229, 221, 213, 0.72)),
+    var(--workspace-chat-custom-bg, none),
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.34), transparent 28%),
     linear-gradient(135deg, rgba(0, 0, 0, 0.045) 0%, rgba(0, 0, 0, 0.02) 24%, transparent 24%, transparent 50%, rgba(0, 0, 0, 0.028) 50%, rgba(0, 0, 0, 0.02) 74%, transparent 74%);
-  background-size: auto, auto, 240px 240px;
+  background-size: auto, cover, auto, 240px 240px;
+  background-position: center, center, center, center;
   padding-right: 10px;
+  position: relative;
 }
 
 .workspace-chat-day-group {
@@ -5695,22 +5714,6 @@ body.workspace-body-mode .contact-request-empty-card p {
   color: #667781;
 }
 
-.workspace-chat-whatsapp-shell .workspace-chat-inline-actions {
-  display: flex;
-  opacity: 0;
-  max-height: 0;
-  overflow: hidden;
-  pointer-events: none;
-  transition: opacity 0.18s ease;
-}
-
-.workspace-chat-whatsapp-shell .workspace-direct-message:hover .workspace-chat-inline-actions,
-.workspace-chat-whatsapp-shell .workspace-direct-message:focus-within .workspace-chat-inline-actions {
-  opacity: 1;
-  max-height: 48px;
-  pointer-events: auto;
-}
-
 .workspace-chat-whatsapp-shell .workspace-chat-image-preview {
   max-width: 320px;
   border-radius: 10px;
@@ -5799,6 +5802,45 @@ body.workspace-body-mode .contact-request-empty-card p {
   background: #bfded6;
   box-shadow: none;
   cursor: not-allowed;
+}
+
+.workspace-chat-popup-menu {
+  position: absolute;
+  min-width: 220px;
+  padding: 8px 0;
+  display: grid;
+  gap: 2px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 40px rgba(17, 27, 33, 0.2);
+  border: 1px solid rgba(17, 27, 33, 0.08);
+  z-index: 5;
+}
+
+.workspace-chat-popup-item {
+  border: none;
+  background: transparent;
+  color: #1f2c34;
+  text-align: left;
+  padding: 12px 18px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.workspace-chat-popup-item:hover {
+  background: rgba(17, 27, 33, 0.05);
+}
+
+.workspace-chat-popup-item-danger {
+  color: #b42318;
+}
+
+.workspace-chat-background-menu {
+  min-width: 200px;
+}
+
+.workspace-chat-hidden-input {
+  display: none;
 }
 
 .workspace-analytics-bars {

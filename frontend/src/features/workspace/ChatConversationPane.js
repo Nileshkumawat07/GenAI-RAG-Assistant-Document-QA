@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildChatFileUrl } from "./chatManagementApi";
 
@@ -69,6 +69,15 @@ function getAvatarLabel(title) {
     .join("");
 }
 
+function getBackgroundStorageKey(conversation) {
+  if (!conversation?.conversationType || !conversation?.conversationId) return "";
+  return `genai_chat_bg_${conversation.conversationType}_${conversation.conversationId}`;
+}
+
+function isInteractiveTarget(target) {
+  return Boolean(target.closest("a, button, input, textarea, label"));
+}
+
 function ChatConversationPane({
   currentUser,
   selectedItem,
@@ -98,6 +107,109 @@ function ChatConversationPane({
   const chatTitle = selectedItem?.title || "Select a chat";
   const chatPresence = selectedItem?.subtitle || selectedItem?.statusText || "Tap a conversation to start chatting";
   const attachmentAccept = "image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip";
+  const streamRef = useRef(null);
+  const wallpaperInputRef = useRef(null);
+  const popupRef = useRef(null);
+  const [messageMenu, setMessageMenu] = useState(null);
+  const [backgroundMenu, setBackgroundMenu] = useState(null);
+  const [backgroundImage, setBackgroundImage] = useState("");
+  const [messageInfo, setMessageInfo] = useState(null);
+
+  const backgroundStorageKey = useMemo(() => getBackgroundStorageKey(selectedConversation), [selectedConversation]);
+  const streamBackgroundStyle = backgroundImage ? { "--workspace-chat-custom-bg": `url(${backgroundImage})` } : undefined;
+
+  useEffect(() => {
+    setMessageMenu(null);
+    setBackgroundMenu(null);
+    setMessageInfo(null);
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    if (!backgroundStorageKey) {
+      setBackgroundImage("");
+      return;
+    }
+
+    try {
+      setBackgroundImage(window.localStorage.getItem(backgroundStorageKey) || "");
+    } catch {
+      setBackgroundImage("");
+    }
+  }, [backgroundStorageKey]);
+
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (!popupRef.current?.contains(event.target)) {
+        setMessageMenu(null);
+        setBackgroundMenu(null);
+      }
+    };
+
+    document.addEventListener("click", handleDocumentClick);
+    return () => document.removeEventListener("click", handleDocumentClick);
+  }, []);
+
+  const persistBackground = (nextBackground) => {
+    setBackgroundImage(nextBackground);
+    if (!backgroundStorageKey) return;
+
+    try {
+      if (nextBackground) window.localStorage.setItem(backgroundStorageKey, nextBackground);
+      else window.localStorage.removeItem(backgroundStorageKey);
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  const openMessageMenu = (event, message) => {
+    if (event.button !== 0 || isInteractiveTarget(event.target)) return;
+    const bounds = streamRef.current?.getBoundingClientRect();
+
+    setBackgroundMenu(null);
+    setMessageMenu({
+      message,
+      x: event.clientX - (bounds?.left || 0),
+      y: event.clientY - (bounds?.top || 0),
+    });
+  };
+
+  const openBackgroundMenu = (event) => {
+    if (event.button !== 0) return;
+    if (event.target.closest(".workspace-direct-message")) return;
+
+    const bounds = streamRef.current?.getBoundingClientRect();
+    setMessageMenu(null);
+    setBackgroundMenu({
+      x: event.clientX - (bounds?.left || 0),
+      y: event.clientY - (bounds?.top || 0),
+    });
+  };
+
+  const handleCopyMessage = async (message) => {
+    const textToCopy = [message.body, message.fileName].filter(Boolean).join("\n").trim();
+    if (!textToCopy) return;
+
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+    } catch {
+      // Ignore clipboard errors.
+    }
+
+    setMessageMenu(null);
+  };
+
+  const handleWallpaperUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      persistBackground(typeof reader.result === "string" ? reader.result : "");
+      setBackgroundMenu(null);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
 
   return (
     <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell">
@@ -127,7 +239,16 @@ function ChatConversationPane({
         </div>
       </div>
 
-      <div ref={conversationStreamRef} className="workspace-chat-conversation-stream">
+      <div
+        ref={(node) => {
+          streamRef.current = node;
+          if (typeof conversationStreamRef === "function") conversationStreamRef(node);
+          else if (conversationStreamRef) conversationStreamRef.current = node;
+        }}
+        className="workspace-chat-conversation-stream"
+        style={streamBackgroundStyle}
+        onClick={openBackgroundMenu}
+      >
         {hasMoreMessages ? (
           <button type="button" className="hero-button hero-button-secondary workspace-chat-load-more" onClick={loadOlderMessages}>
             Load older messages
@@ -148,7 +269,11 @@ function ChatConversationPane({
                 const isImage = message.messageType === "image";
 
                 return (
-                  <article key={message.id} className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message`}>
+                  <article
+                    key={message.id}
+                    className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message`}
+                    onClick={(event) => openMessageMenu(event, message)}
+                  >
                     {!mine && selectedConversation.conversationType !== "direct" ? (
                       <strong className="workspace-chat-sender-line">{message.senderName}</strong>
                     ) : null}
@@ -188,11 +313,23 @@ function ChatConversationPane({
                       <>
                         {message.fileUrl ? (
                           isImage ? (
-                            <a href={buildChatFileUrl(message.id)} target="_blank" rel="noreferrer" className="workspace-chat-media-link">
+                            <a
+                              href={buildChatFileUrl(message.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="workspace-chat-media-link"
+                              onClick={(event) => event.stopPropagation()}
+                            >
                               <img src={buildChatFileUrl(message.id)} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
                             </a>
                           ) : (
-                            <a href={buildChatFileUrl(message.id)} target="_blank" rel="noreferrer" className="workspace-chat-file-chip">
+                            <a
+                              href={buildChatFileUrl(message.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="workspace-chat-file-chip"
+                              onClick={(event) => event.stopPropagation()}
+                            >
                               {message.fileName || "Download file"}
                             </a>
                           )
@@ -205,32 +342,6 @@ function ChatConversationPane({
                       <span>{formatBubbleTime(message.createdAt)}{message.editedAt ? " edited" : ""}</span>
                       {mine ? <span>{statusTicks(message.status)}</span> : null}
                     </div>
-
-                    <div className="workspace-chat-inline-actions">
-                      <button type="button" className="inline-text-button" onClick={() => setReplyToMessage(message)}>
-                        Reply
-                      </button>
-                      {message.canEdit ? (
-                        <button
-                          type="button"
-                          className="inline-text-button"
-                          onClick={() => {
-                            setEditingMessageId(message.id);
-                            setEditingDraft(message.body || "");
-                          }}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                      <button type="button" className="inline-text-button" onClick={() => handleDeleteMessage(message.id, "me")}>
-                        Delete for me
-                      </button>
-                      {message.canDeleteForEveryone ? (
-                        <button type="button" className="inline-text-button" onClick={() => handleDeleteMessage(message.id, "everyone")}>
-                          Delete for everyone
-                        </button>
-                      ) : null}
-                    </div>
                   </article>
                 );
               })}
@@ -241,13 +352,100 @@ function ChatConversationPane({
         )}
 
         {selectedTyping ? <p className="status-item status-info">Someone is typing...</p> : null}
+
+        {messageMenu ? (
+          <div
+            ref={popupRef}
+            className="workspace-chat-popup-menu"
+            style={{ left: `${messageMenu.x}px`, top: `${messageMenu.y}px` }}
+          >
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { setMessageInfo(messageMenu.message); setMessageMenu(null); }}>
+              Message info
+            </button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { setReplyToMessage(messageMenu.message); setMessageMenu(null); }}>
+              Reply
+            </button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => handleCopyMessage(messageMenu.message)}>
+              Copy
+            </button>
+            {messageMenu.message.canEdit ? (
+              <button
+                type="button"
+                className="workspace-chat-popup-item"
+                onClick={() => {
+                  setEditingMessageId(messageMenu.message.id);
+                  setEditingDraft(messageMenu.message.body || "");
+                  setMessageMenu(null);
+                }}
+              >
+                Edit
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="workspace-chat-popup-item workspace-chat-popup-item-danger"
+              onClick={() => {
+                handleDeleteMessage(messageMenu.message.id, "me");
+                setMessageMenu(null);
+              }}
+            >
+              Delete for me
+            </button>
+            {messageMenu.message.canDeleteForEveryone ? (
+              <button
+                type="button"
+                className="workspace-chat-popup-item workspace-chat-popup-item-danger"
+                onClick={() => {
+                  handleDeleteMessage(messageMenu.message.id, "everyone");
+                  setMessageMenu(null);
+                }}
+              >
+                Delete for everyone
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {backgroundMenu ? (
+          <div
+            ref={popupRef}
+            className="workspace-chat-popup-menu workspace-chat-background-menu"
+            style={{ left: `${backgroundMenu.x}px`, top: `${backgroundMenu.y}px` }}
+          >
+            <button type="button" className="workspace-chat-popup-item" onClick={() => wallpaperInputRef.current?.click()}>
+              Change background
+            </button>
+            <button
+              type="button"
+              className="workspace-chat-popup-item"
+              onClick={() => {
+                persistBackground("");
+                setBackgroundMenu(null);
+              }}
+            >
+              Reset background
+            </button>
+          </div>
+        ) : null}
       </div>
+
+      <input ref={wallpaperInputRef} type="file" accept="image/*" className="workspace-chat-hidden-input" onChange={handleWallpaperUpload} />
 
       {replyToMessage ? (
         <div className="workspace-chat-compose-preview">
           <span>Replying to {replyToMessage.senderName}</span>
           <strong>{replyToMessage.body || replyToMessage.fileName || "Attachment"}</strong>
           <button type="button" className="inline-text-button" onClick={() => setReplyToMessage(null)}>
+            Clear
+          </button>
+        </div>
+      ) : null}
+
+      {messageInfo ? (
+        <div className="workspace-chat-compose-preview">
+          <span>{messageInfo.senderName || (messageInfo.senderId === currentUser?.id ? "You" : "Message")}</span>
+          <strong>{formatDate(messageInfo.createdAt, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}{messageInfo.status ? ` · ${messageInfo.status}` : ""}</strong>
+          <button type="button" className="inline-text-button" onClick={() => setMessageInfo(null)}>
             Clear
           </button>
         </div>
