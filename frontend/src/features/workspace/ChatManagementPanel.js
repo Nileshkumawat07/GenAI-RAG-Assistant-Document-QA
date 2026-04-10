@@ -95,6 +95,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const overviewRef = useRef(overview);
   const toastIdRef = useRef(0);
   const pendingJumpRef = useRef(null);
+  const conversationLoadVersionRef = useRef(0);
 
   const currentItems = useMemo(() => {
     const source = activeTab === "groups" ? overview.groups : activeTab === "communities" ? overview.communities : overview.directChats;
@@ -142,9 +143,26 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       setHasMoreMessages(false);
       return;
     }
+    const requestVersion = conversationLoadVersionRef.current + 1;
+    conversationLoadVersionRef.current = requestVersion;
     const data = await getConversationMessages({ conversationType: conversation.conversationType, conversationId: conversation.conversationId, beforeMessageId: options.beforeMessageId, limit: 40 });
+    const stillCurrent =
+      selectedConversationRef.current?.conversationType === conversation.conversationType &&
+      selectedConversationRef.current?.conversationId === conversation.conversationId &&
+      conversationLoadVersionRef.current === requestVersion;
+    if (!stillCurrent) return;
     if (options.prepend) setMessages((current) => [...(data.items || []), ...current.filter((item) => !(data.items || []).some((candidate) => candidate.id === item.id))]);
-    else setMessages(data.items || []);
+    else setMessages((current) => {
+      if (!current.length) return data.items || [];
+      const merged = [...(data.items || [])];
+      current.forEach((item) => {
+        if (!merged.some((candidate) => candidate.id === item.id)) {
+          merged.push(item);
+        }
+      });
+      merged.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+      return merged;
+    });
     setHasMoreMessages(Boolean(data.hasMore));
     await markConversationRead({ conversationType: conversation.conversationType, conversationId: conversation.conversationId });
   }, []);
