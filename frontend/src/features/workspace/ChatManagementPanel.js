@@ -92,6 +92,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const conversationStreamRef = useRef(null);
   const requestsRef = useRef(null);
   const selectedConversationRef = useRef(null);
+  const currentUserIdRef = useRef(currentUser?.id || "");
   const overviewRef = useRef(overview);
   const toastIdRef = useRef(0);
   const pendingJumpRef = useRef(null);
@@ -217,9 +218,41 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     onUserUpdate(latestUser);
   }, [onUserUpdate]);
 
+  const sendActiveConversationSignal = useCallback((conversation = selectedConversationRef.current) => {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    socketRef.current.send(
+      JSON.stringify({
+        type: "active_chat",
+        conversationType: conversation?.conversationType || "",
+        conversationId: conversation?.conversationId || "",
+      })
+    );
+  }, []);
+
+  const isConversationActive = useCallback((conversationType, conversationId, roomKey = "") => {
+    const activeConversation = selectedConversationRef.current;
+    if (!activeConversation) return false;
+    const currentUserId = currentUserIdRef.current;
+    const activeRoomKey = buildConversationRoomKey(
+      currentUserId,
+      activeConversation.conversationType,
+      activeConversation.conversationId
+    );
+    const targetRoomKey = roomKey || buildConversationRoomKey(currentUserId, conversationType, conversationId);
+    return (
+      (conversationType === activeConversation.conversationType &&
+        conversationId === activeConversation.conversationId) ||
+      (activeRoomKey && targetRoomKey && activeRoomKey === targetRoomKey)
+    );
+  }, []);
+
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
   }, [selectedConversation]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id || "";
+  }, [currentUser?.id]);
 
   useEffect(() => {
     overviewRef.current = overview;
@@ -237,7 +270,13 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   }, []);
 
   useEffect(() => {
-    if (!selectedConversation) return;
+    sendActiveConversationSignal(selectedConversation);
+    if (!selectedConversation) {
+      setMessages([]);
+      setHasMoreMessages(false);
+      setHighlightedMessageId("");
+      return;
+    }
     const pendingJump = pendingJumpRef.current;
     if (
       pendingJump &&
@@ -264,17 +303,14 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       loadConversation(selectedConversation).catch((error) => setPanelError(error.message || "Failed to load messages."));
       loadDetails(selectedConversation).catch(() => setDetails(null));
     }
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: "active_chat", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId }));
-    }
-  }, [loadConversation, loadDetails, loadOverview, selectedConversation?.conversationType, selectedConversation?.conversationId]);
+  }, [loadConversation, loadDetails, loadOverview, selectedConversation?.conversationType, selectedConversation?.conversationId, sendActiveConversationSignal]);
 
   useEffect(() => {
     if (!currentUser?.authToken) return undefined;
     const socket = new WebSocket(getChatWebSocketUrl());
     socketRef.current = socket;
     socket.onopen = () => {
-      if (selectedConversation) socket.send(JSON.stringify({ type: "active_chat", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId }));
+      sendActiveConversationSignal();
     };
     socket.onclose = () => {};
     socket.onerror = () => {};
@@ -292,21 +328,15 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         if ((payload.type === "message:new" || payload.type === "receive_message") && payload.message) {
           setIsSending(false);
           const activeConversation = selectedConversationRef.current;
-          const activeRoomKey = activeConversation
-            ? buildConversationRoomKey(currentUser?.id, activeConversation.conversationType, activeConversation.conversationId)
-            : "";
-          const messageRoomKey = payload.roomKey || buildConversationRoomKey(currentUser?.id, payload.message.conversationType, payload.message.conversationId);
-          const isActiveConversation =
-            activeConversation &&
-            (
-              (payload.message.conversationType === activeConversation.conversationType &&
-                payload.message.conversationId === activeConversation.conversationId) ||
-              (activeRoomKey && messageRoomKey && activeRoomKey === messageRoomKey)
-            );
+          const isActiveConversation = isConversationActive(
+            payload.message.conversationType,
+            payload.message.conversationId,
+            payload.roomKey
+          );
 
           if (isActiveConversation) {
             setMessages((current) => mergeMessageList(current, payload.message));
-            if (payload.message.senderId !== currentUser?.id && socketRef.current?.readyState === WebSocket.OPEN) {
+            if (payload.message.senderId !== currentUserIdRef.current && activeConversation && socketRef.current?.readyState === WebSocket.OPEN) {
               socketRef.current.send(JSON.stringify({ type: "seen", conversationType: activeConversation.conversationType, conversationId: activeConversation.conversationId }));
             }
           } else {
@@ -341,17 +371,11 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         }
         if (payload.type === "conversation:refresh") {
           const activeConversation = selectedConversationRef.current;
-          const activeRoomKey = activeConversation
-            ? buildConversationRoomKey(currentUser?.id, activeConversation.conversationType, activeConversation.conversationId)
-            : "";
-          const refreshRoomKey = payload.roomKey || buildConversationRoomKey(currentUser?.id, payload.conversationType, payload.conversationId);
-          const isActiveConversation =
-            activeConversation &&
-            (
-              (payload.conversationType === activeConversation.conversationType &&
-                payload.conversationId === activeConversation.conversationId) ||
-              (activeRoomKey && refreshRoomKey && activeRoomKey === refreshRoomKey)
-            );
+          const isActiveConversation = isConversationActive(
+            payload.conversationType,
+            payload.conversationId,
+            payload.roomKey
+          );
           if (isActiveConversation) {
             await loadConversation(activeConversation).catch(() => {});
             return loadDetails(activeConversation).catch(() => setDetails(null));
@@ -374,14 +398,16 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     };
     return () => {
       try {
-        socket.send(JSON.stringify({ type: "active_chat", conversationType: "", conversationId: "" }));
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "active_chat", conversationType: "", conversationId: "" }));
+        }
       } catch {
         // Ignore cleanup errors.
       }
       socket.close();
       socketRef.current = null;
     };
-  }, [currentUser?.authToken, currentUser?.id, loadConversation, loadDetails, loadOverview, pushToast, selectedConversation?.conversationType, selectedConversation?.conversationId]);
+  }, [currentUser?.authToken, currentUser?.id, isConversationActive, loadConversation, loadDetails, loadOverview, pushToast, sendActiveConversationSignal]);
 
   useEffect(() => {
     const query = searchQuery.trim();
