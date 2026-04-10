@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -34,6 +36,8 @@ from app.schemas.chat_management import (
     UpdateGroupRequest,
 )
 from app.services.chat_management_service import ChatManagementService, ChatManagementServiceError
+
+logger = logging.getLogger(__name__)
 
 
 def build_chat_management_router(chat_management_service: ChatManagementService) -> APIRouter:
@@ -645,9 +649,19 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     async def chat_socket(websocket: WebSocket, token: str | None = Query(default=None)):
         try:
             authenticated_user_id = chat_management_service.authenticate_websocket_user(token)
-        except ChatManagementServiceError:
+        except ChatManagementServiceError as exc:
+            logger.warning(
+                "Chat websocket authentication failed from %s: %s",
+                getattr(websocket.client, "host", "unknown"),
+                str(exc),
+            )
             await websocket.close(code=1008)
             return
+        logger.info(
+            "Chat websocket connected for user %s from %s",
+            authenticated_user_id,
+            getattr(websocket.client, "host", "unknown"),
+        )
         await chat_management_service.connect_websocket(authenticated_user_id, websocket)
         try:
             while True:
@@ -692,8 +706,14 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
                             reply_to_message_id=(payload.get("replyToMessageId") or "").strip() or None,
                         )
                     except ChatManagementServiceError as exc:
+                        logger.warning(
+                            "Chat websocket send_message failed for user %s: %s",
+                            authenticated_user_id,
+                            str(exc),
+                        )
                         await websocket.send_json({"type": "message:error", "detail": str(exc)})
         except WebSocketDisconnect:
+            logger.info("Chat websocket disconnected for user %s", authenticated_user_id)
             await chat_management_service.disconnect_websocket(authenticated_user_id, websocket)
 
     return router
