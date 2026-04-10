@@ -15,6 +15,7 @@ from app.core.config import CHAT_UPLOAD_MAX_BYTES, CHAT_UPLOADS_DIR
 from app.core.database import SessionLocal
 from app.models.chat_community import ChatCommunity
 from app.models.chat_community_group import ChatCommunityGroup
+from app.models.chat_conversation_background import ChatConversationBackground
 from app.models.chat_friend_request import ChatFriendRequest
 from app.models.chat_friendship import ChatFriendship
 from app.models.chat_group import ChatGroup
@@ -323,6 +324,106 @@ class ChatManagementService:
             "hasMore": len(visible_messages) > len(limited),
         }
 
+    async def update_conversation_background(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        upload: UploadFile,
+    ) -> dict:
+        conversation = self._resolve_conversation(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        content_type = (upload.content_type or "").lower().strip()
+        if content_type not in self.image_content_types:
+            raise ChatManagementServiceError("Conversation background must be an image file.")
+        content = await upload.read()
+        if not content:
+            raise ChatManagementServiceError("Uploaded background is empty.")
+        if len(content) > CHAT_UPLOAD_MAX_BYTES:
+            raise ChatManagementServiceError("Background exceeds the maximum upload size.")
+
+        safe_name = self._sanitize_filename(upload.filename or "background.png")
+        conversation_key = self._conversation_storage_key(conversation)
+        background = db.execute(
+            select(ChatConversationBackground).where(
+                ChatConversationBackground.conversation_type == conversation["apiConversationType"],
+                ChatConversationBackground.conversation_key == conversation_key,
+            )
+        ).scalar_one_or_none()
+        if not background:
+            background = ChatConversationBackground(
+                id=str(uuid.uuid4()),
+                conversation_type=conversation["apiConversationType"],
+                conversation_key=conversation_key,
+                created_by_user_id=current_user_id,
+                file_name=safe_name,
+                mime_type=content_type,
+                storage_path="",
+                background_url="",
+            )
+            db.add(background)
+            db.flush()
+
+        storage_path = self._save_conversation_background_file(
+            conversation_type=conversation["apiConversationType"],
+            conversation_key=conversation_key,
+            background_id=background.id,
+            file_name=safe_name,
+            content=content,
+        )
+        background.file_name = safe_name
+        background.mime_type = content_type
+        background.storage_path = str(storage_path)
+        background.background_url = f"/chat/conversation-assets/{conversation['apiConversationType']}/{conversation_key}/{safe_name}"
+        background.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(background)
+        return {
+            "conversationType": conversation["apiConversationType"],
+            "conversationId": conversation["apiConversationId"],
+            "backgroundUrl": background.background_url,
+        }
+
+    def clear_conversation_background(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> dict:
+        conversation = self._resolve_conversation(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        conversation_key = self._conversation_storage_key(conversation)
+        background = db.execute(
+            select(ChatConversationBackground).where(
+                ChatConversationBackground.conversation_type == conversation["apiConversationType"],
+                ChatConversationBackground.conversation_key == conversation_key,
+            )
+        ).scalar_one_or_none()
+        if background:
+            try:
+                Path(background.storage_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+            db.delete(background)
+            db.commit()
+        return {
+            "conversationType": conversation["apiConversationType"],
+            "conversationId": conversation["apiConversationId"],
+            "backgroundUrl": None,
+        }
+
     def send_text_message(
         self,
         db: Session,
@@ -562,6 +663,40 @@ class ChatManagementService:
         if not file_path.exists():
             raise ChatManagementServiceError("Asset was not found.")
         return file_path, "image/png" if safe_file_name.lower().endswith(".png") else None
+
+    def get_conversation_asset_path(
+        self,
+        db: Session,
+        *,
+        current_user_id: str,
+        conversation_type: str,
+        conversation_key: str,
+        file_name: str,
+    ) -> tuple[Path, str | None]:
+        safe_conversation_type = (conversation_type or "").strip().lower()
+        safe_conversation_key = (conversation_key or "").strip()
+        safe_file_name = self._sanitize_filename(file_name or "")
+        if safe_conversation_type not in {"direct", "group", "community"} or not safe_conversation_key or not safe_file_name:
+            raise ChatManagementServiceError("Asset was not found.")
+        self._assert_background_access(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=safe_conversation_type,
+            conversation_key=safe_conversation_key,
+        )
+        background = db.execute(
+            select(ChatConversationBackground).where(
+                ChatConversationBackground.conversation_type == safe_conversation_type,
+                ChatConversationBackground.conversation_key == safe_conversation_key,
+                ChatConversationBackground.file_name == safe_file_name,
+            )
+        ).scalar_one_or_none()
+        if not background:
+            raise ChatManagementServiceError("Asset was not found.")
+        file_path = CHAT_UPLOADS_DIR / "conversation-backgrounds" / safe_conversation_type / safe_conversation_key / safe_file_name
+        if not file_path.exists():
+            raise ChatManagementServiceError("Asset was not found.")
+        return file_path, background.mime_type
 
     def create_group(
         self,
@@ -941,6 +1076,21 @@ class ChatManagementService:
             await self.manager.send_event(user_id, {"type": "overview:refresh"})
             await self.manager.send_event(user_id, {"type": "community:refresh", "communityId": community_id})
 
+    async def emit_conversation_refresh(self, db: Session, *, current_user_id: str, conversation_type: str, conversation_id: str) -> None:
+        participant_ids = self._conversation_participant_ids(
+            db,
+            current_user_id=current_user_id,
+            conversation_type=conversation_type,
+            conversation_id=conversation_id,
+        )
+        normalized_type = (conversation_type or "").strip().lower()
+        for user_id in participant_ids:
+            await self.manager.send_event(user_id, {"type": "overview:refresh"})
+            if normalized_type == "group":
+                await self.manager.send_event(user_id, {"type": "group:refresh", "groupId": conversation_id})
+            elif normalized_type == "community":
+                await self.manager.send_event(user_id, {"type": "community:refresh", "communityId": conversation_id})
+
     def authenticate_websocket_user(self, token: str | None) -> str:
         if not token:
             raise ChatManagementServiceError("Missing websocket token.")
@@ -979,6 +1129,11 @@ class ChatManagementService:
 
     def serialize_direct_chat_item(self, db: Session, *, friend_user_id: str, current_user_id: str) -> dict:
         friend = self._require_user(db, friend_user_id)
+        background_url = self._conversation_background_url(
+            db,
+            conversation_type="direct",
+            conversation_key=self._direct_conversation_key(current_user_id, friend_user_id),
+        )
         latest_message = db.execute(
             self._conversation_message_query(db, conversation_type="direct", conversation_id=friend_user_id, current_user_id=current_user_id)
             .order_by(ChatMessage.created_at.desc())
@@ -1014,9 +1169,11 @@ class ChatManagementService:
             "announcementGroupId": None,
             "linkedGroupCount": 0,
             "communityId": None,
+            "backgroundUrl": background_url,
         }
 
     def serialize_group_list_item(self, db: Session, *, group: ChatGroup, membership: ChatGroupMember, current_user_id: str) -> dict:
+        background_url = self._conversation_background_url(db, conversation_type="group", conversation_key=group.id)
         latest_message = db.execute(
             self._conversation_message_query(db, conversation_type="group", conversation_id=group.id, current_user_id=current_user_id)
             .order_by(ChatMessage.created_at.desc())
@@ -1042,9 +1199,11 @@ class ChatManagementService:
             "announcementGroupId": None,
             "linkedGroupCount": 0,
             "communityId": None,
+            "backgroundUrl": background_url,
         }
 
     def serialize_community_list_item(self, db: Session, *, community: ChatCommunity, membership: ChatGroupMember, current_user_id: str) -> dict:
+        background_url = self._conversation_background_url(db, conversation_type="community", conversation_key=community.id)
         latest_message = db.execute(
             self._conversation_message_query(db, conversation_type="community", conversation_id=community.id, current_user_id=current_user_id)
             .order_by(ChatMessage.created_at.desc())
@@ -1073,6 +1232,7 @@ class ChatManagementService:
             "announcementGroupId": community.announcement_group_id,
             "linkedGroupCount": linked_group_count,
             "communityId": community.id,
+            "backgroundUrl": background_url,
         }
 
     def serialize_group_detail(self, db: Session, *, group: ChatGroup, membership: ChatGroupMember, current_user_id: str) -> dict:
@@ -1087,6 +1247,7 @@ class ChatManagementService:
             "memberCount": len(member_rows),
             "isMuted": bool(membership.is_muted),
             "currentUserRole": membership.role,
+            "backgroundUrl": self._conversation_background_url(db, conversation_type="group", conversation_key=group.id),
             "members": [self.serialize_group_member(row[0], row[1]) for row in member_rows],
         }
 
@@ -1107,6 +1268,7 @@ class ChatManagementService:
             "memberCount": len(member_rows),
             "currentUserRole": membership.role,
             "isMuted": bool(membership.is_muted),
+            "backgroundUrl": self._conversation_background_url(db, conversation_type="community", conversation_key=community.id),
             "groups": [{"id": group.id, "name": group.name, "description": group.description, "imageUrl": group.image_url, "memberCount": self._group_member_count(db, group_id=group.id)} for _, group in group_links],
             "members": [self.serialize_group_member(row[0], row[1]) for row in member_rows],
         }
@@ -1397,6 +1559,51 @@ class ChatManagementService:
     def _participant_ids_for_message(self, db: Session, message: ChatMessage) -> list[str]:
         return self._group_member_ids(db, group_id=message.group_id) if message.group_id else [message.sender_user_id, message.receiver_user_id]
 
+    def _conversation_background_url(self, db: Session, *, conversation_type: str, conversation_key: str) -> str | None:
+        record = db.execute(
+            select(ChatConversationBackground.background_url).where(
+                ChatConversationBackground.conversation_type == conversation_type,
+                ChatConversationBackground.conversation_key == conversation_key,
+            )
+        ).scalar_one_or_none()
+        return record
+
+    def _conversation_storage_key(self, conversation: dict) -> str:
+        if conversation["apiConversationType"] == "direct":
+            return self._direct_conversation_key(conversation["participantIds"][0], conversation["participantIds"][1])
+        return conversation["apiConversationId"]
+
+    def _direct_conversation_key(self, first_user_id: str, second_user_id: str) -> str:
+        return "__".join(sorted([first_user_id, second_user_id]))
+
+    def _conversation_participant_ids(self, db: Session, *, current_user_id: str, conversation_type: str, conversation_id: str) -> list[str]:
+        normalized_type = (conversation_type or "").strip().lower()
+        normalized_id = (conversation_id or "").strip()
+        if normalized_type == "direct":
+            return [current_user_id, normalized_id]
+        if normalized_type == "group":
+            return self._group_member_ids(db, group_id=normalized_id)
+        if normalized_type == "community":
+            community = self._require_community(db, community_id=normalized_id)
+            return self._group_member_ids(db, group_id=community.announcement_group_id)
+        raise ChatManagementServiceError("Conversation was not found.")
+
+    def _assert_background_access(self, db: Session, *, current_user_id: str, conversation_type: str, conversation_key: str) -> None:
+        if conversation_type == "direct":
+            first_user_id, second_user_id = (conversation_key.split("__", 1) + [""])[:2]
+            if current_user_id not in {first_user_id, second_user_id}:
+                raise ChatManagementServiceError("Asset was not found.")
+            other_user_id = second_user_id if current_user_id == first_user_id else first_user_id
+            self._ensure_friends(db, current_user_id=current_user_id, other_user_id=other_user_id)
+            return
+        if conversation_type == "group":
+            self._require_group_membership(db, group_id=conversation_key, user_id=current_user_id)
+            return
+        if conversation_type == "community":
+            self._require_community_membership(db, community_id=conversation_key, user_id=current_user_id)
+            return
+        raise ChatManagementServiceError("Asset was not found.")
+
     def _serialize_message_conversation_id(self, db: Session, message: ChatMessage, *, current_user_id: str) -> str:
         if message.conversation_type == "direct":
             return message.receiver_user_id if message.sender_user_id == current_user_id else message.sender_user_id
@@ -1418,6 +1625,16 @@ class ChatManagementService:
         folder = CHAT_UPLOADS_DIR / owner_id
         folder.mkdir(parents=True, exist_ok=True)
         file_path = folder / f"{message_id}-{file_name}"
+        file_path.write_bytes(content)
+        return file_path
+
+    def _save_conversation_background_file(self, *, conversation_type: str, conversation_key: str, background_id: str, file_name: str, content: bytes) -> Path:
+        folder = CHAT_UPLOADS_DIR / "conversation-backgrounds" / conversation_type / conversation_key
+        folder.mkdir(parents=True, exist_ok=True)
+        for existing in folder.glob("*"):
+            if existing.is_file():
+                existing.unlink(missing_ok=True)
+        file_path = folder / file_name
         file_path.write_bytes(content)
         return file_path
 

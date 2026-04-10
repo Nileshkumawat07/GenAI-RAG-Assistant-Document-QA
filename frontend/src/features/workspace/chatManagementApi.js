@@ -60,6 +60,25 @@ export async function markConversationRead({ conversationType, conversationId })
   return requestJson(`/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/read`, { method: "POST" }, "Failed to update message status.");
 }
 
+export async function updateConversationBackground({ conversationType, conversationId, file }) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(apiUrl(`/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/background`), {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+  return parseFormResponse(response, "Failed to update conversation background.");
+}
+
+export async function clearConversationBackground({ conversationType, conversationId }) {
+  return requestJson(
+    `/chat/conversations/${encodeURIComponent(conversationType)}/${encodeURIComponent(conversationId)}/background`,
+    { method: "DELETE" },
+    "Failed to clear conversation background."
+  );
+}
+
 export async function sendTextMessage(payload) {
   return requestJson("/chat/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }, "Failed to send message.");
 }
@@ -173,6 +192,13 @@ export function buildChatFileUrl(messageId) {
 }
 
 export function buildChatAssetUrl(entityType, entityId, fileUrl) {
+  if (!fileUrl) return "";
+  if (/^https?:/i.test(fileUrl)) return fileUrl;
+  const token = getAuthToken();
+  return apiUrl(`${fileUrl}${fileUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`);
+}
+
+export function buildChatAuthenticatedUrl(fileUrl) {
   if (!fileUrl) return "";
   if (/^https?:/i.test(fileUrl)) return fileUrl;
   const token = getAuthToken();

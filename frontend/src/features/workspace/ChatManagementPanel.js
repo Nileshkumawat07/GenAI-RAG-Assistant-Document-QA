@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ChatConversationPane from "./ChatConversationPane";
 import ChatDiscoveryPane from "./ChatDiscoveryPane";
@@ -27,7 +27,9 @@ import {
   searchChatUsers,
   sendFriendRequest,
   sendTextMessage,
+  clearConversationBackground,
   updateCommunity,
+  updateConversationBackground,
   updateGroup,
   updateGroupMemberRole,
   uploadChatAttachment,
@@ -70,6 +72,7 @@ function ChatManagementPanel({ currentUser }) {
   const socketRef = useRef(null);
   const conversationStreamRef = useRef(null);
   const requestsRef = useRef(null);
+  const selectedConversationRef = useRef(null);
 
   const currentItems = useMemo(() => {
     const source = activeTab === "groups" ? overview.groups : activeTab === "communities" ? overview.communities : overview.directChats;
@@ -89,7 +92,7 @@ function ChatManagementPanel({ currentUser }) {
 
   useEffect(() => () => { if (attachmentPreviewUrl) window.URL.revokeObjectURL(attachmentPreviewUrl); }, [attachmentPreviewUrl]);
 
-  const loadOverview = async () => {
+  const loadOverview = useCallback(async () => {
     const data = await getChatOverview();
     setOverview(data);
     setSelectedConversation((current) => {
@@ -97,9 +100,9 @@ function ChatManagementPanel({ currentUser }) {
       const fallback = data.directChats[0] || data.groups[0] || data.communities[0] || null;
       return fallback ? { conversationType: fallback.conversationType, conversationId: fallback.id } : null;
     });
-  };
+  }, []);
 
-  const loadConversation = async (conversation, options = {}) => {
+  const loadConversation = useCallback(async (conversation, options = {}) => {
     if (!conversation?.conversationId) {
       setMessages([]);
       setHasMoreMessages(false);
@@ -110,14 +113,14 @@ function ChatManagementPanel({ currentUser }) {
     else setMessages(data.items || []);
     setHasMoreMessages(Boolean(data.hasMore));
     await markConversationRead({ conversationType: conversation.conversationType, conversationId: conversation.conversationId });
-  };
+  }, []);
 
-  const loadDetails = async (conversation) => {
+  const loadDetails = useCallback(async (conversation) => {
     if (!conversation) return setDetails(null);
     if (conversation.conversationType === "group") return setDetails(await getGroupDetail(conversation.conversationId));
     if (conversation.conversationType === "community") return setDetails(await getCommunityDetail(conversation.conversationId));
     setDetails(null);
-  };
+  }, []);
 
   const applyNavigationTarget = () => {
     try {
@@ -138,9 +141,13 @@ function ChatManagementPanel({ currentUser }) {
   };
 
   useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
+  useEffect(() => {
     loadOverview().catch((error) => setPanelError(error.message || "Failed to load chat."));
     applyNavigationTarget();
-  }, []);
+  }, [loadOverview]);
 
   useEffect(() => {
     const handleOpen = () => applyNavigationTarget();
@@ -155,7 +162,7 @@ function ChatManagementPanel({ currentUser }) {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: "active_chat", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId }));
     }
-  }, [selectedConversation?.conversationType, selectedConversation?.conversationId]);
+  }, [loadConversation, loadDetails, selectedConversation?.conversationType, selectedConversation?.conversationId]);
 
   useEffect(() => {
     if (!currentUser?.authToken) return undefined;
@@ -171,7 +178,10 @@ function ChatManagementPanel({ currentUser }) {
         const payload = JSON.parse(event.data);
         if (payload.type === "typing") return setTypingState(payload.isTyping ? payload : { userId: "", conversationType: "", conversationId: "" });
         if (payload.type === "message:new" && payload.message) {
-          if (selectedConversation && payload.message.conversationType === selectedConversation.conversationType && payload.message.conversationId === selectedConversation.conversationId) setMessages((current) => mergeMessageList(current, payload.message));
+          const activeConversation = selectedConversationRef.current;
+          if (activeConversation && payload.message.conversationType === activeConversation.conversationType && payload.message.conversationId === activeConversation.conversationId) {
+            setMessages((current) => mergeMessageList(current, payload.message));
+          }
           return loadOverview();
         }
         if (payload.type === "message:updated" && payload.message) return setMessages((current) => current.map((item) => (item.id === payload.message.id ? { ...item, ...payload.message } : item)));
@@ -180,12 +190,16 @@ function ChatManagementPanel({ currentUser }) {
           return loadOverview();
         }
         if (payload.type === "message:deleted") {
-          if (selectedConversation) await loadConversation(selectedConversation);
+          const activeConversation = selectedConversationRef.current;
+          if (activeConversation) await loadConversation(activeConversation);
           return loadOverview();
         }
         if (["overview:refresh", "group:refresh", "community:refresh", "friends:refresh", "friend_request:new", "presence"].includes(payload.type)) {
           await loadOverview();
-          if (selectedConversation && (payload.type === "group:refresh" || payload.type === "community:refresh")) await loadDetails(selectedConversation).catch(() => setDetails(null));
+          const activeConversation = selectedConversationRef.current;
+          if (activeConversation && (payload.type === "group:refresh" || payload.type === "community:refresh")) {
+            await loadDetails(activeConversation).catch(() => setDetails(null));
+          }
         }
       } catch {
         // Ignore malformed socket payloads.
@@ -200,7 +214,7 @@ function ChatManagementPanel({ currentUser }) {
       socket.close();
       socketRef.current = null;
     };
-  }, [currentUser?.authToken, selectedConversation?.conversationType, selectedConversation?.conversationId]);
+  }, [currentUser?.authToken, loadConversation, loadDetails, loadOverview, selectedConversation?.conversationType, selectedConversation?.conversationId]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -317,6 +331,35 @@ function ChatManagementPanel({ currentUser }) {
     }
   };
 
+  const handleUpdateConversationBackground = async (file) => {
+    if (!selectedConversation || !file) return;
+    try {
+      await updateConversationBackground({
+        conversationType: selectedConversation.conversationType,
+        conversationId: selectedConversation.conversationId,
+        file,
+      });
+      await loadOverview();
+      await loadDetails(selectedConversation).catch(() => setDetails(null));
+    } catch (error) {
+      setPanelError(error.message || "Failed to update conversation background.");
+    }
+  };
+
+  const handleClearConversationBackground = async () => {
+    if (!selectedConversation) return;
+    try {
+      await clearConversationBackground({
+        conversationType: selectedConversation.conversationType,
+        conversationId: selectedConversation.conversationId,
+      });
+      await loadOverview();
+      await loadDetails(selectedConversation).catch(() => setDetails(null));
+    } catch (error) {
+      setPanelError(error.message || "Failed to clear conversation background.");
+    }
+  };
+
   const selectedTyping = selectedConversation && typingState.conversationType === selectedConversation.conversationType && typingState.conversationId === selectedConversation.conversationId;
   const canManageMembers = details?.currentUserRole === "admin";
 
@@ -326,7 +369,7 @@ function ChatManagementPanel({ currentUser }) {
 
       <section className="workspace-chat-management-grid">
         <ChatRecentListPane activeTab={activeTab} items={currentItems} recentSearch={recentSearch} selectedConversation={selectedConversation} setActiveTab={setActiveTab} setRecentSearch={setRecentSearch} setSelectedConversation={setSelectedConversation} />
-        <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} />
+        <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} handleUpdateConversationBackground={handleUpdateConversationBackground} handleClearConversationBackground={handleClearConversationBackground} />
         <ChatDiscoveryPane overview={overview} searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} handleCreateGroup={handleCreateGroup} createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} details={details} canManageMembers={canManageMembers} memberInviteIds={memberInviteIds} setMemberInviteIds={setMemberInviteIds} communityGroupId={communityGroupId} setCommunityGroupId={setCommunityGroupId} currentUser={currentUser} requestsRef={requestsRef} requestFocus={requestFocus} handleRequestAction={handleRequestAction} setDetails={setDetails} setPanelError={setPanelError} loadOverview={loadOverview} addGroupMembers={addGroupMembers} addGroupToCommunity={addGroupToCommunity} deleteGroup={deleteGroup} exitGroup={exitGroup} joinCommunity={joinCommunity} leaveCommunity={leaveCommunity} overviewGroups={overview.groups} overviewFriends={overview.friends} removeGroupFromCommunity={removeGroupFromCommunity} removeGroupMember={removeGroupMember} updateCommunity={updateCommunity} updateGroup={updateGroup} updateGroupMemberRole={updateGroupMemberRole} clearSelection={() => { setSelectedConversation(null); setDetails(null); }} />
       </section>
     </div>

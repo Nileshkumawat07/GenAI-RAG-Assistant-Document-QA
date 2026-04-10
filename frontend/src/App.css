@@ -5616,7 +5616,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: grid;
   gap: 10px;
   background:
-    linear-gradient(rgba(229, 221, 213, 0.72), rgba(229, 221, 213, 0.72)),
+    linear-gradient(rgba(229, 221, 213, 0.94), rgba(229, 221, 213, 0.94)),
     var(--workspace-chat-custom-bg, none),
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.34), transparent 28%),
     linear-gradient(135deg, rgba(0, 0, 0, 0.045) 0%, rgba(0, 0, 0, 0.02) 24%, transparent 24%, transparent 50%, rgba(0, 0, 0, 0.028) 50%, rgba(0, 0, 0, 0.02) 74%, transparent 74%);
@@ -5626,6 +5626,13 @@ body.workspace-body-mode .contact-request-empty-card p {
   position: relative;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-conversation-stream.has-custom-background {
+  background-image: var(--workspace-chat-custom-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .workspace-chat-whatsapp-shell .workspace-chat-conversation-stream::-webkit-scrollbar {
@@ -5744,7 +5751,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px 12px;
+  padding: 6px 12px 10px;
   background: #f0f2f5;
   border-top: 1px solid rgba(17, 27, 33, 0.08);
 }
@@ -5754,7 +5761,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 4px;
-  min-height: 48px;
+  min-height: 42px;
   padding: 0 8px;
   border-radius: 24px;
   background: #ffffff;
@@ -5768,14 +5775,15 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-mobile-input,
 .workspace-chat-edit-input {
-  min-height: 22px;
-  max-height: 100px;
-  padding: 12px 6px;
+  min-height: 18px;
+  max-height: 76px;
+  padding: 9px 6px;
   border: none;
   background: transparent;
   box-shadow: none;
   resize: none;
   line-height: 1.35;
+  overflow-y: auto;
 }
 
 .workspace-chat-mobile-input:focus,
@@ -5785,8 +5793,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-emoji-button,
 .workspace-chat-attach-button {
-  width: 32px;
-  min-height: 32px;
+  width: 30px;
+  min-height: 30px;
   padding: 0;
   border: none;
   background: transparent;
@@ -5799,8 +5807,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-chat-send-fab {
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   border: none;
   border-radius: 999px;
   background: #00a884;
@@ -5808,7 +5816,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
   box-shadow: 0 8px 18px rgba(0, 168, 132, 0.28);
   cursor: pointer;
 }

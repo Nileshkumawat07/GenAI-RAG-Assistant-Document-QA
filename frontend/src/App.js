@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import HomePage from "./features/auth/HomePage";
 import LoginPage from "./features/auth/LoginPage";
@@ -12,6 +12,7 @@ import {
   setCurrentUser,
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
+import { getChatWebSocketUrl } from "./features/workspace/chatManagementApi";
 import {
   getWorkspaceDashboard,
   getWorkspaceNotifications,
@@ -30,6 +31,8 @@ function App() {
   const [headerNotifications, setHeaderNotifications] = useState([]);
   const [headerRecentActivity, setHeaderRecentActivity] = useState([]);
   const [headerNotificationsLoading, setHeaderNotificationsLoading] = useState(false);
+  const headerSocketRef = useRef(null);
+  const headerRefreshTimeoutRef = useRef(null);
 
   const buildRouteHash = (nextScreen, nextInfoPage = null) => {
     if (nextScreen !== "workspace") {
@@ -202,7 +205,7 @@ function App() {
   const isPremiumMember = currentUser?.subscriptionStatus === "premium";
   const unreadHeaderNotifications = headerNotifications.filter((item) => !item.isRead).length;
 
-  const loadHeaderNotifications = async () => {
+  const loadHeaderNotifications = useCallback(async () => {
     if (!currentUser || screen !== "workspace") {
       return;
     }
@@ -220,7 +223,14 @@ function App() {
     } finally {
       setHeaderNotificationsLoading(false);
     }
-  };
+  }, [currentUser, screen]);
+
+  const scheduleHeaderNotificationsRefresh = useCallback((delay = 120) => {
+    window.clearTimeout(headerRefreshTimeoutRef.current);
+    headerRefreshTimeoutRef.current = window.setTimeout(() => {
+      loadHeaderNotifications();
+    }, delay);
+  }, [loadHeaderNotifications]);
 
   const handleHeaderNotificationRead = async (notificationId) => {
     try {
@@ -312,7 +322,50 @@ function App() {
     }
 
     loadHeaderNotifications();
-  }, [currentUser?.id, screen]);
+  }, [currentUser?.id, screen, loadHeaderNotifications]);
+
+  useEffect(() => {
+    if (!currentUser || screen !== "workspace") {
+      window.clearTimeout(headerRefreshTimeoutRef.current);
+      if (headerSocketRef.current) {
+        headerSocketRef.current.close();
+        headerSocketRef.current = null;
+      }
+      return undefined;
+    }
+
+    const socket = new WebSocket(getChatWebSocketUrl());
+    headerSocketRef.current = socket;
+
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if ([
+          "message:new",
+          "message:status",
+          "message:deleted",
+          "overview:refresh",
+          "group:refresh",
+          "community:refresh",
+          "friends:refresh",
+          "friend_request:new",
+          "presence",
+        ].includes(payload.type)) {
+          scheduleHeaderNotificationsRefresh();
+        }
+      } catch {
+        // Ignore malformed socket payloads.
+      }
+    };
+
+    return () => {
+      window.clearTimeout(headerRefreshTimeoutRef.current);
+      socket.close();
+      if (headerSocketRef.current === socket) {
+        headerSocketRef.current = null;
+      }
+    };
+  }, [currentUser?.id, currentUser?.authToken, screen, scheduleHeaderNotificationsRefresh]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {

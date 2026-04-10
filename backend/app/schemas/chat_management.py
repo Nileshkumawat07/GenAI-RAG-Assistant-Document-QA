@@ -42,6 +42,7 @@ class ChatListItemResponse(BaseModel):
     announcementGroupId: str | None = None
     linkedGroupCount: int = 0
     communityId: str | None = None
+    backgroundUrl: str | None = None
 
 
 class GroupMemberResponse(BaseModel):
@@ -64,6 +65,7 @@ class GroupDetailResponse(BaseModel):
     memberCount: int = 0
     isMuted: bool = False
     currentUserRole: str | None = None
+    backgroundUrl: str | None = None
     members: list[GroupMemberResponse] = Field(default_factory=list)
 
 
@@ -84,8 +86,15 @@ class CommunityDetailResponse(BaseModel):
     memberCount: int = 0
     currentUserRole: str | None = None
     isMuted: bool = False
+    backgroundUrl: str | None = None
     groups: list[CommunityGroupResponse] = Field(default_factory=list)
     members: list[GroupMemberResponse] = Field(default_factory=list)
+
+
+class ConversationBackgroundResponse(BaseModel):
+    conversationType: str
+    conversationId: str
+    backgroundUrl: str | None = None
 
 
 class ReplyPreviewResponse(BaseModel):

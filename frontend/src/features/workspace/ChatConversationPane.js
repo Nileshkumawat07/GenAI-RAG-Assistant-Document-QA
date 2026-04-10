@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-import { buildChatFileUrl } from "./chatManagementApi";
+import { buildChatAuthenticatedUrl, buildChatFileUrl } from "./chatManagementApi";
 
 function formatDate(value, options) {
   if (!value) return "";
@@ -67,11 +67,6 @@ function getAvatarLabel(title) {
     .join("");
 }
 
-function getBackgroundStorageKey(conversation) {
-  if (!conversation?.conversationType || !conversation?.conversationId) return "";
-  return `genai_chat_bg_${conversation.conversationType}_${conversation.conversationId}`;
-}
-
 function isInteractiveTarget(target) {
   return Boolean(target.closest("a, button, input, textarea, label"));
 }
@@ -112,8 +107,11 @@ function ChatConversationPane({
   handleSaveEdit,
   isSending,
   loadOlderMessages,
+  handleUpdateConversationBackground,
+  handleClearConversationBackground,
 }) {
   const groupedMessages = buildConversationGroups(messages || []);
+  const messageIndex = useMemo(() => new Map((messages || []).map((message) => [message.id, message])), [messages]);
   const chatTitle = selectedItem?.title || "Select a chat";
   const chatPresence = selectedItem?.subtitle || selectedItem?.statusText || "Tap a conversation to start chatting";
   const attachmentAccept = "image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip";
@@ -122,11 +120,10 @@ function ChatConversationPane({
   const popupRef = useRef(null);
   const [messageMenu, setMessageMenu] = useState(null);
   const [backgroundMenu, setBackgroundMenu] = useState(null);
-  const [backgroundImage, setBackgroundImage] = useState("");
   const [messageInfo, setMessageInfo] = useState(null);
 
-  const backgroundStorageKey = useMemo(() => getBackgroundStorageKey(selectedConversation), [selectedConversation]);
-  const streamBackgroundStyle = backgroundImage ? { "--workspace-chat-custom-bg": `url(${backgroundImage})` } : undefined;
+  const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
+  const streamBackgroundStyle = backgroundImageUrl ? { "--workspace-chat-custom-bg": `url("${backgroundImageUrl}")` } : undefined;
   const composerActionLabel = !messageDraft.trim() && !selectedAttachment ? "Voice message" : isSending ? "Sending" : "Send message";
 
   useEffect(() => {
@@ -134,19 +131,6 @@ function ChatConversationPane({
     setBackgroundMenu(null);
     setMessageInfo(null);
   }, [selectedConversation]);
-
-  useEffect(() => {
-    if (!backgroundStorageKey) {
-      setBackgroundImage("");
-      return;
-    }
-
-    try {
-      setBackgroundImage(window.localStorage.getItem(backgroundStorageKey) || "");
-    } catch {
-      setBackgroundImage("");
-    }
-  }, [backgroundStorageKey]);
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
@@ -160,22 +144,9 @@ function ChatConversationPane({
     return () => document.removeEventListener("click", handleDocumentClick);
   }, []);
 
-  const persistBackground = (nextBackground) => {
-    setBackgroundImage(nextBackground);
-    if (!backgroundStorageKey) return;
-
-    try {
-      if (nextBackground) window.localStorage.setItem(backgroundStorageKey, nextBackground);
-      else window.localStorage.removeItem(backgroundStorageKey);
-    } catch {
-      // Ignore storage errors.
-    }
-  };
-
   const openMessageMenu = (event, message) => {
     event.preventDefault();
     event.stopPropagation();
-    if (isInteractiveTarget(event.target)) return;
     const bounds = streamRef.current?.getBoundingClientRect();
     const position = getMenuPosition(bounds, event, 220);
 
@@ -190,7 +161,6 @@ function ChatConversationPane({
   const openBackgroundMenu = (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (event.target.closest(".workspace-direct-message")) return;
 
     const bounds = streamRef.current?.getBoundingClientRect();
     const position = getMenuPosition(bounds, event, 200);
@@ -199,6 +169,21 @@ function ChatConversationPane({
       x: position.x,
       y: position.y,
     });
+  };
+
+  const handleStreamContextMenu = (event) => {
+    const messageElement = event.target.closest("[data-chat-message-id]");
+    if (messageElement) {
+      const message = messageIndex.get(messageElement.dataset.chatMessageId);
+      if (message) {
+        openMessageMenu(event, message);
+        return;
+      }
+    }
+
+    if (!isInteractiveTarget(event.target)) {
+      openBackgroundMenu(event);
+    }
   };
 
   const handleCopyMessage = async (message) => {
@@ -217,13 +202,8 @@ function ChatConversationPane({
   const handleWallpaperUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      persistBackground(typeof reader.result === "string" ? reader.result : "");
-      setBackgroundMenu(null);
-    };
-    reader.readAsDataURL(file);
+    handleUpdateConversationBackground?.(file);
+    setBackgroundMenu(null);
     event.target.value = "";
   };
 
@@ -261,9 +241,9 @@ function ChatConversationPane({
           if (typeof conversationStreamRef === "function") conversationStreamRef(node);
           else if (conversationStreamRef) conversationStreamRef.current = node;
         }}
-        className="workspace-chat-conversation-stream"
+        className={`workspace-chat-conversation-stream ${backgroundImageUrl ? "has-custom-background" : ""}`}
         style={streamBackgroundStyle}
-        onContextMenu={openBackgroundMenu}
+        onContextMenu={handleStreamContextMenu}
       >
         {hasMoreMessages ? (
           <button type="button" className="hero-button hero-button-secondary workspace-chat-load-more" onClick={loadOlderMessages}>
@@ -287,8 +267,8 @@ function ChatConversationPane({
                 return (
                   <article
                     key={message.id}
+                    data-chat-message-id={message.id}
                     className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message`}
-                    onContextMenu={(event) => openMessageMenu(event, message)}
                   >
                     {!mine && selectedConversation.conversationType !== "direct" ? (
                       <strong className="workspace-chat-sender-line">{message.senderName}</strong>
@@ -435,7 +415,7 @@ function ChatConversationPane({
               type="button"
               className="workspace-chat-popup-item"
               onClick={() => {
-                persistBackground("");
+                handleClearConversationBackground?.();
                 setBackgroundMenu(null);
               }}
             >

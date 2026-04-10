@@ -12,6 +12,7 @@ from app.schemas.chat_management import (
     ChatUserSummaryResponse,
     CommunityDetailResponse,
     CommunityGroupLinkRequest,
+    ConversationBackgroundResponse,
     CreateCommunityRequest,
     CreateGroupRequest,
     DeleteMessageRequest,
@@ -279,6 +280,56 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.post("/conversations/{conversation_type}/{conversation_id}/background", response_model=ConversationBackgroundResponse)
+    async def update_conversation_background(
+        conversation_type: str,
+        conversation_id: str,
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            result = await chat_management_service.update_conversation_background(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+                upload=file,
+            )
+            await chat_management_service.emit_conversation_refresh(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.delete("/conversations/{conversation_type}/{conversation_id}/background", response_model=ConversationBackgroundResponse)
+    async def clear_conversation_background(
+        conversation_type: str,
+        conversation_id: str,
+        db: Session = Depends(get_db),
+        authenticated_user_id: str = Depends(require_authenticated_user_id),
+    ):
+        try:
+            result = chat_management_service.clear_conversation_background(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            await chat_management_service.emit_conversation_refresh(
+                db,
+                current_user_id=authenticated_user_id,
+                conversation_type=conversation_type,
+                conversation_id=conversation_id,
+            )
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.get("/conversations/{friend_user_id}/messages", response_model=list[ChatMessageResponse])
     async def get_direct_messages(friend_user_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         try:
@@ -372,6 +423,21 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
         current_user_id = resolve_download_user_id(authorization=authorization, token=token)
         try:
             file_path, mime_type = chat_management_service.get_entity_asset_path(db, current_user_id=current_user_id, entity_type=entity_type, entity_id=entity_id, file_name=file_name)
+            return FileResponse(file_path, media_type=mime_type)
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get("/conversation-assets/{conversation_type}/{conversation_key}/{file_name}")
+    async def download_conversation_asset(conversation_type: str, conversation_key: str, file_name: str, token: str | None = Query(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+        current_user_id = resolve_download_user_id(authorization=authorization, token=token)
+        try:
+            file_path, mime_type = chat_management_service.get_conversation_asset_path(
+                db,
+                current_user_id=current_user_id,
+                conversation_type=conversation_type,
+                conversation_key=conversation_key,
+                file_name=file_name,
+            )
             return FileResponse(file_path, media_type=mime_type)
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
