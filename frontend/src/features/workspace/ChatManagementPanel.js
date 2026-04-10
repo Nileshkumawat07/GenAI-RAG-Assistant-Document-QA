@@ -60,7 +60,6 @@ function ChatManagementPanel({ currentUser }) {
   const [panelError, setPanelError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [typingState, setTypingState] = useState({ userId: "", conversationType: "", conversationId: "" });
-  const [socketReady, setSocketReady] = useState(false);
   const [details, setDetails] = useState(null);
   const [requestFocus, setRequestFocus] = useState(false);
   const [createGroupState, setCreateGroupState] = useState({ name: "", description: "", image: null, memberIds: [] });
@@ -163,11 +162,10 @@ function ChatManagementPanel({ currentUser }) {
     const socket = new WebSocket(getChatWebSocketUrl());
     socketRef.current = socket;
     socket.onopen = () => {
-      setSocketReady(true);
       if (selectedConversation) socket.send(JSON.stringify({ type: "active_chat", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId }));
     };
-    socket.onclose = () => setSocketReady(false);
-    socket.onerror = () => setSocketReady(false);
+    socket.onclose = () => {};
+    socket.onerror = () => {};
     socket.onmessage = async (event) => {
       try {
         const payload = JSON.parse(event.data);
@@ -324,32 +322,6 @@ function ChatManagementPanel({ currentUser }) {
 
   return (
     <div className="workspace-premium-shell">
-      <section className="workspace-command-hero">
-        <article className="workspace-hub-card workspace-command-story workspace-tool-premium-hero">
-          <div className="workspace-command-topline">
-            <div>
-              <span className="workspace-command-kicker">Chat Management</span>
-              <h3 className="workspace-command-title">Real-time chats, groups, communities, discovery, and notifications inside the same workspace shell.</h3>
-              <p className="workspace-command-lede">The same three-column layout now supports direct chat, group collaboration, community announcements, file sharing, edit/delete/reply actions, typing state, and richer notification routing.</p>
-            </div>
-            <div className="workspace-chat-hero-pill"><span>Unread</span><strong>{overview.unreadMessageCount}</strong></div>
-          </div>
-          <div className="workspace-command-badge-row">
-            <article className="workspace-command-badge"><span>Chats</span><strong>{overview.directChats.length}</strong><p>Direct conversations with live presence and delivery state.</p></article>
-            <article className="workspace-command-badge"><span>Groups</span><strong>{overview.groups.length}</strong><p>Shared spaces with admins, members, and media.</p></article>
-            <article className="workspace-command-badge"><span>Communities</span><strong>{overview.communities.length}</strong><p>Announcement channels and linked groups in one layer.</p></article>
-          </div>
-        </article>
-        <aside className="workspace-command-sidebar">
-          <section className="workspace-hub-card workspace-spotlight-panel">
-            <div className="workspace-spotlight-head"><span className="workspace-spotlight-tag">Active chat</span></div>
-            <strong>{selectedItem?.title || "No conversation selected"}</strong>
-            <p>{selectedItem?.statusText || "Choose a recent chat, group, or community to continue."}</p>
-            <div className="workspace-focus-meta"><span>{selectedItem?.subtitle || "Discovery and requests available"}</span><span>{socketReady ? "Socket connected" : "Socket disconnected"}</span></div>
-          </section>
-        </aside>
-      </section>
-
       {panelError ? <p className="error-text">{panelError}</p> : null}
 
       <section className="workspace-chat-management-grid">

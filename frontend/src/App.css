@@ -5624,6 +5624,13 @@ body.workspace-body-mode .contact-request-empty-card p {
   background-position: center, center, center, center;
   padding-right: 10px;
   position: relative;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-conversation-stream::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .workspace-chat-day-group {
@@ -5735,9 +5742,9 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-chat-mobile-composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: center;
   gap: 8px;
-  padding: 10px 14px 14px;
+  padding: 8px 12px 12px;
   background: #f0f2f5;
   border-top: 1px solid rgba(17, 27, 33, 0.08);
 }
@@ -5745,9 +5752,10 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-chat-input-shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-  align-items: end;
-  gap: 6px;
-  padding: 6px 8px;
+  align-items: center;
+  gap: 4px;
+  min-height: 48px;
+  padding: 0 8px;
   border-radius: 24px;
   background: #ffffff;
 }
@@ -5760,13 +5768,14 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-mobile-input,
 .workspace-chat-edit-input {
-  min-height: 24px;
-  max-height: 120px;
-  padding: 8px 4px;
+  min-height: 22px;
+  max-height: 100px;
+  padding: 12px 6px;
   border: none;
   background: transparent;
   box-shadow: none;
   resize: none;
+  line-height: 1.35;
 }
 
 .workspace-chat-mobile-input:focus,
@@ -5776,11 +5785,17 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-emoji-button,
 .workspace-chat-attach-button {
+  width: 32px;
   min-height: 32px;
-  padding: 0 8px;
+  padding: 0;
   border: none;
   background: transparent;
   border-radius: 999px;
+  color: #54656f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .workspace-chat-send-fab {
@@ -5793,7 +5808,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
   box-shadow: 0 8px 18px rgba(0, 168, 132, 0.28);
   cursor: pointer;
 }
@@ -5841,6 +5856,11 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-hidden-input {
   display: none;
+}
+
+.workspace-chat-inline-icon {
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .workspace-analytics-bars {

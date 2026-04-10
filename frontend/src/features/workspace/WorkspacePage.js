@@ -1814,11 +1814,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           ? "Generate images from prompts with an SDXL Lightning pipeline that can use cached model files or download them on first use."
           : activeSection === "dashboard"
             ? "Open a concise command center for saved activity, unread work, and quick workspace signals."
-            : activeSection === "analytics"
-              ? "Track usage patterns across chats, notifications, and workspace teams."
-              : activeSection === "chat"
-                ? "Discover users, manage friend requests, and run realtime one-to-one conversations from one production-ready workspace."
-              : activeSection === "chat-history"
+              : activeSection === "analytics"
+                ? "Track usage patterns across chats, notifications, and workspace teams."
+                : activeSection === "chat"
+                ? ""
+                : activeSection === "chat-history"
                 ? "Save prompt threads and assistant notes so the workspace keeps context over time."
                 : "Create and manage shared team workspaces with role-based member access.";
 
@@ -4395,9 +4395,15 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         </aside>
 
         <div className="workspace-content">
-          <div className="info-card">
-            <p>{infoConfig ? infoConfig.message : workspaceMessage}</p>
-          </div>
+          {infoConfig ? (
+            <div className="info-card">
+              <p>{infoConfig.message}</p>
+            </div>
+          ) : workspaceMessage ? (
+            <div className="info-card">
+              <p>{workspaceMessage}</p>
+            </div>
+          ) : null}
 
           <div className={`content-card ${activeSection === "object-detection" || activeSection === "image-generation" ? "object-detection-mode" : ""}`}>
             {infoConfig ? (

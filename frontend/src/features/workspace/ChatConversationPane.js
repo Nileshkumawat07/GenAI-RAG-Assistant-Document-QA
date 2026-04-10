@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildChatFileUrl } from "./chatManagementApi";
 
-const QUICK_EMOJIS = ["\u{1F600}", "\u{1F44D}", "\u{1F525}", "\u{1F3AF}", "\u{1F64F}"];
-
 function formatDate(value, options) {
   if (!value) return "";
   try {
@@ -78,6 +76,18 @@ function isInteractiveTarget(target) {
   return Boolean(target.closest("a, button, input, textarea, label"));
 }
 
+function getMenuPosition(bounds, event, width) {
+  const offsetX = event.clientX - (bounds?.left || 0);
+  const offsetY = event.clientY - (bounds?.top || 0);
+  const maxX = Math.max(12, (bounds?.width || 0) - width - 12);
+  const maxY = Math.max(12, (bounds?.height || 0) - 220);
+
+  return {
+    x: Math.min(Math.max(12, offsetX), maxX),
+    y: Math.min(Math.max(12, offsetY), maxY),
+  };
+}
+
 function ChatConversationPane({
   currentUser,
   selectedItem,
@@ -117,6 +127,7 @@ function ChatConversationPane({
 
   const backgroundStorageKey = useMemo(() => getBackgroundStorageKey(selectedConversation), [selectedConversation]);
   const streamBackgroundStyle = backgroundImage ? { "--workspace-chat-custom-bg": `url(${backgroundImage})` } : undefined;
+  const composerActionLabel = !messageDraft.trim() && !selectedAttachment ? "Voice message" : isSending ? "Sending" : "Send message";
 
   useEffect(() => {
     setMessageMenu(null);
@@ -162,26 +173,31 @@ function ChatConversationPane({
   };
 
   const openMessageMenu = (event, message) => {
-    if (event.button !== 0 || isInteractiveTarget(event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (isInteractiveTarget(event.target)) return;
     const bounds = streamRef.current?.getBoundingClientRect();
+    const position = getMenuPosition(bounds, event, 220);
 
     setBackgroundMenu(null);
     setMessageMenu({
       message,
-      x: event.clientX - (bounds?.left || 0),
-      y: event.clientY - (bounds?.top || 0),
+      x: position.x,
+      y: position.y,
     });
   };
 
   const openBackgroundMenu = (event) => {
-    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
     if (event.target.closest(".workspace-direct-message")) return;
 
     const bounds = streamRef.current?.getBoundingClientRect();
+    const position = getMenuPosition(bounds, event, 200);
     setMessageMenu(null);
     setBackgroundMenu({
-      x: event.clientX - (bounds?.left || 0),
-      y: event.clientY - (bounds?.top || 0),
+      x: position.x,
+      y: position.y,
     });
   };
 
@@ -247,7 +263,7 @@ function ChatConversationPane({
         }}
         className="workspace-chat-conversation-stream"
         style={streamBackgroundStyle}
-        onClick={openBackgroundMenu}
+        onContextMenu={openBackgroundMenu}
       >
         {hasMoreMessages ? (
           <button type="button" className="hero-button hero-button-secondary workspace-chat-load-more" onClick={loadOlderMessages}>
@@ -272,7 +288,7 @@ function ChatConversationPane({
                   <article
                     key={message.id}
                     className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message`}
-                    onClick={(event) => openMessageMenu(event, message)}
+                    onContextMenu={(event) => openMessageMenu(event, message)}
                   >
                     {!mine && selectedConversation.conversationType !== "direct" ? (
                       <strong className="workspace-chat-sender-line">{message.senderName}</strong>
@@ -478,18 +494,14 @@ function ChatConversationPane({
             disabled={!selectedConversation}
           />
 
-          <div className="workspace-chat-emoji-row workspace-chat-inline-tools">
-            {QUICK_EMOJIS.map((emoji) => (
-              <button key={emoji} type="button" className="workspace-chat-emoji-button" onClick={() => handleDraftChange(`${messageDraft}${emoji}`)}>
-                {emoji}
-              </button>
-            ))}
-          </div>
-
           <label className="workspace-chat-attach-button" aria-label="Attach file">
             <span aria-hidden="true">&#128206;</span>
             <input type="file" accept={attachmentAccept} onChange={(event) => setSelectedAttachment(event.target.files?.[0] || null)} />
           </label>
+
+          <button type="button" className="workspace-chat-emoji-button workspace-chat-inline-icon" aria-label="Payments">
+            <span aria-hidden="true">&#8377;</span>
+          </button>
 
           <button type="button" className="workspace-chat-camera-button" aria-label="Camera">
             <span aria-hidden="true">&#128247;</span>
@@ -500,10 +512,10 @@ function ChatConversationPane({
           type="button"
           className="workspace-chat-send-fab"
           onClick={handleSendMessage}
-          disabled={!selectedConversation || isSending || (!messageDraft.trim() && !selectedAttachment)}
-          aria-label={isSending ? "Sending" : "Send message"}
+          disabled={!selectedConversation || isSending}
+          aria-label={composerActionLabel}
         >
-          <span aria-hidden="true">{isSending ? "..." : "\u27A4"}</span>
+          <span aria-hidden="true">{!messageDraft.trim() && !selectedAttachment ? "\uD83C\uDFA4" : isSending ? "..." : "\u27A4"}</span>
         </button>
       </div>
     </section>
