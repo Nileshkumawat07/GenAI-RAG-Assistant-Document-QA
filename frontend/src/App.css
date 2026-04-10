@@ -5520,6 +5520,287 @@ body.workspace-body-mode .contact-request-empty-card p {
   margin-top: 6px;
 }
 
+.workspace-chat-whatsapp-shell {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #e5ddd5;
+}
+
+.workspace-chat-mobile-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f0f2f5;
+  border-bottom: 1px solid rgba(17, 27, 33, 0.08);
+}
+
+.workspace-chat-contact-row,
+.workspace-chat-header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.workspace-chat-contact-row {
+  min-width: 0;
+  gap: 10px;
+}
+
+.workspace-chat-header-actions {
+  gap: 6px;
+}
+
+.workspace-chat-avatar-large {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  font-size: 13px;
+}
+
+.workspace-chat-contact-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-chat-contact-copy strong {
+  font-size: 15px;
+  color: #111b21;
+}
+
+.workspace-chat-contact-copy span {
+  font-size: 12px;
+  color: #667781;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-chat-icon-button,
+.workspace-chat-camera-button,
+.workspace-chat-emoji-trigger {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #54656f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-conversation-stream {
+  min-height: 540px;
+  max-height: 540px;
+  padding: 18px 14px;
+  display: grid;
+  gap: 10px;
+  background:
+    linear-gradient(rgba(229, 221, 213, 0.92), rgba(229, 221, 213, 0.92)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.34), transparent 28%),
+    linear-gradient(135deg, rgba(0, 0, 0, 0.045) 0%, rgba(0, 0, 0, 0.02) 24%, transparent 24%, transparent 50%, rgba(0, 0, 0, 0.028) 50%, rgba(0, 0, 0, 0.02) 74%, transparent 74%);
+  background-size: auto, auto, 240px 240px;
+  padding-right: 10px;
+}
+
+.workspace-chat-day-group {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-chat-day-divider {
+  display: flex;
+  justify-content: center;
+}
+
+.workspace-chat-day-divider span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #54656f;
+  font-size: 12px;
+  box-shadow: 0 1px 1px rgba(17, 27, 33, 0.12);
+}
+
+.workspace-chat-whatsapp-shell .workspace-direct-message {
+  max-width: min(78%, 460px);
+  padding: 8px 10px 6px;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 1px 1px rgba(17, 27, 33, 0.16);
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-user {
+  margin-left: auto;
+  background: #d9fdd3;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-assistant {
+  margin-right: auto;
+  background: #ffffff;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-assistant strong,
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-assistant p,
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-assistant span,
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-user strong,
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-user p,
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-user span {
+  color: #111b21;
+}
+
+.workspace-chat-bubble-copy {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-sender-line {
+  color: #0b6f5d;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-reply-preview,
+.workspace-chat-whatsapp-shell .workspace-chat-compose-preview {
+  margin: 0 14px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(17, 27, 33, 0.08);
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-reply-preview {
+  margin: 0 0 2px;
+  background: rgba(17, 27, 33, 0.05);
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-bubble-foot {
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-bubble-foot span {
+  font-size: 11px;
+  color: #667781;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-inline-actions {
+  display: flex;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.workspace-chat-whatsapp-shell .workspace-direct-message:hover .workspace-chat-inline-actions,
+.workspace-chat-whatsapp-shell .workspace-direct-message:focus-within .workspace-chat-inline-actions {
+  opacity: 1;
+  max-height: 48px;
+  pointer-events: auto;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-image-preview {
+  max-width: 320px;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(17, 27, 33, 0.14);
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-compose-image {
+  max-width: 180px;
+  margin: 0 14px 12px;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-file-chip {
+  border-radius: 10px;
+  background: rgba(17, 27, 33, 0.05);
+  border: none;
+  color: #0b6f5d;
+}
+
+.workspace-chat-mobile-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  background: #f0f2f5;
+  border-top: 1px solid rgba(17, 27, 33, 0.08);
+}
+
+.workspace-chat-input-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: end;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 24px;
+  background: #ffffff;
+}
+
+.workspace-chat-inline-tools {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.workspace-chat-mobile-input,
+.workspace-chat-edit-input {
+  min-height: 24px;
+  max-height: 120px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+}
+
+.workspace-chat-mobile-input:focus,
+.workspace-chat-edit-input:focus {
+  box-shadow: none;
+}
+
+.workspace-chat-emoji-button,
+.workspace-chat-attach-button {
+  min-height: 32px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+}
+
+.workspace-chat-send-fab {
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: #00a884;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 8px 18px rgba(0, 168, 132, 0.28);
+  cursor: pointer;
+}
+
+.workspace-chat-send-fab:disabled {
+  background: #bfded6;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .workspace-analytics-bars {
   display: grid;
   gap: 10px;
