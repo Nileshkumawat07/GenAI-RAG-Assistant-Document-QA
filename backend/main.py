@@ -547,6 +547,7 @@ def create_app() -> FastAPI:
 
 
 from fastapi import WebSocket, WebSocketDisconnect
+app = create_app()
 
 app = create_app()
 
