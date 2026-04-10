@@ -545,30 +545,9 @@ def create_app() -> FastAPI:
     app.include_router(build_frontend_router(frontend_build_dir))
     return app
 
-from fastapi import WebSocket, WebSocketDisconnect
-def create_app() -> FastAPI:
-    app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
 
-    # ... your existing code ...
+app = create_app()
 
-    
-
-    active_connections = []
-
-    @app.websocket("/chat/ws")
-    async def websocket_endpoint(websocket: WebSocket):
-        await websocket.accept()
-        active_connections.append(websocket)
-
-        try:
-            while True:
-                data = await websocket.receive_text()
-                for connection in active_connections:
-                    await connection.send_text(data)
-        except WebSocketDisconnect:
-            active_connections.remove(websocket)
-
-    return app
 
 if __name__ == "__main__":
     import uvicorn
