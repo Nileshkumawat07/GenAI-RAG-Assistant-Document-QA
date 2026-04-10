@@ -52,6 +52,14 @@ function mergeMessageList(current, incoming) {
   return next;
 }
 
+function buildConversationRoomKey(currentUserId, conversationType, conversationId) {
+  if (!conversationType || !conversationId) return "";
+  if (conversationType === "direct") {
+    return `direct:${[currentUserId, conversationId].filter(Boolean).sort().join("__")}`;
+  }
+  return `${conversationType}:${conversationId}`;
+}
+
 function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const [overview, setOverview] = useState({ friends: [], directChats: [], groups: [], communities: [], sentRequests: [], receivedRequests: [], unreadMessageCount: 0, unreadRequestCount: 0, unreadNotificationCount: 0 });
   const [activeTab, setActiveTab] = useState("chats");
@@ -266,7 +274,19 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         if ((payload.type === "message:new" || payload.type === "receive_message") && payload.message) {
           setIsSending(false);
           const activeConversation = selectedConversationRef.current;
-          if (activeConversation && payload.message.conversationType === activeConversation.conversationType && payload.message.conversationId === activeConversation.conversationId) {
+          const activeRoomKey = activeConversation
+            ? buildConversationRoomKey(currentUser?.id, activeConversation.conversationType, activeConversation.conversationId)
+            : "";
+          const messageRoomKey = payload.roomKey || buildConversationRoomKey(currentUser?.id, payload.message.conversationType, payload.message.conversationId);
+          const isActiveConversation =
+            activeConversation &&
+            (
+              (payload.message.conversationType === activeConversation.conversationType &&
+                payload.message.conversationId === activeConversation.conversationId) ||
+              (activeRoomKey && messageRoomKey && activeRoomKey === messageRoomKey)
+            );
+
+          if (isActiveConversation) {
             setMessages((current) => mergeMessageList(current, payload.message));
             if (payload.message.senderId !== currentUser?.id && socketRef.current?.readyState === WebSocket.OPEN) {
               socketRef.current.send(JSON.stringify({ type: "seen", conversationType: activeConversation.conversationType, conversationId: activeConversation.conversationId }));
@@ -303,7 +323,19 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         }
         if (payload.type === "conversation:refresh") {
           const activeConversation = selectedConversationRef.current;
-          if (activeConversation && payload.conversationType === activeConversation.conversationType && payload.conversationId === activeConversation.conversationId) {
+          const activeRoomKey = activeConversation
+            ? buildConversationRoomKey(currentUser?.id, activeConversation.conversationType, activeConversation.conversationId)
+            : "";
+          const refreshRoomKey = payload.roomKey || buildConversationRoomKey(currentUser?.id, payload.conversationType, payload.conversationId);
+          const isActiveConversation =
+            activeConversation &&
+            (
+              (payload.conversationType === activeConversation.conversationType &&
+                payload.conversationId === activeConversation.conversationId) ||
+              (activeRoomKey && refreshRoomKey && activeRoomKey === refreshRoomKey)
+            );
+          if (isActiveConversation) {
+            await loadConversation(activeConversation).catch(() => {});
             return loadDetails(activeConversation).catch(() => setDetails(null));
           }
           return undefined;
