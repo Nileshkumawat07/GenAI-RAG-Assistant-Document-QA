@@ -545,13 +545,13 @@ def create_app() -> FastAPI:
     app.include_router(build_frontend_router(frontend_build_dir))
     return app
 
-
+from fastapi import WebSocket, WebSocketDisconnect
 def create_app() -> FastAPI:
     app = FastAPI(title="GenAI RAG Assistant API", version="1.0.0")
 
     # ... your existing code ...
 
-    from fastapi import WebSocket, WebSocketDisconnect
+    
 
     active_connections = []
 
