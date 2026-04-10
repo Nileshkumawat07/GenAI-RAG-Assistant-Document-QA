@@ -451,7 +451,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       }));
       socketReadyRef.current = false;
     };
-  }, [currentUser?.authToken, isConversationActive, loadConversation, loadDetails, loadOverview, pushToast, sendActiveConversationSignal, sendSocketPayload]);
+  }, [currentUser?.id, isConversationActive, loadConversation, loadDetails, loadOverview, pushToast, sendActiveConversationSignal, sendSocketPayload]);
 
   useEffect(() => {
     const query = searchQuery.trim();

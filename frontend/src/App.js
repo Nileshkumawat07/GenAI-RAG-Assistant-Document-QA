@@ -206,7 +206,7 @@ function App() {
   const unreadHeaderNotifications = headerNotifications.filter((item) => !item.isRead).length;
 
   const loadHeaderNotifications = useCallback(async () => {
-    if (!currentUser || screen !== "workspace") {
+    if (!currentUser?.id || screen !== "workspace") {
       return;
     }
     try {
@@ -223,7 +223,7 @@ function App() {
     } finally {
       setHeaderNotificationsLoading(false);
     }
-  }, [currentUser, screen]);
+  }, [currentUser?.id, screen]);
 
   const scheduleHeaderNotificationsRefresh = useCallback((delay = 120) => {
     window.clearTimeout(headerRefreshTimeoutRef.current);
@@ -392,7 +392,7 @@ function App() {
         headerSocketRef.current = null;
       }
     };
-  }, [currentUser?.id, currentUser?.authToken, screen, scheduleHeaderNotificationsRefresh]);
+  }, [currentUser?.id, screen, scheduleHeaderNotificationsRefresh]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {
