@@ -546,7 +546,25 @@ def create_app() -> FastAPI:
     return app
 
 
+from fastapi import WebSocket, WebSocketDisconnect
+
 app = create_app()
+
+active_connections = []
+
+@app.websocket("/chat/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            for connection in active_connections:
+                await connection.send_text(data)
+    except WebSocketDisconnect:
+        if websocket in active_connections:
+            active_connections.remove(websocket)
 
 
 if __name__ == "__main__":
