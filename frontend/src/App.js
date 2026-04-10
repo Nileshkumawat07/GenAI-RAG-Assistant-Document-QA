@@ -336,10 +336,32 @@ function App() {
 
     const socket = new WebSocket(getChatWebSocketUrl());
     headerSocketRef.current = socket;
+    const handleSocketSend = (event) => {
+      const payload = event?.detail;
+      if (!payload || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      try {
+        socket.send(JSON.stringify(payload));
+      } catch {
+        // Ignore socket send failures here.
+      }
+    };
+
+    socket.onopen = () => {
+      window.__GENAI_CHAT_SOCKET_READY__ = true;
+      window.dispatchEvent(new CustomEvent("genai-chat-socket-open"));
+    };
+
+    socket.onclose = () => {
+      window.__GENAI_CHAT_SOCKET_READY__ = false;
+      window.dispatchEvent(new CustomEvent("genai-chat-socket-close"));
+    };
 
     socket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
+        window.dispatchEvent(new CustomEvent("genai-chat-socket-message", { detail: payload }));
         if ([
           "message:new",
           "message:status",
@@ -359,8 +381,12 @@ function App() {
       }
     };
 
+    window.addEventListener("genai-chat-socket-send", handleSocketSend);
+
     return () => {
       window.clearTimeout(headerRefreshTimeoutRef.current);
+      window.removeEventListener("genai-chat-socket-send", handleSocketSend);
+      window.__GENAI_CHAT_SOCKET_READY__ = false;
       socket.close();
       if (headerSocketRef.current === socket) {
         headerSocketRef.current = null;

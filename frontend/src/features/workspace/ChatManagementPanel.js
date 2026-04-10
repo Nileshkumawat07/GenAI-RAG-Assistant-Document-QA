@@ -19,7 +19,6 @@ import {
   getChatOverview,
   getConversationMessageContext,
   getConversationSidebar,
-  getChatWebSocketUrl,
   getConversationMessages,
   joinCommunity,
   leaveCommunity,
@@ -88,7 +87,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const [communityGroupId, setCommunityGroupId] = useState("");
   const [toastItems, setToastItems] = useState([]);
   const typingTimeoutRef = useRef(null);
-  const socketRef = useRef(null);
+  const socketReadyRef = useRef(Boolean(window.__GENAI_CHAT_SOCKET_READY__));
   const conversationStreamRef = useRef(null);
   const requestsRef = useRef(null);
   const selectedConversationRef = useRef(null);
@@ -218,16 +217,19 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     onUserUpdate(latestUser);
   }, [onUserUpdate]);
 
-  const sendActiveConversationSignal = useCallback((conversation = selectedConversationRef.current) => {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-    socketRef.current.send(
-      JSON.stringify({
-        type: "active_chat",
-        conversationType: conversation?.conversationType || "",
-        conversationId: conversation?.conversationId || "",
-      })
-    );
+  const sendSocketPayload = useCallback((payload) => {
+    if (!payload || !socketReadyRef.current) return false;
+    window.dispatchEvent(new CustomEvent("genai-chat-socket-send", { detail: payload }));
+    return true;
   }, []);
+
+  const sendActiveConversationSignal = useCallback((conversation = selectedConversationRef.current) => {
+    sendSocketPayload({
+      type: "active_chat",
+      conversationType: conversation?.conversationType || "",
+      conversationId: conversation?.conversationId || "",
+    });
+  }, [sendSocketPayload]);
 
   const isConversationActive = useCallback((conversationType, conversationId, roomKey = "") => {
     const activeConversation = selectedConversationRef.current;
@@ -307,16 +309,20 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
   useEffect(() => {
     if (!currentUser?.authToken) return undefined;
-    const socket = new WebSocket(getChatWebSocketUrl());
-    socketRef.current = socket;
-    socket.onopen = () => {
+
+    const handleSocketOpen = () => {
+      socketReadyRef.current = true;
       sendActiveConversationSignal();
     };
-    socket.onclose = () => {};
-    socket.onerror = () => {};
-    socket.onmessage = async (event) => {
+
+    const handleSocketClose = () => {
+      socketReadyRef.current = false;
+    };
+
+    const handleSocketMessage = async (event) => {
       try {
-        const payload = JSON.parse(event.data);
+        const payload = event?.detail;
+        if (!payload) return;
         if (payload.type === "typing" || payload.type === "stop_typing") {
           return setTypingState(payload.isTyping ? payload : { userId: "", conversationType: "", conversationId: "" });
         }
@@ -336,8 +342,12 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
           if (isActiveConversation) {
             setMessages((current) => mergeMessageList(current, payload.message));
-            if (payload.message.senderId !== currentUserIdRef.current && activeConversation && socketRef.current?.readyState === WebSocket.OPEN) {
-              socketRef.current.send(JSON.stringify({ type: "seen", conversationType: activeConversation.conversationType, conversationId: activeConversation.conversationId }));
+            if (payload.message.senderId !== currentUserIdRef.current && activeConversation) {
+              sendSocketPayload({
+                type: "seen",
+                conversationType: activeConversation.conversationType,
+                conversationId: activeConversation.conversationId,
+              });
             }
           } else {
             const sourceItems = [
@@ -396,18 +406,25 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         // Ignore malformed socket payloads.
       }
     };
+
+    window.addEventListener("genai-chat-socket-open", handleSocketOpen);
+    window.addEventListener("genai-chat-socket-close", handleSocketClose);
+    window.addEventListener("genai-chat-socket-message", handleSocketMessage);
+    socketReadyRef.current = Boolean(window.__GENAI_CHAT_SOCKET_READY__);
+    if (socketReadyRef.current) {
+      sendActiveConversationSignal();
+    }
+
     return () => {
-      try {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "active_chat", conversationType: "", conversationId: "" }));
-        }
-      } catch {
-        // Ignore cleanup errors.
-      }
-      socket.close();
-      socketRef.current = null;
+      window.removeEventListener("genai-chat-socket-open", handleSocketOpen);
+      window.removeEventListener("genai-chat-socket-close", handleSocketClose);
+      window.removeEventListener("genai-chat-socket-message", handleSocketMessage);
+      window.dispatchEvent(new CustomEvent("genai-chat-socket-send", {
+        detail: { type: "active_chat", conversationType: "", conversationId: "" },
+      }));
+      socketReadyRef.current = false;
     };
-  }, [currentUser?.authToken, currentUser?.id, isConversationActive, loadConversation, loadDetails, loadOverview, pushToast, sendActiveConversationSignal]);
+  }, [currentUser?.authToken, isConversationActive, loadConversation, loadDetails, loadOverview, pushToast, sendActiveConversationSignal, sendSocketPayload]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -446,8 +463,13 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   }, [highlightedMessageId]);
 
   const sendTypingSignal = (isTyping) => {
-    if (!selectedConversation || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-    socketRef.current.send(JSON.stringify({ type: "typing", conversationType: selectedConversation.conversationType, conversationId: selectedConversation.conversationId, isTyping }));
+    if (!selectedConversation) return;
+    sendSocketPayload({
+      type: "typing",
+      conversationType: selectedConversation.conversationType,
+      conversationId: selectedConversation.conversationId,
+      isTyping,
+    });
   };
 
   const handleDraftChange = (value) => {
@@ -468,8 +490,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         body: messageDraft.trim(),
         replyToMessageId: replyToMessage?.id || null,
       };
-      if (!selectedAttachment && socketRef.current?.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({ type: "send_message", ...payload }));
+      if (!selectedAttachment && sendSocketPayload({ type: "send_message", ...payload })) {
       } else {
         const sent = selectedAttachment ? await uploadChatAttachment({ ...payload, file: selectedAttachment }) : await sendTextMessage(payload);
         setMessages((current) => mergeMessageList(current, sent));
@@ -480,7 +501,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       sendTypingSignal(false);
       await loadOverview();
       await loadDetails(selectedConversation).catch(() => setDetails(null));
-      if (selectedAttachment || socketRef.current?.readyState !== WebSocket.OPEN) {
+      if (selectedAttachment || !socketReadyRef.current) {
         setIsSending(false);
       }
     } catch (error) {
