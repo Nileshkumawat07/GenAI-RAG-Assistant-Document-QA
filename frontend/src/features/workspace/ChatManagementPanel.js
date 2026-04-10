@@ -86,6 +86,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const [memberInviteIds, setMemberInviteIds] = useState([]);
   const [communityGroupId, setCommunityGroupId] = useState("");
   const [toastItems, setToastItems] = useState([]);
+  const [socketReady, setSocketReady] = useState(Boolean(window.__GENAI_CHAT_SOCKET_READY__));
   const typingTimeoutRef = useRef(null);
   const socketReadyRef = useRef(Boolean(window.__GENAI_CHAT_SOCKET_READY__));
   const conversationStreamRef = useRef(null);
@@ -338,11 +339,13 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
     const handleSocketOpen = () => {
       socketReadyRef.current = true;
+      setSocketReady(true);
       sendActiveConversationSignal();
     };
 
     const handleSocketClose = () => {
       socketReadyRef.current = false;
+      setSocketReady(false);
     };
 
     const handleSocketMessage = async (event) => {
@@ -438,6 +441,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     window.addEventListener("genai-chat-socket-close", handleSocketClose);
     window.addEventListener("genai-chat-socket-message", handleSocketMessage);
     socketReadyRef.current = Boolean(window.__GENAI_CHAT_SOCKET_READY__);
+    setSocketReady(socketReadyRef.current);
     if (socketReadyRef.current) {
       sendActiveConversationSignal();
     }
@@ -450,8 +454,23 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         detail: { type: "active_chat", conversationType: "", conversationId: "" },
       }));
       socketReadyRef.current = false;
+      setSocketReady(false);
     };
   }, [currentUser?.id, isConversationActive, loadConversation, loadDetails, loadOverview, pushToast, sendActiveConversationSignal, sendSocketPayload]);
+
+  useEffect(() => {
+    if (!selectedConversation?.conversationId || socketReady) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      loadConversation(selectedConversation).catch(() => {});
+    }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadConversation, selectedConversation?.conversationType, selectedConversation?.conversationId, socketReady]);
 
   useEffect(() => {
     const query = searchQuery.trim();
