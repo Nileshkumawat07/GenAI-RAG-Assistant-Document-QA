@@ -662,10 +662,19 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
             return FileResponse(file_path, media_type=mime_type)
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+    from fastapi import Cookie
     @router.websocket("/ws")
-    async def chat_socket(websocket: WebSocket, token: str | None = Query(default=None)):
+    async def chat_socket(websocket: WebSocket):
+        await websocket.accept()
         try:
+            
+            token = websocket.query_params.get("token")
+            
+            
+            if not token:
+                await websocket.close(code=1008)
+                return
+            
             authenticated_user_id = chat_management_service.authenticate_websocket_user(token)
         except ChatManagementServiceError as exc:
             logger.warning(
