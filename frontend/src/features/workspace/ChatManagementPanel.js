@@ -334,7 +334,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   }, [loadConversation, loadDetails, loadOverview, selectedConversation?.conversationType, selectedConversation?.conversationId, sendActiveConversationSignal]);
 
   useEffect(() => {
-    if (!currentUser?.authToken) return undefined;
+    if (!currentUser?.id) return undefined;
 
     const handleSocketOpen = () => {
       socketReadyRef.current = true;

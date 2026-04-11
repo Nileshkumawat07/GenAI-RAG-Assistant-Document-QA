@@ -218,6 +218,17 @@ class ChatManagementService:
     def get_overview(self, db: Session, *, current_user_id: str) -> dict:
         friends = self.search_friends(db, current_user_id=current_user_id, query="")
         direct_chats = [self.serialize_direct_chat_item(db, friend_user_id=item["id"], current_user_id=current_user_id) for item in friends]
+        direct_chat_map: dict[str, dict] = {}
+        for item in direct_chats:
+            existing = direct_chat_map.get(item["id"])
+            if not existing:
+                direct_chat_map[item["id"]] = item
+                continue
+            existing_time = existing.get("lastMessageAt") or ""
+            next_time = item.get("lastMessageAt") or ""
+            if next_time >= existing_time:
+                direct_chat_map[item["id"]] = item
+        direct_chats = list(direct_chat_map.values())
         direct_chats.sort(key=lambda item: (item["lastMessageAt"] or "", item["title"].lower()), reverse=True)
         groups = self.list_groups(db, current_user_id=current_user_id)
         communities = self.list_communities(db, current_user_id=current_user_id)
@@ -252,21 +263,19 @@ class ChatManagementService:
         if current_user_id == receiver_user_id:
             raise ChatManagementServiceError("You cannot send a friend request to yourself.")
         receiver = self._require_user(db, receiver_user_id)
+        self._cleanup_friendship_duplicates(db, first_user_id=current_user_id, second_user_id=receiver_user_id)
         self._ensure_not_friends(db, current_user_id=current_user_id, other_user_id=receiver_user_id)
-        existing = db.execute(
-            select(ChatFriendRequest).where(
-                or_(
-                    and_(ChatFriendRequest.sender_user_id == current_user_id, ChatFriendRequest.receiver_user_id == receiver_user_id),
-                    and_(ChatFriendRequest.sender_user_id == receiver_user_id, ChatFriendRequest.receiver_user_id == current_user_id),
-                )
-            )
-        ).scalars().all()
+        existing = self._friend_request_rows_for_pair(db, first_user_id=current_user_id, second_user_id=receiver_user_id)
+        active_existing: list[ChatFriendRequest] = []
         for item in existing:
             if item.status == "pending":
+                active_existing.append(item)
                 if item.sender_user_id == current_user_id:
                     raise ChatManagementServiceError("Friend request already sent.")
                 raise ChatManagementServiceError("This user already sent you a friend request.")
-            db.delete(item)
+        for item in existing:
+            if item not in active_existing:
+                db.delete(item)
         request = ChatFriendRequest(
             id=str(uuid.uuid4()),
             sender_user_id=current_user_id,
@@ -292,7 +301,16 @@ class ChatManagementService:
         request = self._require_friend_request(db, request_id=request_id)
         if request.receiver_user_id != current_user_id or request.status != "pending":
             raise ChatManagementServiceError("Friend request was not found.")
+        self._cleanup_friendship_duplicates(db, first_user_id=request.sender_user_id, second_user_id=request.receiver_user_id)
         self._create_friendship_pair(db, request.sender_user_id, request.receiver_user_id)
+        for sibling_request in self._friend_request_rows_for_pair(
+            db,
+            first_user_id=request.sender_user_id,
+            second_user_id=request.receiver_user_id,
+        ):
+            if sibling_request.id == request.id:
+                continue
+            db.delete(sibling_request)
         request.status = "accepted"
         request.responded_at = datetime.now(timezone.utc)
         self._create_workspace_notification(
@@ -318,12 +336,29 @@ class ChatManagementService:
         return {"rejected": True}
 
     def list_friends(self, db: Session, *, current_user_id: str) -> list[dict]:
+        friendship_rows = db.execute(
+            select(ChatFriendship).where(ChatFriendship.user_id == current_user_id)
+        ).scalars().all()
+        deduped_friendships = self._dedupe_friendships(friendship_rows)
+        removed_duplicates = False
+        for duplicate in friendship_rows:
+            if duplicate not in deduped_friendships:
+                db.delete(duplicate)
+                removed_duplicates = True
+        if removed_duplicates:
+            db.commit()
         rows = db.execute(
             select(ChatFriendship, User)
             .join(User, User.id == ChatFriendship.friend_user_id)
             .where(ChatFriendship.user_id == current_user_id, User.archived_at.is_(None))
         ).all()
-        serialized = [self.serialize_user_summary(db, row[1], "friends", viewer_user_id=current_user_id) for row in rows]
+        seen_friend_ids: set[str] = set()
+        serialized = []
+        for _, friend in rows:
+            if friend.id in seen_friend_ids:
+                continue
+            seen_friend_ids.add(friend.id)
+            serialized.append(self.serialize_user_summary(db, friend, "friends", viewer_user_id=current_user_id))
         serialized.sort(key=lambda item: item["fullName"].lower())
         return serialized
 
@@ -2206,6 +2241,52 @@ class ChatManagementService:
             if db.execute(select(ChatFriendship).where(ChatFriendship.user_id == user_id, ChatFriendship.friend_user_id == friend_id)).scalar_one_or_none():
                 continue
             db.add(ChatFriendship(id=str(uuid.uuid4()), user_id=user_id, friend_user_id=friend_id))
+
+    def _dedupe_friendships(self, friendship_rows: list[ChatFriendship]) -> list[ChatFriendship]:
+        unique_rows: dict[tuple[str, str], ChatFriendship] = {}
+        for item in friendship_rows:
+            key = (item.user_id, item.friend_user_id)
+            existing = unique_rows.get(key)
+            if not existing:
+                unique_rows[key] = item
+                continue
+            existing_time = existing.created_at or datetime.min.replace(tzinfo=timezone.utc)
+            next_time = item.created_at or datetime.min.replace(tzinfo=timezone.utc)
+            if next_time < existing_time:
+                unique_rows[key] = item
+        return list(unique_rows.values())
+
+    def _cleanup_friendship_duplicates(self, db: Session, *, first_user_id: str, second_user_id: str) -> None:
+        rows = db.execute(
+            select(ChatFriendship).where(
+                or_(
+                    and_(ChatFriendship.user_id == first_user_id, ChatFriendship.friend_user_id == second_user_id),
+                    and_(ChatFriendship.user_id == second_user_id, ChatFriendship.friend_user_id == first_user_id),
+                )
+            )
+        ).scalars().all()
+        deduped = self._dedupe_friendships(rows)
+        for item in rows:
+            if item not in deduped:
+                db.delete(item)
+
+    def _friend_request_rows_for_pair(self, db: Session, *, first_user_id: str, second_user_id: str) -> list[ChatFriendRequest]:
+        rows = db.execute(
+            select(ChatFriendRequest).where(
+                or_(
+                    and_(ChatFriendRequest.sender_user_id == first_user_id, ChatFriendRequest.receiver_user_id == second_user_id),
+                    and_(ChatFriendRequest.sender_user_id == second_user_id, ChatFriendRequest.receiver_user_id == first_user_id),
+                )
+            )
+        ).scalars().all()
+        rows.sort(
+            key=lambda item: (
+                0 if item.status == "pending" else 1,
+                item.responded_at or item.created_at or datetime.min.replace(tzinfo=timezone.utc),
+            ),
+            reverse=True,
+        )
+        return rows
 
     def _add_group_member(self, db: Session, *, group_id: str, user_id: str, role: str, added_by_user_id: str | None) -> None:
         db.add(ChatGroupMember(id=str(uuid.uuid4()), group_id=group_id, user_id=user_id, role=role, added_by_user_id=added_by_user_id))

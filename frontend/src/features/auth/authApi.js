@@ -2,6 +2,7 @@ import { apiUrl, requestJson } from "../../shared/api/http";
 import { getAuthToken } from "./authStorage";
 
 export function normalizeAuthUser(user) {
+  const persistedAuthToken = getAuthToken();
   return {
     id: user.id,
     name: user.fullName,
@@ -36,7 +37,7 @@ export function normalizeAuthUser(user) {
     subscriptionActivatedAt: user.subscriptionActivatedAt || null,
     subscriptionExpiresAt: user.subscriptionExpiresAt || null,
     createdAt: user.createdAt,
-    authToken: user.authToken,
+    authToken: user.authToken || persistedAuthToken,
     isAdmin: !!user.isAdmin,
     mode: user.mode || (user.isAdmin ? "admin" : user.isManagement ? "management" : "member"),
   };

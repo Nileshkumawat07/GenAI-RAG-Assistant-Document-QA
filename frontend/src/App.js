@@ -33,6 +33,8 @@ function App() {
   const [headerNotificationsLoading, setHeaderNotificationsLoading] = useState(false);
   const headerSocketRef = useRef(null);
   const headerRefreshTimeoutRef = useRef(null);
+  const headerSocketReconnectTimeoutRef = useRef(null);
+  const headerSocketReconnectAttemptRef = useRef(0);
 
   const buildRouteHash = (nextScreen, nextInfoPage = null) => {
     if (nextScreen !== "workspace") {
@@ -327,6 +329,7 @@ function App() {
   useEffect(() => {
     if (!currentUser || screen !== "workspace") {
       window.clearTimeout(headerRefreshTimeoutRef.current);
+      window.clearTimeout(headerSocketReconnectTimeoutRef.current);
       if (headerSocketRef.current) {
         headerSocketRef.current.close();
         headerSocketRef.current = null;
@@ -334,11 +337,12 @@ function App() {
       return undefined;
     }
 
-    const socket = new WebSocket(getChatWebSocketUrl());
-    headerSocketRef.current = socket;
+    let disposed = false;
+
     const handleSocketSend = (event) => {
       const payload = event?.detail;
-      if (!payload || socket.readyState !== WebSocket.OPEN) {
+      const socket = headerSocketRef.current;
+      if (!payload || !socket || socket.readyState !== WebSocket.OPEN) {
         return;
       }
       try {
@@ -348,47 +352,87 @@ function App() {
       }
     };
 
-    socket.onopen = () => {
-      window.__GENAI_CHAT_SOCKET_READY__ = true;
-      window.dispatchEvent(new CustomEvent("genai-chat-socket-open"));
-    };
-
-    socket.onclose = () => {
-      window.__GENAI_CHAT_SOCKET_READY__ = false;
-      window.dispatchEvent(new CustomEvent("genai-chat-socket-close"));
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        window.dispatchEvent(new CustomEvent("genai-chat-socket-message", { detail: payload }));
-        if ([
-          "message:new",
-          "message:status",
-          "message:deleted",
-          "notification:new",
-          "overview:refresh",
-          "group:refresh",
-          "community:refresh",
-          "friends:refresh",
-          "friend_request:new",
-          "presence",
-        ].includes(payload.type)) {
-          scheduleHeaderNotificationsRefresh();
-        }
-      } catch {
-        // Ignore malformed socket payloads.
+    const scheduleReconnect = () => {
+      if (disposed) {
+        return;
       }
+      window.clearTimeout(headerSocketReconnectTimeoutRef.current);
+      const reconnectDelay = Math.min(1000 * (2 ** headerSocketReconnectAttemptRef.current), 10000);
+      headerSocketReconnectTimeoutRef.current = window.setTimeout(() => {
+        connectChatSocket();
+      }, reconnectDelay);
+      headerSocketReconnectAttemptRef.current += 1;
     };
 
+    const connectChatSocket = () => {
+      if (disposed) {
+        return;
+      }
+
+      const socket = new WebSocket(getChatWebSocketUrl());
+      headerSocketRef.current = socket;
+
+      socket.onopen = () => {
+        if (disposed || headerSocketRef.current !== socket) {
+          return;
+        }
+        headerSocketReconnectAttemptRef.current = 0;
+        window.__GENAI_CHAT_SOCKET_READY__ = true;
+        window.dispatchEvent(new CustomEvent("genai-chat-socket-open"));
+      };
+
+      socket.onclose = () => {
+        if (headerSocketRef.current === socket) {
+          headerSocketRef.current = null;
+        }
+        window.__GENAI_CHAT_SOCKET_READY__ = false;
+        window.dispatchEvent(new CustomEvent("genai-chat-socket-close"));
+        scheduleReconnect();
+      };
+
+      socket.onerror = () => {
+        try {
+          socket.close();
+        } catch {
+          // Ignore forced close failures.
+        }
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          window.dispatchEvent(new CustomEvent("genai-chat-socket-message", { detail: payload }));
+          if ([
+            "message:new",
+            "message:status",
+            "message:deleted",
+            "notification:new",
+            "overview:refresh",
+            "group:refresh",
+            "community:refresh",
+            "friends:refresh",
+            "friend_request:new",
+            "presence",
+          ].includes(payload.type)) {
+            scheduleHeaderNotificationsRefresh();
+          }
+        } catch {
+          // Ignore malformed socket payloads.
+        }
+      };
+    };
+
+    connectChatSocket();
     window.addEventListener("genai-chat-socket-send", handleSocketSend);
 
     return () => {
+      disposed = true;
       window.clearTimeout(headerRefreshTimeoutRef.current);
+      window.clearTimeout(headerSocketReconnectTimeoutRef.current);
       window.removeEventListener("genai-chat-socket-send", handleSocketSend);
       window.__GENAI_CHAT_SOCKET_READY__ = false;
-      socket.close();
-      if (headerSocketRef.current === socket) {
+      if (headerSocketRef.current) {
+        headerSocketRef.current.close();
         headerSocketRef.current = null;
       }
     };

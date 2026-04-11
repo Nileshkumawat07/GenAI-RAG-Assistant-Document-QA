@@ -73,16 +73,40 @@ function isInteractiveTarget(target) {
   return Boolean(target.closest("a, button, input, textarea, label"));
 }
 
-function getMenuPosition(bounds, event, width) {
-  const offsetX = event.clientX - (bounds?.left || 0);
-  const offsetY = event.clientY - (bounds?.top || 0);
-  const maxX = Math.max(12, (bounds?.width || 0) - width - 12);
-  const maxY = Math.max(12, (bounds?.height || 0) - 220);
+function getMenuPosition(container, event, width, height = 220, anchorElement = null) {
+  const bounds = container?.getBoundingClientRect();
+  const scrollLeft = container?.scrollLeft || 0;
+  const scrollTop = container?.scrollTop || 0;
+  const anchorBounds = anchorElement?.getBoundingClientRect();
+  const fallbackX = (event.clientX - (bounds?.left || 0)) + scrollLeft;
+  const fallbackY = (event.clientY - (bounds?.top || 0)) + scrollTop;
+  const preferredX = anchorBounds
+    ? (anchorBounds.left - (bounds?.left || 0)) + scrollLeft + Math.min(anchorBounds.width || 0, 40)
+    : fallbackX;
+  const preferredY = anchorBounds
+    ? (anchorBounds.top - (bounds?.top || 0)) + scrollTop + Math.min(anchorBounds.height || 0, 18)
+    : fallbackY;
+  const minX = scrollLeft + 12;
+  const minY = scrollTop + 12;
+  const maxX = Math.max(minX, scrollLeft + (bounds?.width || 0) - width - 12);
+  const maxY = Math.max(minY, scrollTop + (bounds?.height || 0) - height - 12);
 
   return {
-    x: Math.min(Math.max(12, offsetX), maxX),
-    y: Math.min(Math.max(12, offsetY), maxY),
+    x: Math.min(Math.max(minX, preferredX), maxX),
+    y: Math.min(Math.max(minY, preferredY), maxY),
   };
+}
+
+function getAttachmentKind(message) {
+  if (message.messageType === "image") return "image";
+  if (message.messageType === "video") return "video";
+  if (message.messageType === "voice") return "audio";
+  if ((message.mimeType || "").toLowerCase().includes("pdf")) return "pdf";
+  return "file";
+}
+
+function canPreviewAttachment(message) {
+  return ["image", "video", "audio", "pdf"].includes(getAttachmentKind(message));
 }
 
 function ChatConversationPane({
@@ -127,6 +151,7 @@ function ChatConversationPane({
   const [messageMenu, setMessageMenu] = useState(null);
   const [backgroundMenu, setBackgroundMenu] = useState(null);
   const [messageInfo, setMessageInfo] = useState(null);
+  const [attachmentViewer, setAttachmentViewer] = useState(null);
 
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
   const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
@@ -137,6 +162,7 @@ function ChatConversationPane({
     setMessageMenu(null);
     setBackgroundMenu(null);
     setMessageInfo(null);
+    setAttachmentViewer(null);
   }, [selectedConversation]);
 
   useEffect(() => {
@@ -158,11 +184,10 @@ function ChatConversationPane({
     return () => document.removeEventListener("click", handleDocumentClick);
   }, []);
 
-  const openMessageMenu = (event, message) => {
+  const openMessageMenu = (event, message, anchorElement = null) => {
     event.preventDefault();
     event.stopPropagation();
-    const bounds = streamRef.current?.getBoundingClientRect();
-    const position = getMenuPosition(bounds, event, 220);
+    const position = getMenuPosition(streamRef.current, event, 220, 320, anchorElement);
 
     setBackgroundMenu(null);
     setMessageMenu({
@@ -176,8 +201,7 @@ function ChatConversationPane({
     event.preventDefault();
     event.stopPropagation();
 
-    const bounds = streamRef.current?.getBoundingClientRect();
-    const position = getMenuPosition(bounds, event, 200);
+    const position = getMenuPosition(streamRef.current, event, 200, 140);
     setMessageMenu(null);
     setBackgroundMenu({
       x: position.x,
@@ -190,7 +214,7 @@ function ChatConversationPane({
     if (messageElement) {
       const message = messageIndex.get(messageElement.dataset.chatMessageId);
       if (message) {
-        openMessageMenu(event, message);
+        openMessageMenu(event, message, messageElement);
         return;
       }
     }
@@ -219,6 +243,37 @@ function ChatConversationPane({
     handleUpdateConversationBackground?.(file);
     setBackgroundMenu(null);
     event.target.value = "";
+  };
+
+  const handleOpenAttachment = (message) => {
+    if (!message?.fileUrl) return;
+    const fileUrl = buildChatFileUrl(message.id);
+    if (canPreviewAttachment(message)) {
+      setAttachmentViewer({
+        id: message.id,
+        url: fileUrl,
+        fileName: message.fileName || "Attachment",
+        kind: getAttachmentKind(message),
+        mimeType: message.mimeType || "",
+      });
+      setMessageMenu(null);
+      return;
+    }
+    window.open(fileUrl, "_blank", "noopener,noreferrer");
+    setMessageMenu(null);
+  };
+
+  const handleDownloadAttachment = (message) => {
+    if (!message?.fileUrl) return;
+    const link = document.createElement("a");
+    link.href = buildChatFileUrl(message.id);
+    link.download = message.fileName || "attachment";
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setMessageMenu(null);
   };
 
   return (
@@ -281,12 +336,15 @@ function ChatConversationPane({
                 const isImage = message.messageType === "image";
                 const isVideo = message.messageType === "video";
                 const isVoice = message.messageType === "voice";
+                const hasPreview = canPreviewAttachment(message);
+                const fileUrl = message.fileUrl ? buildChatFileUrl(message.id) : "";
 
                 return (
                   <article
                     key={message.id}
                     data-chat-message-id={message.id}
                     className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message ${highlightedMessageId === message.id ? "is-highlighted" : ""}`}
+                    onContextMenu={(event) => openMessageMenu(event, message, event.currentTarget)}
                   >
                     {!mine && selectedConversation.conversationType !== "direct" ? (
                       <strong className="workspace-chat-sender-line">{message.senderName}</strong>
@@ -327,33 +385,44 @@ function ChatConversationPane({
                       <>
                         {message.fileUrl ? (
                           isImage ? (
-                            <a
-                              href={buildChatFileUrl(message.id)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
                               className="workspace-chat-media-link"
-                              onClick={(event) => event.stopPropagation()}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenAttachment(message);
+                              }}
                             >
-                              <img src={buildChatFileUrl(message.id)} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
-                            </a>
+                              <img src={fileUrl} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
+                            </button>
                           ) : isVideo ? (
-                            <video className="workspace-chat-image-preview workspace-chat-video-preview" controls preload="metadata">
-                              <source src={buildChatFileUrl(message.id)} type={message.mimeType || "video/mp4"} />
-                            </video>
+                            <button
+                              type="button"
+                              className="workspace-chat-media-link workspace-chat-video-link"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenAttachment(message);
+                              }}
+                            >
+                              <video className="workspace-chat-image-preview workspace-chat-video-preview" preload="metadata">
+                                <source src={fileUrl} type={message.mimeType || "video/mp4"} />
+                              </video>
+                            </button>
                           ) : isVoice ? (
                             <audio className="workspace-chat-audio-preview" controls preload="metadata">
-                              <source src={buildChatFileUrl(message.id)} type={message.mimeType || "audio/mpeg"} />
+                              <source src={fileUrl} type={message.mimeType || "audio/mpeg"} />
                             </audio>
                           ) : (
-                            <a
-                              href={buildChatFileUrl(message.id)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
                               className="workspace-chat-file-chip"
-                              onClick={(event) => event.stopPropagation()}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenAttachment(message);
+                              }}
                             >
-                              {message.fileName || "Download file"}
-                            </a>
+                              {hasPreview ? `View ${message.fileName || "file"}` : (message.fileName || "Open file")}
+                            </button>
                           )
                         ) : null}
                         {message.body ? <p className="workspace-chat-bubble-copy">{message.body}</p> : null}
@@ -405,6 +474,16 @@ function ChatConversationPane({
             <button type="button" className="workspace-chat-popup-item" onClick={() => { setMessageInfo(messageMenu.message); setMessageMenu(null); }}>
               Message info
             </button>
+            {messageMenu.message.fileUrl ? (
+              <button type="button" className="workspace-chat-popup-item" onClick={() => handleOpenAttachment(messageMenu.message)}>
+                View
+              </button>
+            ) : null}
+            {messageMenu.message.fileUrl ? (
+              <button type="button" className="workspace-chat-popup-item" onClick={() => handleDownloadAttachment(messageMenu.message)}>
+                Download
+              </button>
+            ) : null}
             <button type="button" className="workspace-chat-popup-item" onClick={() => { setReplyToMessage(messageMenu.message); setMessageMenu(null); }}>
               Reply
             </button>
@@ -477,6 +556,42 @@ function ChatConversationPane({
           </div>
         ) : null}
       </div>
+
+      {attachmentViewer ? (
+        <div className="workspace-chat-viewer-backdrop" onClick={() => setAttachmentViewer(null)}>
+          <div className="workspace-chat-viewer-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="workspace-chat-viewer-header">
+              <strong>{attachmentViewer.fileName}</strong>
+              <div className="workspace-chat-viewer-actions">
+                <button type="button" className="inline-text-button" onClick={() => handleDownloadAttachment({ id: attachmentViewer.id, fileUrl: attachmentViewer.url, fileName: attachmentViewer.fileName })}>
+                  Download
+                </button>
+                <button type="button" className="inline-text-button" onClick={() => setAttachmentViewer(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="workspace-chat-viewer-body">
+              {attachmentViewer.kind === "image" ? (
+                <img src={attachmentViewer.url} alt={attachmentViewer.fileName} className="workspace-chat-viewer-image" />
+              ) : null}
+              {attachmentViewer.kind === "video" ? (
+                <video className="workspace-chat-viewer-media" controls autoPlay preload="metadata">
+                  <source src={attachmentViewer.url} type={attachmentViewer.mimeType || "video/mp4"} />
+                </video>
+              ) : null}
+              {attachmentViewer.kind === "audio" ? (
+                <audio className="workspace-chat-viewer-audio" controls autoPlay preload="metadata">
+                  <source src={attachmentViewer.url} type={attachmentViewer.mimeType || "audio/mpeg"} />
+                </audio>
+              ) : null}
+              {attachmentViewer.kind === "pdf" ? (
+                <iframe title={attachmentViewer.fileName} src={attachmentViewer.url} className="workspace-chat-viewer-frame" />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <input ref={wallpaperInputRef} type="file" accept="image/*" className="workspace-chat-hidden-input" onChange={handleWallpaperUpload} />
 
