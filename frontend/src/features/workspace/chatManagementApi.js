@@ -252,6 +252,10 @@ export async function leaveCommunity(communityId) {
   return requestJson(`/chat/communities/${encodeURIComponent(communityId)}/leave`, { method: "POST" }, "Failed to leave community.");
 }
 
+export async function deleteCommunity(communityId) {
+  return requestJson(`/chat/communities/${encodeURIComponent(communityId)}`, { method: "DELETE" }, "Failed to delete community.");
+}
+
 export async function addGroupToCommunity(communityId, groupId) {
   return requestJson(`/chat/communities/${encodeURIComponent(communityId)}/groups`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId }) }, "Failed to add group to community.");
 }

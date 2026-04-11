@@ -279,6 +279,15 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.delete("/communities/{community_id}")
+    async def delete_community(community_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
+        try:
+            result = chat_management_service.delete_community(db, current_user_id=authenticated_user_id, community_id=community_id)
+            await chat_management_service.emit_community_refresh(community_id=community_id)
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.post("/communities/{community_id}/groups", response_model=CommunityDetailResponse)
     async def add_group_to_community(community_id: str, payload: CommunityGroupLinkRequest, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         try:

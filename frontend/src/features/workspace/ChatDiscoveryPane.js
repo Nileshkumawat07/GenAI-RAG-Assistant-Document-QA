@@ -70,6 +70,7 @@ function ChatDiscoveryPane({
   updateGroup,
   updateGroupMemberRole,
   handleRemoveFriend,
+  handleDeleteCommunity,
   clearSelection,
 }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState("account");
@@ -207,6 +208,7 @@ function ChatDiscoveryPane({
   const isDirect = details?.conversationType === "direct";
   const isGroup = details?.conversationType === "group";
   const isCommunity = details?.conversationType === "community";
+  const isCommunityCreator = isCommunity && details?.createdByUserId === currentUser?.id;
 
   return (
     <aside className="workspace-hub-card workspace-chat-column workspace-chat-discovery-panel">
@@ -346,7 +348,27 @@ function ChatDiscoveryPane({
             </div>
 
             {isGroup ? <div className="workspace-chat-inline-actions"><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => exitGroup(selectedConversation.conversationId), true)}>Exit group</button>{details.currentUserRole === "admin" ? <button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => deleteGroup(selectedConversation.conversationId), true)}>Delete group</button> : null}<button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => updateGroup(selectedConversation.conversationId, { isMuted: !details.preferences?.isMuted }))}>{details.preferences?.isMuted ? "Unmute notifications" : "Mute notifications"}</button></div> : null}
-            {isCommunity ? <div className="workspace-chat-inline-actions"><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => joinCommunity(selectedConversation.conversationId))}>Join</button><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => leaveCommunity(selectedConversation.conversationId), true)}>Leave</button><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => updateCommunity(selectedConversation.conversationId, { isMuted: !details.preferences?.isMuted }))}>{details.preferences?.isMuted ? "Unmute announcements" : "Mute announcements"}</button></div> : null}
+            {isCommunity ? (
+              <div className="workspace-chat-inline-actions">
+                <button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => joinCommunity(selectedConversation.conversationId))}>Join</button>
+                {isCommunityCreator ? (
+                  <button
+                    type="button"
+                    className="inline-text-button"
+                    onClick={() => {
+                      if (window.confirm(`Delete ${details.title} community permanently?`)) {
+                        handleDeleteCommunity?.();
+                      }
+                    }}
+                  >
+                    Delete community
+                  </button>
+                ) : (
+                  <button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => leaveCommunity(selectedConversation.conversationId), true)}>Leave</button>
+                )}
+                <button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => updateCommunity(selectedConversation.conversationId, { isMuted: !details.preferences?.isMuted }))}>{details.preferences?.isMuted ? "Unmute announcements" : "Mute announcements"}</button>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

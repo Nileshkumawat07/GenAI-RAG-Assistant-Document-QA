@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from types import MethodType
 
 import app.models  # noqa: F401
 from app.api.routes.chat_management import build_chat_management_router
@@ -81,6 +82,9 @@ def test_remove_friend_route_deletes_direct_chat_and_friendship():
 
     auth_service = AuthService()
     chat_service = ChatManagementService(auth_service)
+    async def noop_emit_friendship_update(self, *, user_ids):
+        return None
+    chat_service.emit_friendship_update = MethodType(noop_emit_friendship_update, chat_service)
     request = chat_service.send_friend_request(db, current_user_id="user-1", receiver_user_id="user-2")
     chat_service.accept_friend_request(db, current_user_id="user-2", request_id=request["id"])
     chat_service.send_text_message(
@@ -116,3 +120,49 @@ def test_remove_friend_route_deletes_direct_chat_and_friendship():
     overview = chat_service.get_overview(db, current_user_id="user-1")
     assert overview["friends"] == []
     assert overview["directChats"] == []
+
+
+def test_delete_community_route_deletes_creator_community():
+    db = build_session()
+    db.add(build_user("user-1", "one@example.com", "userone", "User One"))
+    db.commit()
+
+    auth_service = AuthService()
+    chat_service = ChatManagementService(auth_service)
+
+    async def noop_emit_community_refresh(self, *, community_id):
+        return None
+
+    chat_service.emit_community_refresh = MethodType(noop_emit_community_refresh, chat_service)
+    community = chat_service.create_community(
+        db,
+        current_user_id="user-1",
+        name="Alpha Community",
+        description="Creator-owned community",
+        image_file=None,
+    )
+
+    app = FastAPI()
+    app.include_router(build_chat_management_router(chat_service))
+
+    def override_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_db
+    client = TestClient(app)
+    token = auth_service.create_access_token(user_id="user-1")
+
+    response = client.delete(
+        f"/chat/communities/{community['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["deleted"] is True
+    assert payload["communityId"] == community["id"]
+    overview = chat_service.get_overview(db, current_user_id="user-1")
+    assert overview["communities"] == []

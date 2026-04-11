@@ -1621,6 +1621,64 @@ class ChatManagementService:
         db.commit()
         return {"left": True, "communityId": community.id}
 
+    def delete_community(self, db: Session, *, current_user_id: str, community_id: str) -> dict:
+        community, announcement_group, membership = self._require_community_membership(db, community_id=community_id, user_id=current_user_id)
+        self._ensure_group_admin(membership)
+        if community.created_by_user_id != current_user_id:
+            raise ChatManagementServiceError("Only the community creator can delete the community.")
+
+        group_links = db.execute(
+            select(ChatCommunityGroup).where(ChatCommunityGroup.community_id == community.id)
+        ).scalars().all()
+        for link in group_links:
+            db.delete(link)
+
+        community_messages = db.execute(
+            select(ChatMessage).where(ChatMessage.group_id == announcement_group.id)
+        ).scalars().all()
+        for item in community_messages:
+            if item.storage_path:
+                try:
+                    Path(item.storage_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+            db.delete(item)
+
+        community_preferences = db.execute(
+            select(ChatConversationPreference).where(
+                ChatConversationPreference.conversation_type == "community",
+                ChatConversationPreference.conversation_id == community.id,
+            )
+        ).scalars().all()
+        for item in community_preferences:
+            db.delete(item)
+
+        background_rows = db.execute(
+            select(ChatConversationBackground).where(
+                ChatConversationBackground.conversation_type == "community",
+                ChatConversationBackground.conversation_key == community.id,
+            )
+        ).scalars().all()
+        for item in background_rows:
+            if item.storage_path:
+                try:
+                    Path(item.storage_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+            db.delete(item)
+
+        membership_rows = db.execute(
+            select(ChatGroupMember).where(ChatGroupMember.group_id == announcement_group.id)
+        ).scalars().all()
+        for item in membership_rows:
+            db.delete(item)
+
+        announcement_group.is_deleted = True
+        announcement_group.updated_at = datetime.now(timezone.utc)
+        db.delete(community)
+        db.commit()
+        return {"deleted": True, "communityId": community_id}
+
     def add_group_to_community(self, db: Session, *, current_user_id: str, community_id: str, group_id: str) -> dict:
         community, _, membership = self._require_community_membership(db, community_id=community_id, user_id=current_user_id)
         self._ensure_group_admin(membership)
@@ -2097,6 +2155,7 @@ class ChatManagementService:
             "announcementGroupId": announcement_group.id,
             "memberCount": len(member_rows),
             "currentUserRole": membership.role,
+            "createdByUserId": community.created_by_user_id,
             "isMuted": bool(membership.is_muted),
             "backgroundUrl": self._conversation_background_url(db, conversation_type="community", conversation_key=community.id),
             "groups": [{"id": group.id, "name": group.name, "description": group.description, "imageUrl": group.image_url, "memberCount": self._group_member_count(db, group_id=group.id)} for _, group in group_links],

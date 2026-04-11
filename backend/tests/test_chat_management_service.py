@@ -167,3 +167,29 @@ def test_remove_friend_deletes_direct_relationship_and_messages():
     assert removed["deletedMessageCount"] == 1
     assert overview["friends"] == []
     assert overview["directChats"] == []
+
+
+def test_delete_community_removes_it_for_creator():
+    db = build_session()
+    db.add(build_user("user-1", "one@example.com", "userone", "User One"))
+    db.commit()
+    service = ChatManagementService(AuthService())
+
+    community = service.create_community(
+        db,
+        current_user_id="user-1",
+        name="Alpha Community",
+        description="A removable community",
+        image_file=None,
+    )
+
+    deleted = service.delete_community(
+        db,
+        current_user_id="user-1",
+        community_id=community["id"],
+    )
+    overview = service.get_overview(db, current_user_id="user-1")
+
+    assert deleted["deleted"] is True
+    assert deleted["communityId"] == community["id"]
+    assert overview["communities"] == []
