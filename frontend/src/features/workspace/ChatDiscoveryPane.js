@@ -69,6 +69,7 @@ function ChatDiscoveryPane({
   updateCommunity,
   updateGroup,
   updateGroupMemberRole,
+  handleRemoveFriend,
   clearSelection,
 }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState("account");
@@ -273,6 +274,19 @@ function ChatDiscoveryPane({
               <button type="button" className={`workspace-inline-action ${details.preferences?.isPinned ? "is-active" : ""}`} onClick={() => handleUpdateConversationPreference({ isPinned: !details.preferences?.isPinned })}>{details.preferences?.isPinned ? "Unpin" : "Pin"}</button>
               <button type="button" className={`workspace-inline-action ${details.preferences?.isArchived ? "is-active" : ""}`} onClick={() => handleUpdateConversationPreference({ isArchived: !details.preferences?.isArchived })}>{details.preferences?.isArchived ? "Unarchive" : "Archive"}</button>
               {isDirect ? <button type="button" className={`workspace-inline-action ${details.preferences?.isBlocked ? "is-active" : ""}`} onClick={() => handleUpdateConversationPreference({ isBlocked: !details.preferences?.isBlocked })}>{details.preferences?.isBlocked ? "Unblock" : "Block"}</button> : null}
+              {isDirect ? (
+                <button
+                  type="button"
+                  className="workspace-inline-action workspace-inline-action-danger"
+                  onClick={() => {
+                    if (window.confirm(`Remove ${details.title} from friends and delete this direct chat?`)) {
+                      handleRemoveFriend?.();
+                    }
+                  }}
+                >
+                  Remove friend
+                </button>
+              ) : null}
             </div>
 
             <label className="workspace-form-stack">

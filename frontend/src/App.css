@@ -5794,6 +5794,16 @@ body.workspace-body-mode .contact-request-empty-card p {
   gap: 4px;
 }
 
+.workspace-inline-action-danger {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.2);
+  background: rgba(180, 35, 24, 0.06);
+}
+
+.workspace-inline-action-danger:hover {
+  background: rgba(180, 35, 24, 0.12);
+}
+
 .workspace-chat-mobile-input,
 .workspace-chat-edit-input {
   min-height: 18px;
