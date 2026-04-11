@@ -72,6 +72,15 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     async def list_friends(db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         return chat_management_service.list_friends(db, current_user_id=authenticated_user_id)
 
+    @router.delete("/friends/{friend_user_id}")
+    async def remove_friend(friend_user_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
+        try:
+            result = chat_management_service.remove_friend(db, current_user_id=authenticated_user_id, friend_user_id=friend_user_id)
+            await chat_management_service.emit_friendship_update(user_ids=[authenticated_user_id, friend_user_id])
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.get("/groups", response_model=list[ChatListItemResponse])
     async def list_groups(db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         return chat_management_service.list_groups(db, current_user_id=authenticated_user_id)

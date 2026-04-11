@@ -335,6 +335,84 @@ class ChatManagementService:
         db.commit()
         return {"rejected": True}
 
+    def remove_friend(self, db: Session, *, current_user_id: str, friend_user_id: str) -> dict:
+        self._require_user(db, friend_user_id)
+        self._ensure_friends(db, current_user_id=current_user_id, other_user_id=friend_user_id)
+        self._cleanup_friendship_duplicates(db, first_user_id=current_user_id, second_user_id=friend_user_id)
+
+        direct_conversation_key = self._direct_conversation_key(current_user_id, friend_user_id)
+        direct_messages = db.execute(
+            self._conversation_message_query(
+                db,
+                conversation_type="direct",
+                conversation_id=friend_user_id,
+                current_user_id=current_user_id,
+            )
+        ).scalars().all()
+        message_ids = [item.id for item in direct_messages]
+        removed_files = 0
+        for item in direct_messages:
+            if item.storage_path:
+                try:
+                    Path(item.storage_path).unlink(missing_ok=True)
+                    removed_files += 1
+                except Exception:
+                    pass
+            db.delete(item)
+
+        friendship_rows = db.execute(
+            select(ChatFriendship).where(
+                or_(
+                    and_(ChatFriendship.user_id == current_user_id, ChatFriendship.friend_user_id == friend_user_id),
+                    and_(ChatFriendship.user_id == friend_user_id, ChatFriendship.friend_user_id == current_user_id),
+                )
+            )
+        ).scalars().all()
+        for item in friendship_rows:
+            db.delete(item)
+
+        request_rows = self._friend_request_rows_for_pair(
+            db,
+            first_user_id=current_user_id,
+            second_user_id=friend_user_id,
+        )
+        for item in request_rows:
+            db.delete(item)
+
+        preference_rows = db.execute(
+            select(ChatConversationPreference).where(
+                ChatConversationPreference.conversation_type == "direct",
+                ChatConversationPreference.conversation_id.in_([current_user_id, friend_user_id]),
+                ChatConversationPreference.user_id.in_([current_user_id, friend_user_id]),
+            )
+        ).scalars().all()
+        for item in preference_rows:
+            counterpart_id = friend_user_id if item.user_id == current_user_id else current_user_id
+            if item.conversation_id == counterpart_id:
+                db.delete(item)
+
+        background_rows = db.execute(
+            select(ChatConversationBackground).where(
+                ChatConversationBackground.conversation_type == "direct",
+                ChatConversationBackground.conversation_key == direct_conversation_key,
+            )
+        ).scalars().all()
+        for item in background_rows:
+            if item.storage_path:
+                try:
+                    Path(item.storage_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+            db.delete(item)
+
+        db.commit()
+        return {
+            "removed": True,
+            "friendUserId": friend_user_id,
+            "deletedMessageCount": len(message_ids),
+            "deletedFileCount": removed_files,
+        }
+
     def list_friends(self, db: Session, *, current_user_id: str) -> list[dict]:
         friendship_rows = db.execute(
             select(ChatFriendship).where(ChatFriendship.user_id == current_user_id)

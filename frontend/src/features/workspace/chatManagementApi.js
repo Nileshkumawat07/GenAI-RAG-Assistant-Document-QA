@@ -51,6 +51,10 @@ export async function rejectFriendRequest(requestId) {
   return requestJson(`/chat/friend-requests/${encodeURIComponent(requestId)}/reject`, { method: "POST" }, "Failed to reject friend request.");
 }
 
+export async function removeFriend(friendUserId) {
+  return requestJson(`/chat/friends/${encodeURIComponent(friendUserId)}`, { method: "DELETE" }, "Failed to remove friend.");
+}
+
 export async function getConversationMessages({ conversationType, conversationId, beforeMessageId, limit = 40 }) {
   const query = new URLSearchParams();
   query.set("limit", String(limit));

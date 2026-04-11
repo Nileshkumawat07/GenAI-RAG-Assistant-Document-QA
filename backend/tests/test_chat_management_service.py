@@ -136,3 +136,34 @@ def test_search_chat_and_message_context_for_direct_conversation():
     assert search_result["messages"][0]["conversationId"] == "user-2"
     assert context["focusMessageId"] == first["id"]
     assert any(item["id"] == first["id"] for item in context["items"])
+
+
+def test_remove_friend_deletes_direct_relationship_and_messages():
+    db = build_session()
+    db.add_all(
+        [
+            build_user("user-1", "one@example.com", "userone", "User One"),
+            build_user("user-2", "two@example.com", "usertwo", "User Two"),
+        ]
+    )
+    db.commit()
+    service = ChatManagementService(AuthService())
+
+    request = service.send_friend_request(db, current_user_id="user-1", receiver_user_id="user-2")
+    service.accept_friend_request(db, current_user_id="user-2", request_id=request["id"])
+    service.send_text_message(
+        db,
+        current_user_id="user-1",
+        receiver_user_id="user-2",
+        body="This chat will be removed",
+        reply_to_message_id=None,
+    )
+
+    removed = service.remove_friend(db, current_user_id="user-1", friend_user_id="user-2")
+    overview = service.get_overview(db, current_user_id="user-1")
+
+    assert removed["removed"] is True
+    assert removed["friendUserId"] == "user-2"
+    assert removed["deletedMessageCount"] == 1
+    assert overview["friends"] == []
+    assert overview["directChats"] == []

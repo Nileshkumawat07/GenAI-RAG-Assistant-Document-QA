@@ -24,6 +24,7 @@ import {
   leaveCommunity,
   markConversationRead,
   rejectFriendRequest,
+  removeFriend,
   removeGroupFromCommunity,
   removeGroupMember,
   searchChatUsers,
@@ -576,6 +577,21 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     }
   };
 
+  const handleRemoveFriend = async () => {
+    const activeConversation = selectedConversationRef.current;
+    if (!activeConversation || activeConversation.conversationType !== "direct") return;
+    try {
+      await removeFriend(activeConversation.conversationId);
+      setMessages([]);
+      setHasMoreMessages(false);
+      setDetails(null);
+      setSelectedConversation(null);
+      await loadOverview();
+    } catch (error) {
+      setPanelError(error.message || "Failed to remove friend.");
+    }
+  };
+
   const handleCreateGroup = async () => {
     try {
       await createGroup(createGroupState);
@@ -735,7 +751,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
       <section className="workspace-chat-management-grid">
         <ChatRecentListPane activeTab={activeTab} items={currentItems} listFilter={listFilter} recentSearch={recentSearch} selectedConversation={selectedConversation} typingState={typingState} setActiveTab={setActiveTab} setListFilter={setListFilter} setRecentSearch={setRecentSearch} setSelectedConversation={setSelectedConversation} />
-        <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} highlightedMessageId={highlightedMessageId} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} handleToggleReaction={handleToggleReaction} handleToggleStar={handleToggleStar} handleTogglePin={handleTogglePin} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} handleUpdateConversationBackground={handleUpdateConversationBackground} handleClearConversationBackground={handleClearConversationBackground} />
+        <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} highlightedMessageId={highlightedMessageId} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} handleToggleReaction={handleToggleReaction} handleToggleStar={handleToggleStar} handleTogglePin={handleTogglePin} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} handleUpdateConversationBackground={handleUpdateConversationBackground} handleClearConversationBackground={handleClearConversationBackground} handleRemoveFriend={handleRemoveFriend} />
         <ChatDiscoveryPane overview={overview} searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} handleOpenSearchMessage={openConversationAtMessage} createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} handleCreateGroup={handleCreateGroup} createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} selectedConversation={selectedConversation} details={details} canManageMembers={canManageMembers} memberInviteIds={memberInviteIds} setMemberInviteIds={setMemberInviteIds} communityGroupId={communityGroupId} setCommunityGroupId={setCommunityGroupId} currentUser={currentUser} onUserUpdate={onUserUpdate} requestsRef={requestsRef} requestFocus={requestFocus} handleRequestAction={handleRequestAction} handleUpdateConversationPreference={handleUpdateConversationPreference} handleClearConversation={handleClearConversation} handleDeleteConversationMedia={handleDeleteConversationMedia} handleChatProfileUpdated={handleChatProfileUpdated} refreshSelectedConversation={refreshSelectedConversation} setDetails={setDetails} setPanelError={setPanelError} loadOverview={loadOverview} addGroupMembers={addGroupMembers} addGroupToCommunity={addGroupToCommunity} deleteGroup={deleteGroup} exitGroup={exitGroup} joinCommunity={joinCommunity} leaveCommunity={leaveCommunity} overviewGroups={overview.groups} overviewFriends={overview.friends} removeGroupFromCommunity={removeGroupFromCommunity} removeGroupMember={removeGroupMember} updateCommunity={updateCommunity} updateGroup={updateGroup} updateGroupMemberRole={updateGroupMemberRole} clearSelection={() => { setSelectedConversation(null); setDetails(null); }} />
       </section>
     </div>

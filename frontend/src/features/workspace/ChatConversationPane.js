@@ -139,6 +139,7 @@ function ChatConversationPane({
   loadOlderMessages,
   handleUpdateConversationBackground,
   handleClearConversationBackground,
+  handleRemoveFriend,
 }) {
   const groupedMessages = buildConversationGroups(messages || []);
   const messageIndex = useMemo(() => new Map((messages || []).map((message) => [message.id, message])), [messages]);
@@ -148,10 +149,12 @@ function ChatConversationPane({
   const streamRef = useRef(null);
   const wallpaperInputRef = useRef(null);
   const popupRef = useRef(null);
+  const headerMenuRef = useRef(null);
   const [messageMenu, setMessageMenu] = useState(null);
   const [backgroundMenu, setBackgroundMenu] = useState(null);
   const [messageInfo, setMessageInfo] = useState(null);
   const [attachmentViewer, setAttachmentViewer] = useState(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
 
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
   const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
@@ -163,6 +166,7 @@ function ChatConversationPane({
     setBackgroundMenu(null);
     setMessageInfo(null);
     setAttachmentViewer(null);
+    setHeaderMenuOpen(false);
   }, [selectedConversation]);
 
   useEffect(() => {
@@ -177,6 +181,9 @@ function ChatConversationPane({
       if (!popupRef.current?.contains(event.target)) {
         setMessageMenu(null);
         setBackgroundMenu(null);
+      }
+      if (!headerMenuRef.current?.contains(event.target)) {
+        setHeaderMenuOpen(false);
       }
     };
 
@@ -300,9 +307,27 @@ function ChatConversationPane({
           <button type="button" className="workspace-chat-icon-button" aria-label="Voice call">
             <span aria-hidden="true">&#9742;</span>
           </button>
-          <button type="button" className="workspace-chat-icon-button" aria-label="More options">
+          <button type="button" className="workspace-chat-icon-button" aria-label="More options" onClick={() => setHeaderMenuOpen((current) => !current)}>
             <span aria-hidden="true">&#8942;</span>
           </button>
+          {headerMenuOpen ? (
+            <div ref={headerMenuRef} className="workspace-chat-header-menu">
+              {selectedConversation?.conversationType === "direct" ? (
+                <button
+                  type="button"
+                  className="workspace-chat-popup-item workspace-chat-popup-item-danger"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    if (window.confirm(`Remove ${chatTitle} from friends and delete this direct chat?`)) {
+                      handleRemoveFriend?.();
+                    }
+                  }}
+                >
+                  Remove friend
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
