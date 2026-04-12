@@ -419,9 +419,8 @@ function App() {
           ].includes(payload.type)) {
             scheduleHeaderNotificationsRefresh();
           }
-        } catch {
+        } catch (err) {
           console.error("SOCKET ERROR:", err);
-           
         }
       };
     };
