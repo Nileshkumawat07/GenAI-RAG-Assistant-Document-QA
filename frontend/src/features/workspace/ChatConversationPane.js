@@ -161,10 +161,12 @@ function ChatConversationPane({
   const streamRef = useRef(null);
   const wallpaperInputRef = useRef(null);
   const popupRef = useRef(null);
+  const headerMenuRef = useRef(null);
   const [messageMenu, setMessageMenu] = useState(null);
   const [backgroundMenu, setBackgroundMenu] = useState(null);
   const [messageInfo, setMessageInfo] = useState(null);
   const [attachmentViewer, setAttachmentViewer] = useState(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
 
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
   const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
@@ -176,6 +178,7 @@ function ChatConversationPane({
     setBackgroundMenu(null);
     setMessageInfo(null);
     setAttachmentViewer(null);
+    setHeaderMenuOpen(false);
   }, [selectedConversation]);
 
   useEffect(() => {
@@ -190,6 +193,9 @@ function ChatConversationPane({
       if (!popupRef.current?.contains(event.target)) {
         setMessageMenu(null);
         setBackgroundMenu(null);
+      }
+      if (!headerMenuRef.current?.contains(event.target)) {
+        setHeaderMenuOpen(false);
       }
     };
 
@@ -282,6 +288,10 @@ function ChatConversationPane({
   return (
     <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell">
       <div className="workspace-chat-mobile-header">
+        <button type="button" className="workspace-chat-icon-button" aria-label="Back">
+          <span aria-hidden="true">&#8592;</span>
+        </button>
+
         <button type="button" className="workspace-chat-contact-row workspace-chat-contact-trigger workspace-chat-header-trigger" onClick={() => onOpenProfile?.()}>
           <div className="workspace-chat-avatar workspace-chat-avatar-large">
             {headerAvatarImage ? <img src={headerAvatarImage} alt={chatTitle} className="workspace-chat-avatar-image" /> : getAvatarLabel(chatTitle)}
@@ -298,8 +308,18 @@ function ChatConversationPane({
             <span aria-hidden="true">&#9742;</span>
           </button>
           <button type="button" className="workspace-chat-icon-button" aria-label="Video call">
-            <span aria-hidden="true">&#9654;</span>
+            <span aria-hidden="true">&#9633;</span>
           </button>
+          <button type="button" className="workspace-chat-icon-button" aria-label="More options" onClick={() => setHeaderMenuOpen((current) => !current)}>
+            <span aria-hidden="true">&#8942;</span>
+          </button>
+          {headerMenuOpen ? (
+            <div ref={headerMenuRef} className="workspace-chat-header-menu">
+              <button type="button" className="workspace-chat-popup-item" onClick={() => { setHeaderMenuOpen(false); onOpenProfile?.(); }}>
+                View profile
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
