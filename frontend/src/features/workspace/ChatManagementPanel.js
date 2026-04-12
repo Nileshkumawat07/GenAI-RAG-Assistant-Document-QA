@@ -154,17 +154,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       conversationLoadVersionRef.current === requestVersion;
     if (!stillCurrent) return;
     if (options.prepend) setMessages((current) => [...(data.items || []), ...current.filter((item) => !(data.items || []).some((candidate) => candidate.id === item.id))]);
-    else setMessages((current) => {
-      if (!current.length) return data.items || [];
-      const merged = [...(data.items || [])];
-      current.forEach((item) => {
-        if (!merged.some((candidate) => candidate.id === item.id)) {
-          merged.push(item);
-        }
-      });
-      merged.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
-      return merged;
-    });
+    else setMessages(data.items || []);
     setHasMoreMessages(Boolean(data.hasMore));
     await markConversationRead({ conversationType: conversation.conversationType, conversationId: conversation.conversationId });
   }, []);
