@@ -5699,6 +5699,18 @@ body.workspace-body-mode .contact-request-empty-card p {
   gap: 10px;
 }
 
+.workspace-chat-contact-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-chat-contact-trigger:hover .workspace-chat-contact-copy strong {
+  color: #123d7a;
+}
+
 .workspace-chat-header-actions {
   gap: 6px;
   position: relative;
@@ -5728,6 +5740,120 @@ body.workspace-body-mode .contact-request-empty-card p {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.workspace-chat-profile-panel {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(250, 252, 255, 0.98), rgba(240, 246, 255, 0.94));
+}
+
+.workspace-chat-profile-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(18, 61, 122, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.workspace-chat-profile-header-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workspace-chat-profile-header-copy strong {
+  font-size: 16px;
+  color: var(--primary-deep);
+}
+
+.workspace-chat-profile-header-copy span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.workspace-chat-profile-scroll {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.workspace-chat-profile-hero {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 22px 18px 18px;
+  border: 1px solid rgba(18, 61, 122, 0.08);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top, rgba(74, 143, 245, 0.14), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.95));
+}
+
+.workspace-chat-avatar-xl {
+  width: 108px;
+  height: 108px;
+  font-size: 28px;
+}
+
+.workspace-chat-profile-hero h3 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--primary-deep);
+}
+
+.workspace-chat-profile-hero p,
+.workspace-chat-profile-hero span {
+  margin: 0;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.55;
+}
+
+.workspace-chat-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.workspace-chat-profile-detail-list {
+  display: grid;
+  gap: 12px;
+}
+
+.workspace-chat-profile-detail-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(18, 61, 122, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.workspace-chat-profile-detail-item span {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.workspace-chat-profile-detail-item strong {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--primary-deep);
+  word-break: break-word;
+}
+
+.workspace-chat-profile-tab-row {
+  margin-top: 4px;
 }
 
 .workspace-chat-icon-button,

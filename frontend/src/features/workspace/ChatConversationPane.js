@@ -140,6 +140,7 @@ function ChatConversationPane({
   handleUpdateConversationBackground,
   handleClearConversationBackground,
   handleRemoveFriend,
+  onOpenProfile,
 }) {
   const groupedMessages = buildConversationGroups(messages || []);
   const messageIndex = useMemo(() => new Map((messages || []).map((message) => [message.id, message])), [messages]);
@@ -290,7 +291,7 @@ function ChatConversationPane({
           <span aria-hidden="true">&#8592;</span>
         </button>
 
-        <div className="workspace-chat-contact-row">
+        <button type="button" className="workspace-chat-contact-row workspace-chat-contact-trigger" onClick={() => onOpenProfile?.()}>
           <div className="workspace-chat-avatar workspace-chat-avatar-large">
             {headerAvatarImage ? <img src={headerAvatarImage} alt={chatTitle} className="workspace-chat-avatar-image" /> : getAvatarLabel(chatTitle)}
           </div>
@@ -298,7 +299,7 @@ function ChatConversationPane({
             <strong>{chatTitle}</strong>
             <span>{chatPresence}</span>
           </div>
-        </div>
+        </button>
 
         <div className="workspace-chat-header-actions">
           <button type="button" className="workspace-chat-icon-button" aria-label="Video call">
