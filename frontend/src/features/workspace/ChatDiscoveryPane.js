@@ -1,25 +1,7 @@
 import React from "react";
 
-import { buildChatFileUrl } from "./chatManagementApi";
-
-function DiscoverySectionTitle({ eyebrow, title, summary, icon }) {
-  return (
-    <div className="workspace-chat-section-heading">
-      <div className="workspace-chat-section-heading-main">
-        <span className="workspace-chat-section-icon" aria-hidden="true">{icon}</span>
-        <div>
-          <span className="workspace-hub-eyebrow">{eyebrow}</span>
-          <h4>{title}</h4>
-        </div>
-      </div>
-      {summary ? <span className="workspace-section-summary">{summary}</span> : null}
-    </div>
-  );
-}
-
 function ChatDiscoveryPane({
   overview,
-  details,
   requestsRef,
   requestFocus,
   handleRequestAction,
@@ -69,20 +51,6 @@ function ChatDiscoveryPane({
             </div>
           </div>
         </div>
-
-        {details ? (
-          <div className="workspace-chat-side-section workspace-chat-settings-card">
-            <div className="workspace-chat-side-section workspace-chat-settings-subcard">
-              <DiscoverySectionTitle eyebrow="Shared media" title="Images and videos" summary={`${details.sharedMedia?.length || 0}`} icon="MD" />
-              <div className="workspace-chat-member-list">
-                {(details.sharedMedia || []).map((item) => <a key={item.id} href={buildChatFileUrl(item.id)} target="_blank" rel="noreferrer" className="workspace-chat-member-card workspace-chat-media-card"><strong>{item.fileName || item.messageType}</strong><p>{item.senderName}</p></a>)}
-                {!details.sharedMedia?.length ? <p className="status-item status-info">No shared media yet.</p> : null}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="status-item status-info">Select a chat to view shared media.</p>
-        )}
 
         <div ref={requestsRef} className={`workspace-chat-side-section ${requestFocus ? "is-focus" : ""}`}>
           <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Requests</span><h4>Received</h4></div><span className="workspace-section-summary">{overview.receivedRequests.length}</span></div>
