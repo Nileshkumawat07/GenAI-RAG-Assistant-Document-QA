@@ -6092,6 +6092,50 @@ body.workspace-body-mode .contact-request-empty-card p {
   height: 0;
 }
 
+.workspace-chat-camera-stage {
+  display: grid;
+  gap: 12px;
+  align-self: stretch;
+  padding: 12px;
+  border-radius: 20px;
+  background: rgba(17, 27, 33, 0.86);
+  box-shadow: 0 14px 30px rgba(17, 27, 33, 0.22);
+}
+
+.workspace-chat-camera-feed {
+  width: 100%;
+  min-height: 280px;
+  max-height: 56vh;
+  object-fit: cover;
+  border-radius: 16px;
+  background: #0f1418;
+}
+
+.workspace-chat-camera-preview {
+  object-fit: contain;
+  background: #000000;
+}
+
+.workspace-chat-camera-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-chat-camera-actions .inline-text-button {
+  color: #ffffff;
+}
+
+.workspace-chat-camera-capture {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.workspace-chat-hidden-canvas {
+  display: none;
+}
+
 .workspace-chat-day-group {
   display: grid;
   gap: 10px;

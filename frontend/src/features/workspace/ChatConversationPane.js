@@ -135,6 +135,7 @@ function ChatConversationPane({
   messageDraft,
   handleDraftChange,
   handleSendMessage,
+  handleSendCapturedPhoto,
   handleDeleteMessage,
   handleSaveEdit,
   handleToggleReaction,
@@ -162,11 +163,17 @@ function ChatConversationPane({
   const wallpaperInputRef = useRef(null);
   const popupRef = useRef(null);
   const headerMenuRef = useRef(null);
+  const cameraVideoRef = useRef(null);
+  const cameraCanvasRef = useRef(null);
+  const mediaStreamRef = useRef(null);
   const [messageMenu, setMessageMenu] = useState(null);
   const [backgroundMenu, setBackgroundMenu] = useState(null);
   const [messageInfo, setMessageInfo] = useState(null);
   const [attachmentViewer, setAttachmentViewer] = useState(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState("idle");
+  const [cameraError, setCameraError] = useState("");
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
 
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
   const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
@@ -179,7 +186,20 @@ function ChatConversationPane({
     setMessageInfo(null);
     setAttachmentViewer(null);
     setHeaderMenuOpen(false);
+    setCameraMode("idle");
+    setCameraError("");
+    setCapturedPhoto(null);
   }, [selectedConversation]);
+
+  useEffect(() => () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (capturedPhoto?.previewUrl) {
+      window.URL.revokeObjectURL(capturedPhoto.previewUrl);
+    }
+  }, [capturedPhoto]);
 
   useEffect(() => {
     if (!highlightedMessageId) return;
@@ -285,6 +305,89 @@ function ChatConversationPane({
     setMessageMenu(null);
   };
 
+  const stopCameraStream = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+  };
+
+  const handleOpenCamera = async () => {
+    if (!selectedConversation) return;
+    try {
+      setCameraError("");
+      if (capturedPhoto?.previewUrl) {
+        window.URL.revokeObjectURL(capturedPhoto.previewUrl);
+      }
+      setCapturedPhoto(null);
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      mediaStreamRef.current = stream;
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream;
+        await cameraVideoRef.current.play().catch(() => {});
+      }
+      setCameraMode("live");
+    } catch {
+      setCameraMode("idle");
+      setCameraError("Camera unavailable.");
+    }
+  };
+
+  const handleCapturePhoto = async () => {
+    const video = cameraVideoRef.current;
+    const canvas = cameraCanvasRef.current;
+    if (!video || !canvas) return;
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(video, 0, 0, width, height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) return;
+    const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const previewUrl = window.URL.createObjectURL(blob);
+    if (capturedPhoto?.previewUrl) {
+      window.URL.revokeObjectURL(capturedPhoto.previewUrl);
+    }
+    setCapturedPhoto({ file, previewUrl });
+    stopCameraStream();
+    setCameraMode("preview");
+  };
+
+  const handleRetakePhoto = () => {
+    if (capturedPhoto?.previewUrl) {
+      window.URL.revokeObjectURL(capturedPhoto.previewUrl);
+    }
+    setCapturedPhoto(null);
+    setCameraMode("idle");
+    handleOpenCamera();
+  };
+
+  const handleCloseCamera = () => {
+    stopCameraStream();
+    if (capturedPhoto?.previewUrl) {
+      window.URL.revokeObjectURL(capturedPhoto.previewUrl);
+    }
+    setCapturedPhoto(null);
+    setCameraError("");
+    setCameraMode("idle");
+  };
+
+  const handleSendCameraPhoto = async () => {
+    if (!capturedPhoto?.file) return;
+    await handleSendCapturedPhoto?.(capturedPhoto.file);
+    handleCloseCamera();
+  };
+
   return (
     <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell">
       <div className="workspace-chat-mobile-header">
@@ -340,135 +443,165 @@ function ChatConversationPane({
         ) : null}
 
         {selectedConversation ? (
-          groupedMessages.map((group, groupIndex) => (
-            <div key={`${group.label || "messages"}-${groupIndex}`} className="workspace-chat-day-group">
-              {group.label ? (
-                <div className="workspace-chat-day-divider">
-                  <span>{group.label}</span>
-                </div>
-              ) : null}
-
-              {group.items.map((message) => {
-                const mine = message.senderId === currentUser?.id;
-                const isImage = message.messageType === "image";
-                const isVideo = message.messageType === "video";
-                const isVoice = message.messageType === "voice";
-                const hasPreview = canPreviewAttachment(message);
-                const fileUrl = message.fileUrl ? buildChatFileUrl(message.id) : "";
-
-                return (
-                  <article
-                    key={message.id}
-                    data-chat-message-id={message.id}
-                    className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message ${highlightedMessageId === message.id ? "is-highlighted" : ""}`}
-                    onContextMenu={(event) => openMessageMenu(event, message, event.currentTarget)}
-                  >
-                    {!mine && selectedConversation.conversationType !== "direct" ? (
-                      <strong className="workspace-chat-sender-line">{message.senderName}</strong>
-                    ) : null}
-
-                    {message.replyPreview ? (
-                      <div className="workspace-chat-reply-preview">
-                        <strong>{message.replyPreview.senderName}</strong>
-                        <p>{message.replyPreview.body}</p>
-                      </div>
-                    ) : null}
-
-                    {editingMessageId === message.id ? (
-                      <div className="workspace-chat-edit-shell">
-                        <textarea
-                          className="question-input workspace-chat-composer-input workspace-chat-edit-input"
-                          rows={3}
-                          value={editingDraft}
-                          onChange={(event) => setEditingDraft(event.target.value)}
-                        />
-                        <div className="workspace-chat-inline-actions">
-                          <button type="button" className="inline-text-button" onClick={() => handleSaveEdit(message.id)}>
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-text-button"
-                            onClick={() => {
-                              setEditingMessageId("");
-                              setEditingDraft("");
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {message.fileUrl ? (
-                          isImage ? (
-                            <button
-                              type="button"
-                              className="workspace-chat-media-link"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleOpenAttachment(message);
-                              }}
-                            >
-                              <img src={fileUrl} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
-                            </button>
-                          ) : isVideo ? (
-                            <button
-                              type="button"
-                              className="workspace-chat-media-link workspace-chat-video-link"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleOpenAttachment(message);
-                              }}
-                            >
-                              <video className="workspace-chat-image-preview workspace-chat-video-preview" preload="metadata">
-                                <source src={fileUrl} type={message.mimeType || "video/mp4"} />
-                              </video>
-                            </button>
-                          ) : isVoice ? (
-                            <audio className="workspace-chat-audio-preview" controls preload="metadata">
-                              <source src={fileUrl} type={message.mimeType || "audio/mpeg"} />
-                            </audio>
-                          ) : (
-                            <button
-                              type="button"
-                              className="workspace-chat-file-chip"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleOpenAttachment(message);
-                              }}
-                            >
-                              {hasPreview ? `View ${message.fileName || "file"}` : (message.fileName || "Open file")}
-                            </button>
-                          )
-                        ) : null}
-                        {message.body ? <p className="workspace-chat-bubble-copy">{message.body}</p> : null}
-                      </>
-                    )}
-
-                    <div className="workspace-chat-bubble-foot">
-                      <span>{formatBubbleTime(message.createdAt)}{message.editedAt ? " edited" : ""}</span>
-                      {mine ? <span className={`workspace-chat-status-ticks ${message.status === "read" ? "is-read" : ""}`}>{statusTicks(message.status)}</span> : null}
+          <>
+            {cameraMode !== "idle" ? (
+              <div className="workspace-chat-camera-stage">
+                {cameraMode === "live" ? (
+                  <>
+                    <video ref={cameraVideoRef} className="workspace-chat-camera-feed" playsInline muted autoPlay />
+                    <div className="workspace-chat-camera-actions">
+                      <button type="button" className="inline-text-button" onClick={handleCloseCamera}>Close</button>
+                      <button type="button" className="workspace-chat-send-fab workspace-chat-camera-capture" onClick={handleCapturePhoto}>
+                        <span aria-hidden="true">&#9711;</span>
+                      </button>
                     </div>
-                    {message.reactions?.length ? (
-                      <div className="workspace-chat-reaction-row">
-                        {message.reactions.map((reaction) => (
-                          <button
-                            key={`${message.id}-${reaction.emoji}`}
-                            type="button"
-                            className={`workspace-chat-reaction-chip ${reaction.reactedByCurrentUser ? "is-active" : ""}`}
-                            onClick={() => handleToggleReaction(message.id, reaction.emoji)}
-                          >
-                            {reaction.emoji} {reaction.count}
-                          </button>
-                        ))}
+                  </>
+                ) : null}
+                {cameraMode === "preview" && capturedPhoto ? (
+                  <>
+                    <img src={capturedPhoto.previewUrl} alt="Captured" className="workspace-chat-camera-feed workspace-chat-camera-preview" />
+                    <div className="workspace-chat-camera-actions">
+                      <button type="button" className="inline-text-button" onClick={handleRetakePhoto}>Retake</button>
+                      <button type="button" className="workspace-chat-send-fab" onClick={handleSendCameraPhoto} disabled={isSending}>
+                        <span aria-hidden="true">{isSending ? "..." : "\u27A4"}</span>
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+                <canvas ref={cameraCanvasRef} className="workspace-chat-hidden-canvas" />
+              </div>
+            ) : null}
+
+            {groupedMessages.map((group, groupIndex) => (
+              <div key={`${group.label || "messages"}-${groupIndex}`} className="workspace-chat-day-group">
+                {group.label ? (
+                  <div className="workspace-chat-day-divider">
+                    <span>{group.label}</span>
+                  </div>
+                ) : null}
+
+                {group.items.map((message) => {
+                  const mine = message.senderId === currentUser?.id;
+                  const isImage = message.messageType === "image";
+                  const isVideo = message.messageType === "video";
+                  const isVoice = message.messageType === "voice";
+                  const hasPreview = canPreviewAttachment(message);
+                  const fileUrl = message.fileUrl ? buildChatFileUrl(message.id) : "";
+
+                  return (
+                    <article
+                      key={message.id}
+                      data-chat-message-id={message.id}
+                      className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message ${highlightedMessageId === message.id ? "is-highlighted" : ""}`}
+                      onContextMenu={(event) => openMessageMenu(event, message, event.currentTarget)}
+                    >
+                      {!mine && selectedConversation.conversationType !== "direct" ? (
+                        <strong className="workspace-chat-sender-line">{message.senderName}</strong>
+                      ) : null}
+
+                      {message.replyPreview ? (
+                        <div className="workspace-chat-reply-preview">
+                          <strong>{message.replyPreview.senderName}</strong>
+                          <p>{message.replyPreview.body}</p>
+                        </div>
+                      ) : null}
+
+                      {editingMessageId === message.id ? (
+                        <div className="workspace-chat-edit-shell">
+                          <textarea
+                            className="question-input workspace-chat-composer-input workspace-chat-edit-input"
+                            rows={3}
+                            value={editingDraft}
+                            onChange={(event) => setEditingDraft(event.target.value)}
+                          />
+                          <div className="workspace-chat-inline-actions">
+                            <button type="button" className="inline-text-button" onClick={() => handleSaveEdit(message.id)}>
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-text-button"
+                              onClick={() => {
+                                setEditingMessageId("");
+                                setEditingDraft("");
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {message.fileUrl ? (
+                            isImage ? (
+                              <button
+                                type="button"
+                                className="workspace-chat-media-link"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOpenAttachment(message);
+                                }}
+                              >
+                                <img src={fileUrl} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
+                              </button>
+                            ) : isVideo ? (
+                              <button
+                                type="button"
+                                className="workspace-chat-media-link workspace-chat-video-link"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOpenAttachment(message);
+                                }}
+                              >
+                                <video className="workspace-chat-image-preview workspace-chat-video-preview" preload="metadata">
+                                  <source src={fileUrl} type={message.mimeType || "video/mp4"} />
+                                </video>
+                              </button>
+                            ) : isVoice ? (
+                              <audio className="workspace-chat-audio-preview" controls preload="metadata">
+                                <source src={fileUrl} type={message.mimeType || "audio/mpeg"} />
+                              </audio>
+                            ) : (
+                              <button
+                                type="button"
+                                className="workspace-chat-file-chip"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOpenAttachment(message);
+                                }}
+                              >
+                                {hasPreview ? `View ${message.fileName || "file"}` : (message.fileName || "Open file")}
+                              </button>
+                            )
+                          ) : null}
+                          {message.body ? <p className="workspace-chat-bubble-copy">{message.body}</p> : null}
+                        </>
+                      )}
+
+                      <div className="workspace-chat-bubble-foot">
+                        <span>{formatBubbleTime(message.createdAt)}{message.editedAt ? " edited" : ""}</span>
+                        {mine ? <span className={`workspace-chat-status-ticks ${message.status === "read" ? "is-read" : ""}`}>{statusTicks(message.status)}</span> : null}
                       </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          ))
+                      {message.reactions?.length ? (
+                        <div className="workspace-chat-reaction-row">
+                          {message.reactions.map((reaction) => (
+                            <button
+                              key={`${message.id}-${reaction.emoji}`}
+                              type="button"
+                              className={`workspace-chat-reaction-chip ${reaction.reactedByCurrentUser ? "is-active" : ""}`}
+                              onClick={() => handleToggleReaction(message.id, reaction.emoji)}
+                            >
+                              {reaction.emoji} {reaction.count}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ))}
+          </>
         ) : (
           <p className="status-item status-info">Select a chat, group, or community to start messaging.</p>
         )}
@@ -557,6 +690,7 @@ function ChatConversationPane({
       ) : null}
 
       {attachmentPreviewUrl ? <img src={attachmentPreviewUrl} alt="attachment preview" className="workspace-chat-image-preview workspace-chat-compose-image" /> : null}
+      {cameraError ? <div className="workspace-chat-compose-preview"><span>{cameraError}</span></div> : null}
 
       <div className="workspace-chat-composer workspace-chat-mobile-composer">
         <div className="workspace-chat-input-shell">
@@ -564,7 +698,7 @@ function ChatConversationPane({
           <textarea className="question-input workspace-chat-composer-input workspace-chat-mobile-input" rows={1} value={messageDraft} onChange={(event) => handleDraftChange(event.target.value)} placeholder={selectedItem ? `Message ${selectedItem.title}` : "Select a conversation to message"} disabled={!selectedConversation} />
           <label className="workspace-chat-attach-button" aria-label="Attach file"><span aria-hidden="true">&#128206;</span><input type="file" accept={attachmentAccept} onChange={(event) => setSelectedAttachment(event.target.files?.[0] || null)} /></label>
           <button type="button" className="workspace-chat-emoji-button workspace-chat-inline-icon" aria-label="Payments"><span aria-hidden="true">&#8377;</span></button>
-          <button type="button" className="workspace-chat-camera-button" aria-label="Camera"><span aria-hidden="true">&#128247;</span></button>
+          <button type="button" className="workspace-chat-camera-button" aria-label="Camera" onClick={handleOpenCamera} disabled={!selectedConversation || isSending}><span aria-hidden="true">&#128247;</span></button>
         </div>
 
         <button type="button" className="workspace-chat-send-fab" onClick={handleSendMessage} disabled={!selectedConversation || isSending} aria-label={composerActionLabel}>

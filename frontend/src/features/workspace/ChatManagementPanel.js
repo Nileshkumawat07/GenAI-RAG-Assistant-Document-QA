@@ -565,6 +565,31 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     }
   };
 
+  const handleSendCapturedPhoto = async (file) => {
+    if (!selectedConversationRef.current || !file) return;
+    try {
+      setIsSending(true);
+      const activeConversation = selectedConversationRef.current;
+      const payload = {
+        conversationType: activeConversation.conversationType,
+        conversationId: activeConversation.conversationId,
+        receiverId: activeConversation.conversationType === "direct" ? activeConversation.conversationId : undefined,
+        body: "",
+        replyToMessageId: replyToMessage?.id || null,
+        file,
+      };
+      const sent = await uploadChatAttachment(payload);
+      setMessages((current) => mergeMessageList(current, sent));
+      setReplyToMessage(null);
+      await loadOverview();
+      await loadDetails(activeConversation).catch(() => setDetails(null));
+    } catch (error) {
+      setPanelError(error.message || "Failed to send message.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const handleRemoveFriend = async () => {
     const activeConversation = selectedConversationRef.current;
     if (!activeConversation || activeConversation.conversationType !== "direct") return;
@@ -757,7 +782,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       <section className="workspace-chat-management-grid">
         <ChatRecentListPane activeTab={activeTab} items={currentItems} listFilter={listFilter} recentSearch={recentSearch} selectedConversation={selectedConversation} typingState={typingState} currentUser={currentUser} setActiveTab={setActiveTab} setListFilter={setListFilter} setRecentSearch={setRecentSearch} setSelectedConversation={setSelectedConversation} createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} handleCreateGroup={handleCreateGroup} createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} overviewFriends={overview.friends} onOpenSelfProfile={() => setCenterPanel("self-profile")} onOpenSettings={() => setCenterPanel("settings")} />
         {centerPanel === "conversation" ? (
-          <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} highlightedMessageId={highlightedMessageId} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} handleToggleReaction={handleToggleReaction} handleToggleStar={handleToggleStar} handleTogglePin={handleTogglePin} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} handleUpdateConversationBackground={handleUpdateConversationBackground} handleClearConversationBackground={handleClearConversationBackground} onOpenProfile={() => setCenterPanel("profile")} onForwardMessage={handleForwardMessage} />
+          <ChatConversationPane currentUser={currentUser} selectedItem={selectedItem} selectedConversation={selectedConversation} messages={messages} hasMoreMessages={hasMoreMessages} conversationStreamRef={conversationStreamRef} selectedTyping={selectedTyping} highlightedMessageId={highlightedMessageId} editingMessageId={editingMessageId} editingDraft={editingDraft} setEditingDraft={setEditingDraft} setEditingMessageId={setEditingMessageId} replyToMessage={replyToMessage} setReplyToMessage={setReplyToMessage} selectedAttachment={selectedAttachment} setSelectedAttachment={setSelectedAttachment} attachmentPreviewUrl={attachmentPreviewUrl} messageDraft={messageDraft} handleDraftChange={handleDraftChange} handleSendMessage={handleSendMessage} handleSendCapturedPhoto={handleSendCapturedPhoto} handleDeleteMessage={handleDeleteMessage} handleSaveEdit={handleSaveEdit} handleToggleReaction={handleToggleReaction} handleToggleStar={handleToggleStar} handleTogglePin={handleTogglePin} isSending={isSending} loadOlderMessages={() => loadConversation(selectedConversation, { prepend: true, beforeMessageId: messages[0]?.id })} handleUpdateConversationBackground={handleUpdateConversationBackground} handleClearConversationBackground={handleClearConversationBackground} onOpenProfile={() => setCenterPanel("profile")} onForwardMessage={handleForwardMessage} />
         ) : (
           <ChatProfilePanel currentUser={currentUser} selectedConversation={selectedConversation} details={details} mode={centerPanel} onClose={() => setCenterPanel("conversation")} setPanelError={setPanelError} handleUpdateConversationPreference={handleUpdateConversationPreference} handleClearConversation={handleClearConversation} handleDeleteConversationMedia={handleDeleteConversationMedia} handleChatProfileUpdated={handleChatProfileUpdated} refreshSelectedConversation={refreshSelectedConversation} handleRemoveFriend={handleRemoveFriend} canManageMembers={canManageMembers} memberInviteIds={memberInviteIds} setMemberInviteIds={setMemberInviteIds} communityGroupId={communityGroupId} setCommunityGroupId={setCommunityGroupId} loadOverview={loadOverview} addGroupMembers={addGroupMembers} addGroupToCommunity={addGroupToCommunity} deleteGroup={deleteGroup} exitGroup={exitGroup} leaveCommunity={leaveCommunity} overviewGroups={overview.groups} overviewFriends={overview.friends} removeGroupFromCommunity={removeGroupFromCommunity} removeGroupMember={removeGroupMember} updateCommunity={updateCommunity} updateGroup={updateGroup} updateGroupMemberRole={updateGroupMemberRole} handleDeleteCommunity={handleDeleteCommunity} />
         )}
