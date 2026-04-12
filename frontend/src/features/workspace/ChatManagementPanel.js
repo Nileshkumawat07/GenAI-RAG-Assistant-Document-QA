@@ -76,6 +76,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState({ users: [] });
   const [searchLoading, setSearchLoading] = useState(false);
+  const [pendingRequestUserIds, setPendingRequestUserIds] = useState([]);
   const [panelError, setPanelError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [typingState, setTypingState] = useState({ userId: "", conversationType: "", conversationId: "" });
@@ -132,6 +133,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const loadOverview = useCallback(async () => {
     const data = await getChatOverview();
     setOverview(data);
+    setPendingRequestUserIds((current) => current.filter((userId) => !(data.sentRequests || []).some((item) => item.receiver?.id === userId)));
     setSelectedConversation((current) => {
       if (current && [...data.directChats, ...data.groups, ...data.communities].some((item) => item.conversationType === current.conversationType && item.id === current.conversationId)) return current;
       const fallback = data.directChats[0] || data.groups[0] || data.communities[0] || null;
@@ -558,9 +560,11 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
   const handleSendFriendRequest = async (userId) => {
     try {
+      setPendingRequestUserIds((current) => (current.includes(userId) ? current : [...current, userId]));
       await sendFriendRequest(userId);
       await loadOverview();
     } catch (error) {
+      setPendingRequestUserIds((current) => current.filter((item) => item !== userId));
       setPanelError(error.message || "Failed to send request.");
     }
   };
@@ -786,7 +790,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
         ) : (
           <ChatProfilePanel currentUser={currentUser} selectedConversation={selectedConversation} details={details} mode={centerPanel} onClose={() => setCenterPanel("conversation")} setPanelError={setPanelError} handleUpdateConversationPreference={handleUpdateConversationPreference} handleClearConversation={handleClearConversation} handleDeleteConversationMedia={handleDeleteConversationMedia} handleChatProfileUpdated={handleChatProfileUpdated} refreshSelectedConversation={refreshSelectedConversation} handleRemoveFriend={handleRemoveFriend} canManageMembers={canManageMembers} memberInviteIds={memberInviteIds} setMemberInviteIds={setMemberInviteIds} communityGroupId={communityGroupId} setCommunityGroupId={setCommunityGroupId} loadOverview={loadOverview} addGroupMembers={addGroupMembers} addGroupToCommunity={addGroupToCommunity} deleteGroup={deleteGroup} exitGroup={exitGroup} leaveCommunity={leaveCommunity} overviewGroups={overview.groups} overviewFriends={overview.friends} removeGroupFromCommunity={removeGroupFromCommunity} removeGroupMember={removeGroupMember} updateCommunity={updateCommunity} updateGroup={updateGroup} updateGroupMemberRole={updateGroupMemberRole} handleDeleteCommunity={handleDeleteCommunity} />
         )}
-        <ChatDiscoveryPane overview={overview} details={details} requestsRef={requestsRef} requestFocus={requestFocus} handleRequestAction={handleRequestAction} />
+        <ChatDiscoveryPane overview={overview} details={details} requestsRef={requestsRef} requestFocus={requestFocus} handleRequestAction={handleRequestAction} searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} pendingRequestUserIds={pendingRequestUserIds} />
       </section>
     </div>
   );

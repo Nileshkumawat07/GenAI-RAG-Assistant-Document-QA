@@ -396,8 +396,7 @@ function ChatConversationPane({
   };
 
   return (
-    <section className={`workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell ${isCameraOpen ? "is-camera-open" : ""}`}>
-      {!isCameraOpen ? (
+    <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell">
       <div className="workspace-chat-mobile-header">
         <button type="button" className="workspace-chat-icon-button" aria-label="Back">
           <span aria-hidden="true">&#8592;</span>
@@ -433,7 +432,6 @@ function ChatConversationPane({
           ) : null}
         </div>
       </div>
-      ) : null}
 
       <div
         ref={(node) => {
@@ -442,7 +440,7 @@ function ChatConversationPane({
           else if (conversationStreamRef) conversationStreamRef.current = node;
         }}
         className={`workspace-chat-conversation-stream ${backgroundImageUrl ? "has-custom-background" : ""} ${isCameraOpen ? "is-camera-open" : ""}`}
-        style={isCameraOpen ? undefined : streamBackgroundStyle}
+        style={streamBackgroundStyle}
         onContextMenu={handleStreamContextMenu}
       >
         {!isCameraOpen && hasMoreMessages ? (
@@ -674,7 +672,7 @@ function ChatConversationPane({
 
       <input ref={wallpaperInputRef} type="file" accept="image/*" className="workspace-chat-hidden-input" onChange={handleWallpaperUpload} />
 
-      {!isCameraOpen && replyToMessage ? (
+      {replyToMessage ? (
         <div className="workspace-chat-compose-preview">
           <span>Replying to {replyToMessage.senderName}</span>
           <strong>{replyToMessage.body || replyToMessage.fileName || "Attachment"}</strong>
@@ -682,7 +680,7 @@ function ChatConversationPane({
         </div>
       ) : null}
 
-      {!isCameraOpen && messageInfo ? (
+      {messageInfo ? (
         <div className="workspace-chat-compose-preview">
           <span>{messageInfo.senderName || (messageInfo.senderId === currentUser?.id ? "You" : "Message")}</span>
           <strong>{formatDate(messageInfo.createdAt, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}{messageInfo.status ? ` · ${messageInfo.status}` : ""}</strong>
@@ -690,7 +688,7 @@ function ChatConversationPane({
         </div>
       ) : null}
 
-      {!isCameraOpen && selectedAttachment ? (
+      {selectedAttachment ? (
         <div className="workspace-chat-compose-preview">
           <span>Attachment ready</span>
           <strong>{selectedAttachment.name}</strong>
@@ -698,10 +696,9 @@ function ChatConversationPane({
         </div>
       ) : null}
 
-      {!isCameraOpen && attachmentPreviewUrl ? <img src={attachmentPreviewUrl} alt="attachment preview" className="workspace-chat-image-preview workspace-chat-compose-image" /> : null}
-      {!isCameraOpen && cameraError ? <div className="workspace-chat-compose-preview"><span>{cameraError}</span></div> : null}
+      {attachmentPreviewUrl ? <img src={attachmentPreviewUrl} alt="attachment preview" className="workspace-chat-image-preview workspace-chat-compose-image" /> : null}
+      {cameraError ? <div className="workspace-chat-compose-preview"><span>{cameraError}</span></div> : null}
 
-      {!isCameraOpen ? (
       <div className="workspace-chat-composer workspace-chat-mobile-composer">
         <div className="workspace-chat-input-shell">
           <button type="button" className="workspace-chat-emoji-trigger" aria-label="Emoji picker"><span aria-hidden="true">&#9786;</span></button>
@@ -715,7 +712,6 @@ function ChatConversationPane({
           <span aria-hidden="true">{!messageDraft.trim() && !selectedAttachment ? "\uD83C\uDFA4" : isSending ? "..." : "\u27A4"}</span>
         </button>
       </div>
-      ) : null}
     </section>
   );
 }

@@ -6094,14 +6094,17 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-camera-stage {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   align-self: stretch;
   min-height: 100%;
   height: 100%;
-  padding: 14px;
-  border-radius: 0;
-  background: #000000;
-  box-shadow: none;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: 10px 8px 12px;
+  border-radius: 18px;
+  background:
+    linear-gradient(rgba(229, 221, 213, 0.82), rgba(229, 221, 213, 0.82)),
+    var(--workspace-chat-custom-bg, none);
+  box-shadow: inset 0 0 0 1px rgba(17, 27, 33, 0.06);
 }
 
 .workspace-chat-camera-feed {
@@ -6111,12 +6114,12 @@ body.workspace-body-mode .contact-request-empty-card p {
   max-height: none;
   object-fit: cover;
   border-radius: 18px;
-  background: #0f1418;
+  background: #dfe5ec;
 }
 
 .workspace-chat-camera-preview {
   object-fit: contain;
-  background: #000000;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .workspace-chat-camera-actions {
@@ -6124,10 +6127,11 @@ body.workspace-body-mode .contact-request-empty-card p {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 0 6px;
 }
 
 .workspace-chat-camera-actions .inline-text-button {
-  color: #ffffff;
+  color: #123d7a;
 }
 
 .workspace-chat-camera-capture {
@@ -6139,17 +6143,9 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: none;
 }
 
-.workspace-chat-whatsapp-shell.is-camera-open {
-  padding: 0;
-  overflow: hidden;
-  background: #000000;
-}
-
 .workspace-chat-whatsapp-shell .workspace-chat-conversation-stream.is-camera-open {
-  padding: 0;
+  padding: 12px 10px;
   gap: 0;
-  background: #000000;
-  background-image: none;
   overflow: hidden;
 }
 

@@ -17,7 +17,24 @@ function DiscoverySectionTitle({ eyebrow, title, summary, icon }) {
   );
 }
 
-function ChatDiscoveryPane({ overview, details, requestsRef, requestFocus, handleRequestAction }) {
+function ChatDiscoveryPane({
+  overview,
+  details,
+  requestsRef,
+  requestFocus,
+  handleRequestAction,
+  searchQuery,
+  setSearchQuery,
+  searchResults,
+  searchLoading,
+  handleSendFriendRequest,
+  pendingRequestUserIds,
+}) {
+  const sentRequestUserIds = new Set([
+    ...(overview.sentRequests || []).map((item) => item.receiver?.id).filter(Boolean),
+    ...(pendingRequestUserIds || []),
+  ]);
+
   return (
     <aside className="workspace-hub-card workspace-chat-column workspace-chat-discovery-panel">
       <div className="workspace-section-heading">
@@ -26,6 +43,33 @@ function ChatDiscoveryPane({ overview, details, requestsRef, requestFocus, handl
       </div>
 
       <div className="workspace-chat-discovery-scroll">
+        <div className="workspace-chat-side-section workspace-chat-settings-card">
+          <div className="workspace-chat-side-section workspace-chat-settings-subcard">
+            <DiscoverySectionTitle eyebrow="People" title="Search users" summary={searchLoading ? "..." : `${searchResults.users?.length || 0}`} icon="SR" />
+            <input className="workspace-input workspace-command-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search username or full name" />
+            <div className="workspace-chat-request-list">
+              {searchQuery.trim() ? (
+                searchLoading ? <p className="status-item status-info">Searching users...</p> : (
+                  searchResults.users?.length ? searchResults.users.map((item) => {
+                    const requestSent = sentRequestUserIds.has(item.id);
+                    return (
+                      <article key={item.id} className="workspace-chat-request-card">
+                        <strong>{item.fullName}</strong>
+                        <p>@{item.username}</p>
+                        <div className="workspace-hub-actions">
+                          <button type="button" className="admin-table-action-button" onClick={() => handleSendFriendRequest(item.id)} disabled={requestSent}>
+                            {requestSent ? "Request sent" : "Send request"}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  }) : <p className="status-item status-info">No users found.</p>
+                )
+              ) : <p className="status-item status-info">Search users to send a friend request.</p>}
+            </div>
+          </div>
+        </div>
+
         {details ? (
           <div className="workspace-chat-side-section workspace-chat-settings-card">
             <div className="workspace-chat-side-section workspace-chat-settings-subcard">
@@ -35,19 +79,9 @@ function ChatDiscoveryPane({ overview, details, requestsRef, requestFocus, handl
                 {!details.sharedMedia?.length ? <p className="status-item status-info">No shared media yet.</p> : null}
               </div>
             </div>
-
-            <div className="workspace-chat-side-section workspace-chat-settings-subcard">
-              <DiscoverySectionTitle eyebrow="Starred" title="Messages" summary={`${details.starredMessages?.length || 0}`} icon="ST" />
-              <div className="workspace-chat-member-list">{(details.starredMessages || []).map((item) => <article key={item.id} className="workspace-chat-member-card"><strong>{item.senderName}</strong><p>{item.body || item.fileName || item.messageType}</p></article>)}{!details.starredMessages?.length ? <p className="status-item status-info">No starred messages yet.</p> : null}</div>
-            </div>
-
-            <div className="workspace-chat-side-section workspace-chat-settings-subcard">
-              <DiscoverySectionTitle eyebrow="Pinned" title="Messages" summary={`${details.pinnedMessages?.length || 0}`} icon="PN" />
-              <div className="workspace-chat-member-list">{(details.pinnedMessages || []).map((item) => <article key={item.id} className="workspace-chat-member-card"><strong>{item.senderName}</strong><p>{item.body || item.fileName || item.messageType}</p></article>)}{!details.pinnedMessages?.length ? <p className="status-item status-info">No pinned messages yet.</p> : null}</div>
-            </div>
           </div>
         ) : (
-          <p className="status-item status-info">Select a chat to view shared media and pinned content.</p>
+          <p className="status-item status-info">Select a chat to view shared media.</p>
         )}
 
         <div ref={requestsRef} className={`workspace-chat-side-section ${requestFocus ? "is-focus" : ""}`}>
