@@ -265,8 +265,8 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   }, [selectedConversation]);
 
   useEffect(() => {
-    if (centerPanel === "profile") setCenterPanel("conversation");
-  }, [centerPanel, selectedConversation?.conversationType, selectedConversation?.conversationId]);
+    setCenterPanel("conversation");
+  }, [selectedConversation?.conversationType, selectedConversation?.conversationId]);
 
   useEffect(() => {
     currentUserIdRef.current = currentUser?.id || "";
