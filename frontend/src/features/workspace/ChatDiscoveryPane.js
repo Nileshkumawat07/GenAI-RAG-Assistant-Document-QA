@@ -1,5 +1,20 @@
 import React from "react";
 
+function DiscoverySectionTitle({ eyebrow, title, summary, icon }) {
+  return (
+    <div className="workspace-chat-section-heading">
+      <div className="workspace-chat-section-heading-main">
+        <span className="workspace-chat-section-icon" aria-hidden="true">{icon}</span>
+        <div>
+          <span className="workspace-hub-eyebrow">{eyebrow}</span>
+          <h4>{title}</h4>
+        </div>
+      </div>
+      {summary ? <span className="workspace-section-summary">{summary}</span> : null}
+    </div>
+  );
+}
+
 function ChatDiscoveryPane({
   overview,
   requestsRef,
@@ -20,8 +35,8 @@ function ChatDiscoveryPane({
   return (
     <aside className="workspace-hub-card workspace-chat-column workspace-chat-discovery-panel">
       <div className="workspace-section-heading">
-        <div><span className="workspace-hub-eyebrow">Discovery</span><h4>Shared content</h4></div>
-        <span className="workspace-section-summary">{details ? "Live" : "Standby"}</span>
+        <div><span className="workspace-hub-eyebrow">Discovery</span><h4>People</h4></div>
+        <span className="workspace-section-summary">Live</span>
       </div>
 
       <div className="workspace-chat-discovery-scroll">
