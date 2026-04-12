@@ -31,6 +31,8 @@ function ChatDiscoveryPane({
     ...(overview.sentRequests || []).map((item) => item.receiver?.id).filter(Boolean),
     ...(pendingRequestUserIds || []),
   ]);
+  const existingFriendUserIds = new Set((overview.friends || []).map((item) => item.id).filter(Boolean));
+  const availableUsers = (searchResults.users || []).filter((item) => !existingFriendUserIds.has(item.id));
 
   return (
     <aside className="workspace-hub-card workspace-chat-column workspace-chat-discovery-panel">
@@ -42,12 +44,12 @@ function ChatDiscoveryPane({
       <div className="workspace-chat-discovery-scroll">
         <div className="workspace-chat-side-section workspace-chat-settings-card">
           <div className="workspace-chat-side-section workspace-chat-settings-subcard">
-            <DiscoverySectionTitle eyebrow="People" title="Search users" summary={searchLoading ? "..." : `${searchResults.users?.length || 0}`} icon="SR" />
+            <DiscoverySectionTitle eyebrow="People" title="Search users" summary={searchLoading ? "..." : `${availableUsers.length || 0}`} icon="SR" />
             <input className="workspace-input workspace-command-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search username or full name" />
             <div className="workspace-chat-request-list">
               {searchQuery.trim() ? (
                 searchLoading ? <p className="status-item status-info">Searching users...</p> : (
-                  searchResults.users?.length ? searchResults.users.map((item) => {
+                  availableUsers.length ? availableUsers.map((item) => {
                     const requestSent = sentRequestUserIds.has(item.id);
                     return (
                       <article key={item.id} className="workspace-chat-request-card">
