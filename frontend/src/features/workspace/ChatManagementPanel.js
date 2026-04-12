@@ -9,6 +9,7 @@ import {
   acceptFriendRequest,
   addGroupMembers,
   addGroupToCommunity,
+  cancelFriendRequest,
   clearChatConversation,
   createCommunity,
   createGroup,
@@ -551,6 +552,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
   const handleRequestAction = async (requestId, action) => {
     try {
       if (action === "accept") await acceptFriendRequest(requestId);
+      else if (action === "cancel") await cancelFriendRequest(requestId);
       else await rejectFriendRequest(requestId);
       await loadOverview();
     } catch (error) {
@@ -611,25 +613,29 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
 
   const handleCreateGroup = async () => {
     try {
-      await createGroup(createGroupState);
+      const createdGroup = await createGroup(createGroupState);
       setCreateGroupState({ name: "", description: "", image: null, memberIds: [] });
       await loadOverview();
       setActiveTab("groups");
-      setComposerMode("");
+      setSelectedConversation({ conversationType: "group", conversationId: createdGroup.id });
+      return true;
     } catch (error) {
       setPanelError(error.message || "Failed to create group.");
+      return false;
     }
   };
 
   const handleCreateCommunity = async () => {
     try {
-      await createCommunity(createCommunityState);
+      const createdCommunity = await createCommunity(createCommunityState);
       setCreateCommunityState({ name: "", description: "", image: null });
       await loadOverview();
       setActiveTab("communities");
-      setComposerMode("");
+      setSelectedConversation({ conversationType: "community", conversationId: createdCommunity.id });
+      return true;
     } catch (error) {
       setPanelError(error.message || "Failed to create community.");
+      return false;
     }
   };
 

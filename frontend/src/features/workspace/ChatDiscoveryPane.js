@@ -37,14 +37,14 @@ function ChatDiscoveryPane({
   return (
     <aside className="workspace-hub-card workspace-chat-column workspace-chat-discovery-panel">
       <div className="workspace-section-heading">
-        <div><span className="workspace-hub-eyebrow">Discovery</span><h4>People</h4></div>
+        <div><span className="workspace-hub-eyebrow">Connections</span><h4>People</h4></div>
         <span className="workspace-section-summary">Live</span>
       </div>
 
       <div className="workspace-chat-discovery-scroll">
         <div className="workspace-chat-side-section workspace-chat-settings-card">
           <div className="workspace-chat-side-section workspace-chat-settings-subcard">
-            <DiscoverySectionTitle eyebrow="People" title="Search users" summary={searchLoading ? "..." : `${availableUsers.length || 0}`} icon="SR" />
+            <DiscoverySectionTitle eyebrow="People" title="Find contacts" summary={searchLoading ? "..." : `${availableUsers.length || 0}`} icon="SR" />
             <input className="workspace-input workspace-command-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search username or full name" />
             <div className="workspace-chat-request-list">
               {searchQuery.trim() ? (
@@ -64,19 +64,40 @@ function ChatDiscoveryPane({
                     );
                   }) : <p className="status-item status-info">No users found.</p>
                 )
-              ) : <p className="status-item status-info">Search users to send a friend request.</p>}
+              ) : <p className="status-item status-info">Search to find people.</p>}
             </div>
           </div>
         </div>
 
         <div ref={requestsRef} className={`workspace-chat-side-section ${requestFocus ? "is-focus" : ""}`}>
           <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Requests</span><h4>Received</h4></div><span className="workspace-section-summary">{overview.receivedRequests.length}</span></div>
-          <div className="workspace-chat-request-list">{overview.receivedRequests.length > 0 ? overview.receivedRequests.map((item) => <article key={item.id} className="workspace-chat-request-card"><strong>{item.sender.fullName}</strong><p>@{item.sender.username}</p><div className="workspace-hub-actions"><button type="button" className="admin-table-action-button" onClick={() => handleRequestAction(item.id, "accept")}>Accept</button><button type="button" className="admin-table-action-button" onClick={() => handleRequestAction(item.id, "reject")}>Reject</button></div></article>) : <p className="status-item status-info">No received requests.</p>}</div>
+          <div className="workspace-chat-request-list">
+            {overview.receivedRequests.length > 0 ? overview.receivedRequests.map((item) => (
+              <article key={item.id} className="workspace-chat-request-card">
+                <strong>{item.sender.fullName}</strong>
+                <p>@{item.sender.username}</p>
+                <div className="workspace-hub-actions">
+                  <button type="button" className="admin-table-action-button" onClick={() => handleRequestAction(item.id, "accept")}>Accept</button>
+                  <button type="button" className="admin-table-action-button" onClick={() => handleRequestAction(item.id, "reject")}>Reject</button>
+                </div>
+              </article>
+            )) : <p className="status-item status-info">No received requests.</p>}
+          </div>
         </div>
 
         <div className="workspace-chat-side-section">
           <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Requests</span><h4>Sent</h4></div><span className="workspace-section-summary">{overview.sentRequests.length}</span></div>
-          <div className="workspace-chat-request-list">{overview.sentRequests.length > 0 ? overview.sentRequests.map((item) => <article key={item.id} className="workspace-chat-request-card"><strong>{item.receiver.fullName}</strong><p>@{item.receiver.username}</p></article>) : <p className="status-item status-info">No sent requests.</p>}</div>
+          <div className="workspace-chat-request-list">
+            {overview.sentRequests.length > 0 ? overview.sentRequests.map((item) => (
+              <article key={item.id} className="workspace-chat-request-card">
+                <strong>{item.receiver.fullName}</strong>
+                <p>@{item.receiver.username}</p>
+                <div className="workspace-hub-actions">
+                  <button type="button" className="admin-table-action-button" onClick={() => handleRequestAction(item.id, "cancel")}>Cancel Request</button>
+                </div>
+              </article>
+            )) : <p className="status-item status-info">No sent requests.</p>}
+          </div>
         </div>
       </div>
     </aside>

@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildChatAuthenticatedUrl, buildChatFileUrl } from "./chatManagementApi";
 
-const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "🙏"];
+const REACTION_EMOJIS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F64F}"];
+const QUICK_EMOJIS = ["\u{1F60A}", "\u{1F44B}", "\u{1F44D}", "\u{1F525}", "\u{1F389}", "\u2764\uFE0F"];
 
 function formatDate(value, options) {
   if (!value) return "";
@@ -14,9 +15,9 @@ function formatDate(value, options) {
 }
 
 function statusTicks(status) {
-  if (status === "read") return "✓✓";
-  if (status === "delivered") return "✓✓";
-  return "✓";
+  if (status === "read") return "\u2713\u2713";
+  if (status === "delivered") return "\u2713\u2713";
+  return "\u2713";
 }
 
 function formatBubbleTime(value) {
@@ -159,10 +160,12 @@ function ChatConversationPane({
         ? formatLastSeen(selectedItem.lastSeenAt)
         : selectedItem?.statusText || selectedItem?.subtitle || "Select a conversation";
   const attachmentAccept = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip";
+  const canSendMessage = Boolean(selectedConversation && (messageDraft.trim() || selectedAttachment));
   const streamRef = useRef(null);
   const wallpaperInputRef = useRef(null);
   const popupRef = useRef(null);
   const headerMenuRef = useRef(null);
+  const emojiMenuRef = useRef(null);
   const cameraVideoRef = useRef(null);
   const cameraCanvasRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -171,6 +174,7 @@ function ChatConversationPane({
   const [messageInfo, setMessageInfo] = useState(null);
   const [attachmentViewer, setAttachmentViewer] = useState(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [emojiMenuOpen, setEmojiMenuOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState("idle");
   const [cameraError, setCameraError] = useState("");
   const [capturedPhoto, setCapturedPhoto] = useState(null);
@@ -179,7 +183,7 @@ function ChatConversationPane({
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
   const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
   const streamBackgroundStyle = backgroundImageUrl ? { "--workspace-chat-custom-bg": `url("${backgroundImageUrl}")` } : undefined;
-  const composerActionLabel = !messageDraft.trim() && !selectedAttachment ? "Voice message" : isSending ? "Sending" : "Send message";
+  const composerActionLabel = isSending ? "Sending" : "Send message";
 
   useEffect(() => {
     setMessageMenu(null);
@@ -187,6 +191,7 @@ function ChatConversationPane({
     setMessageInfo(null);
     setAttachmentViewer(null);
     setHeaderMenuOpen(false);
+    setEmojiMenuOpen(false);
     setCameraMode("idle");
     setCameraError("");
     setCapturedPhoto(null);
@@ -224,17 +229,32 @@ function ChatConversationPane({
       if (!headerMenuRef.current?.contains(event.target)) {
         setHeaderMenuOpen(false);
       }
+      if (!emojiMenuRef.current?.contains(event.target)) {
+        setEmojiMenuOpen(false);
+      }
     };
 
     document.addEventListener("click", handleDocumentClick);
     return () => document.removeEventListener("click", handleDocumentClick);
   }, []);
 
+  const stopCameraStream = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+  };
+
   const openMessageMenu = (event, message, anchorElement = null) => {
     event.preventDefault();
     event.stopPropagation();
     const position = getMenuPosition(streamRef.current, event, 220, 340, anchorElement);
     setBackgroundMenu(null);
+    setHeaderMenuOpen(false);
+    setEmojiMenuOpen(false);
     setMessageMenu({ message, x: position.x, y: position.y });
   };
 
@@ -243,6 +263,8 @@ function ChatConversationPane({
     event.stopPropagation();
     const position = getMenuPosition(streamRef.current, event, 200, 140);
     setMessageMenu(null);
+    setHeaderMenuOpen(false);
+    setEmojiMenuOpen(false);
     setBackgroundMenu({ x: position.x, y: position.y });
   };
 
@@ -268,6 +290,7 @@ function ChatConversationPane({
     try {
       await navigator.clipboard.writeText(textToCopy);
     } catch {
+      // Ignore clipboard failures.
     }
 
     setMessageMenu(null);
@@ -278,6 +301,7 @@ function ChatConversationPane({
     if (!file) return;
     handleUpdateConversationBackground?.(file);
     setBackgroundMenu(null);
+    setHeaderMenuOpen(false);
     event.target.value = "";
   };
 
@@ -310,16 +334,6 @@ function ChatConversationPane({
     link.click();
     link.remove();
     setMessageMenu(null);
-  };
-
-  const stopCameraStream = () => {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = null;
-    }
   };
 
   const handleOpenCamera = async () => {
@@ -395,13 +409,23 @@ function ChatConversationPane({
     handleCloseCamera();
   };
 
+  const handleInsertEmoji = (emoji) => {
+    handleDraftChange(`${messageDraft || ""}${emoji}`);
+    setEmojiMenuOpen(false);
+  };
+
+  const handleComposerKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (canSendMessage && !isSending) {
+        handleSendMessage();
+      }
+    }
+  };
+
   return (
     <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell">
       <div className="workspace-chat-mobile-header">
-        <button type="button" className="workspace-chat-icon-button" aria-label="Back">
-          <span aria-hidden="true">&#8592;</span>
-        </button>
-
         <button type="button" className="workspace-chat-contact-row workspace-chat-contact-trigger workspace-chat-header-trigger" onClick={() => onOpenProfile?.()}>
           <div className="workspace-chat-avatar workspace-chat-avatar-large">
             {headerAvatarImage ? <img src={headerAvatarImage} alt={chatTitle} className="workspace-chat-avatar-image" /> : getAvatarLabel(chatTitle)}
@@ -412,21 +436,21 @@ function ChatConversationPane({
           </div>
         </button>
 
-        <div className="workspace-chat-header-actions">
+        <div ref={headerMenuRef} className="workspace-chat-header-actions">
           {selectedItem?.isMuted || selectedItem?.preferences?.isMuted ? <span className="workspace-chat-header-badge" title="Muted">&#128263;</span> : null}
-          <button type="button" className="workspace-chat-icon-button" aria-label="Voice call">
-            <span aria-hidden="true">&#9742;</span>
-          </button>
-          <button type="button" className="workspace-chat-icon-button" aria-label="Video call">
-            <span aria-hidden="true">&#9633;</span>
-          </button>
-          <button type="button" className="workspace-chat-icon-button" aria-label="More options" onClick={() => setHeaderMenuOpen((current) => !current)}>
+          <button type="button" className="workspace-chat-icon-button" aria-label="More options" onClick={() => { setHeaderMenuOpen((current) => !current); setEmojiMenuOpen(false); }}>
             <span aria-hidden="true">&#8942;</span>
           </button>
           {headerMenuOpen ? (
-            <div ref={headerMenuRef} className="workspace-chat-header-menu">
+            <div className="workspace-chat-header-menu">
               <button type="button" className="workspace-chat-popup-item" onClick={() => { setHeaderMenuOpen(false); onOpenProfile?.(); }}>
                 View profile
+              </button>
+              <button type="button" className="workspace-chat-popup-item" onClick={() => { setHeaderMenuOpen(false); wallpaperInputRef.current?.click(); }}>
+                Change background
+              </button>
+              <button type="button" className="workspace-chat-popup-item" onClick={() => { handleClearConversationBackground?.(); setHeaderMenuOpen(false); }}>
+                Reset background
               </button>
             </div>
           ) : null}
@@ -502,9 +526,7 @@ function ChatConversationPane({
                       className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message ${highlightedMessageId === message.id ? "is-highlighted" : ""}`}
                       onContextMenu={(event) => openMessageMenu(event, message, event.currentTarget)}
                     >
-                      {!mine && selectedConversation.conversationType !== "direct" ? (
-                        <strong className="workspace-chat-sender-line">{message.senderName}</strong>
-                      ) : null}
+                      {!mine && selectedConversation.conversationType !== "direct" ? <strong className="workspace-chat-sender-line">{message.senderName}</strong> : null}
 
                       {message.replyPreview ? (
                         <div className="workspace-chat-reply-preview">
@@ -515,51 +537,21 @@ function ChatConversationPane({
 
                       {editingMessageId === message.id ? (
                         <div className="workspace-chat-edit-shell">
-                          <textarea
-                            className="question-input workspace-chat-composer-input workspace-chat-edit-input"
-                            rows={3}
-                            value={editingDraft}
-                            onChange={(event) => setEditingDraft(event.target.value)}
-                          />
+                          <textarea className="question-input workspace-chat-composer-input workspace-chat-edit-input" rows={3} value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} />
                           <div className="workspace-chat-inline-actions">
-                            <button type="button" className="inline-text-button" onClick={() => handleSaveEdit(message.id)}>
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              className="inline-text-button"
-                              onClick={() => {
-                                setEditingMessageId("");
-                                setEditingDraft("");
-                              }}
-                            >
-                              Cancel
-                            </button>
+                            <button type="button" className="inline-text-button" onClick={() => handleSaveEdit(message.id)}>Save</button>
+                            <button type="button" className="inline-text-button" onClick={() => { setEditingMessageId(""); setEditingDraft(""); }}>Cancel</button>
                           </div>
                         </div>
                       ) : (
                         <>
                           {message.fileUrl ? (
                             isImage ? (
-                              <button
-                                type="button"
-                                className="workspace-chat-media-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleOpenAttachment(message);
-                                }}
-                              >
+                              <button type="button" className="workspace-chat-media-link" onClick={(event) => { event.stopPropagation(); handleOpenAttachment(message); }}>
                                 <img src={fileUrl} alt={message.fileName || "attachment"} className="workspace-chat-image-preview" />
                               </button>
                             ) : isVideo ? (
-                              <button
-                                type="button"
-                                className="workspace-chat-media-link workspace-chat-video-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleOpenAttachment(message);
-                                }}
-                              >
+                              <button type="button" className="workspace-chat-media-link workspace-chat-video-link" onClick={(event) => { event.stopPropagation(); handleOpenAttachment(message); }}>
                                 <video className="workspace-chat-image-preview workspace-chat-video-preview" preload="metadata">
                                   <source src={fileUrl} type={message.mimeType || "video/mp4"} />
                                 </video>
@@ -569,14 +561,7 @@ function ChatConversationPane({
                                 <source src={fileUrl} type={message.mimeType || "audio/mpeg"} />
                               </audio>
                             ) : (
-                              <button
-                                type="button"
-                                className="workspace-chat-file-chip"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleOpenAttachment(message);
-                                }}
-                              >
+                              <button type="button" className="workspace-chat-file-chip" onClick={(event) => { event.stopPropagation(); handleOpenAttachment(message); }}>
                                 {hasPreview ? `View ${message.fileName || "file"}` : (message.fileName || "Open file")}
                               </button>
                             )
@@ -592,12 +577,7 @@ function ChatConversationPane({
                       {message.reactions?.length ? (
                         <div className="workspace-chat-reaction-row">
                           {message.reactions.map((reaction) => (
-                            <button
-                              key={`${message.id}-${reaction.emoji}`}
-                              type="button"
-                              className={`workspace-chat-reaction-chip ${reaction.reactedByCurrentUser ? "is-active" : ""}`}
-                              onClick={() => handleToggleReaction(message.id, reaction.emoji)}
-                            >
+                            <button key={`${message.id}-${reaction.emoji}`} type="button" className={`workspace-chat-reaction-chip ${reaction.reactedByCurrentUser ? "is-active" : ""}`} onClick={() => handleToggleReaction(message.id, reaction.emoji)}>
                               {reaction.emoji} {reaction.count}
                             </button>
                           ))}
@@ -632,11 +612,7 @@ function ChatConversationPane({
             <button type="button" className="workspace-chat-popup-item" onClick={() => { handleToggleStar(messageMenu.message.id); setMessageMenu(null); }}>{messageMenu.message.isStarred ? "Unstar" : "Star"}</button>
             <button type="button" className="workspace-chat-popup-item" onClick={() => { handleTogglePin(messageMenu.message.id); setMessageMenu(null); }}>{messageMenu.message.isPinned ? "Unpin" : "Pin"}</button>
             <button type="button" className="workspace-chat-popup-item" onClick={() => handleCopyMessage(messageMenu.message)}>Copy</button>
-            {messageMenu.message.canEdit ? (
-              <button type="button" className="workspace-chat-popup-item" onClick={() => { setEditingMessageId(messageMenu.message.id); setEditingDraft(messageMenu.message.body || ""); setMessageMenu(null); }}>
-                Edit
-              </button>
-            ) : null}
+            {messageMenu.message.canEdit ? <button type="button" className="workspace-chat-popup-item" onClick={() => { setEditingMessageId(messageMenu.message.id); setEditingDraft(messageMenu.message.body || ""); setMessageMenu(null); }}>Edit</button> : null}
             <button type="button" className="workspace-chat-popup-item workspace-chat-popup-item-danger" onClick={() => { handleDeleteMessage(messageMenu.message.id, "me"); setMessageMenu(null); }}>Delete for me</button>
             {messageMenu.message.canDeleteForEveryone ? <button type="button" className="workspace-chat-popup-item workspace-chat-popup-item-danger" onClick={() => { handleDeleteMessage(messageMenu.message.id, "everyone"); setMessageMenu(null); }}>Delete for everyone</button> : null}
           </div>
@@ -683,7 +659,7 @@ function ChatConversationPane({
       {messageInfo ? (
         <div className="workspace-chat-compose-preview">
           <span>{messageInfo.senderName || (messageInfo.senderId === currentUser?.id ? "You" : "Message")}</span>
-          <strong>{formatDate(messageInfo.createdAt, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}{messageInfo.status ? ` · ${messageInfo.status}` : ""}</strong>
+          <strong>{formatDate(messageInfo.createdAt, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}{messageInfo.status ? ` | ${messageInfo.status}` : ""}</strong>
           <button type="button" className="inline-text-button" onClick={() => setMessageInfo(null)}>Clear</button>
         </div>
       ) : null}
@@ -699,17 +675,28 @@ function ChatConversationPane({
       {attachmentPreviewUrl ? <img src={attachmentPreviewUrl} alt="attachment preview" className="workspace-chat-image-preview workspace-chat-compose-image" /> : null}
       {cameraError ? <div className="workspace-chat-compose-preview"><span>{cameraError}</span></div> : null}
 
+      {emojiMenuOpen ? (
+        <div ref={emojiMenuRef} className="workspace-chat-emoji-panel">
+          {QUICK_EMOJIS.map((emoji) => (
+            <button key={emoji} type="button" className="workspace-chat-emoji-option" onClick={() => handleInsertEmoji(emoji)}>
+              {emoji}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="workspace-chat-composer workspace-chat-mobile-composer">
         <div className="workspace-chat-input-shell">
-          <button type="button" className="workspace-chat-emoji-trigger" aria-label="Emoji picker"><span aria-hidden="true">&#9786;</span></button>
-          <textarea className="question-input workspace-chat-composer-input workspace-chat-mobile-input" rows={1} value={messageDraft} onChange={(event) => handleDraftChange(event.target.value)} placeholder={selectedItem ? `Message ${selectedItem.title}` : "Select a conversation to message"} disabled={!selectedConversation} />
+          <button type="button" className="workspace-chat-emoji-trigger" aria-label="Emoji picker" onClick={() => { setEmojiMenuOpen((current) => !current); setHeaderMenuOpen(false); }}>
+            <span aria-hidden="true">&#9786;</span>
+          </button>
+          <textarea className="question-input workspace-chat-composer-input workspace-chat-mobile-input" rows={1} value={messageDraft} onChange={(event) => handleDraftChange(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder={selectedItem ? `Message ${selectedItem.title}` : "Select a conversation to message"} disabled={!selectedConversation} />
           <label className="workspace-chat-attach-button" aria-label="Attach file"><span aria-hidden="true">&#128206;</span><input type="file" accept={attachmentAccept} onChange={(event) => setSelectedAttachment(event.target.files?.[0] || null)} /></label>
-          <button type="button" className="workspace-chat-emoji-button workspace-chat-inline-icon" aria-label="Payments"><span aria-hidden="true">&#8377;</span></button>
           <button type="button" className="workspace-chat-camera-button" aria-label="Camera" onClick={handleOpenCamera} disabled={!selectedConversation || isSending}><span aria-hidden="true">&#128247;</span></button>
         </div>
 
-        <button type="button" className="workspace-chat-send-fab" onClick={handleSendMessage} disabled={!selectedConversation || isSending} aria-label={composerActionLabel}>
-          <span aria-hidden="true">{!messageDraft.trim() && !selectedAttachment ? "\uD83C\uDFA4" : isSending ? "..." : "\u27A4"}</span>
+        <button type="button" className="workspace-chat-send-fab" onClick={handleSendMessage} disabled={!canSendMessage || isSending} aria-label={composerActionLabel}>
+          <span aria-hidden="true">{isSending ? "..." : "\u27A4"}</span>
         </button>
       </div>
     </section>

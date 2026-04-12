@@ -169,6 +169,28 @@ def test_remove_friend_deletes_direct_relationship_and_messages():
     assert overview["directChats"] == []
 
 
+def test_cancel_friend_request_removes_pending_request_for_both_sides():
+    db = build_session()
+    db.add_all(
+        [
+            build_user("user-1", "one@example.com", "userone", "User One"),
+            build_user("user-2", "two@example.com", "usertwo", "User Two"),
+        ]
+    )
+    db.commit()
+    service = ChatManagementService(AuthService())
+
+    request = service.send_friend_request(db, current_user_id="user-1", receiver_user_id="user-2")
+    canceled = service.cancel_friend_request(db, current_user_id="user-1", request_id=request["id"])
+    sender_overview = service.get_overview(db, current_user_id="user-1")
+    receiver_overview = service.get_overview(db, current_user_id="user-2")
+
+    assert canceled["canceled"] is True
+    assert canceled["receiverUserId"] == "user-2"
+    assert sender_overview["sentRequests"] == []
+    assert receiver_overview["receivedRequests"] == []
+
+
 def test_delete_community_removes_it_for_creator():
     db = build_session()
     db.add(build_user("user-1", "one@example.com", "userone", "User One"))

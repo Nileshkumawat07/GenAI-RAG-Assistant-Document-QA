@@ -122,6 +122,51 @@ def test_remove_friend_route_deletes_direct_chat_and_friendship():
     assert overview["directChats"] == []
 
 
+def test_cancel_friend_request_route_deletes_pending_request():
+    db = build_session()
+    db.add_all(
+        [
+            build_user("user-1", "one@example.com", "userone", "User One"),
+            build_user("user-2", "two@example.com", "usertwo", "User Two"),
+        ]
+    )
+    db.commit()
+
+    auth_service = AuthService()
+    chat_service = ChatManagementService(auth_service)
+
+    async def noop_emit_friend_request_update(self, *, sender_user_id, receiver_user_id):
+        return None
+
+    chat_service.emit_friend_request_update = MethodType(noop_emit_friend_request_update, chat_service)
+    request = chat_service.send_friend_request(db, current_user_id="user-1", receiver_user_id="user-2")
+
+    app = FastAPI()
+    app.include_router(build_chat_management_router(chat_service))
+
+    def override_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_db
+    client = TestClient(app)
+    token = auth_service.create_access_token(user_id="user-1")
+
+    response = client.delete(
+        f"/chat/friend-requests/{request['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["canceled"] is True
+    assert payload["receiverUserId"] == "user-2"
+    overview = chat_service.get_overview(db, current_user_id="user-1")
+    assert overview["sentRequests"] == []
+
+
 def test_delete_community_route_deletes_creator_community():
     db = build_session()
     db.add(build_user("user-1", "one@example.com", "userone", "User One"))

@@ -114,6 +114,15 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.delete("/friend-requests/{request_id}")
+    async def cancel_friend_request(request_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
+        try:
+            result = chat_management_service.cancel_friend_request(db, current_user_id=authenticated_user_id, request_id=request_id)
+            await chat_management_service.emit_friend_request_update(sender_user_id=authenticated_user_id, receiver_user_id=result["receiverUserId"])
+            return result
+        except ChatManagementServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.get("/groups/{group_id}", response_model=GroupDetailResponse)
     async def get_group_detail(group_id: str, db: Session = Depends(get_db), authenticated_user_id: str = Depends(require_authenticated_user_id)):
         try:

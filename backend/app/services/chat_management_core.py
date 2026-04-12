@@ -375,6 +375,15 @@ class ChatManagementService:
         db.commit()
         return {"rejected": True}
 
+    def cancel_friend_request(self, db: Session, *, current_user_id: str, request_id: str) -> dict:
+        request = self._require_friend_request(db, request_id=request_id)
+        if request.sender_user_id != current_user_id or request.status != "pending":
+            raise ChatManagementServiceError("Friend request was not found.")
+        receiver_user_id = request.receiver_user_id
+        db.delete(request)
+        db.commit()
+        return {"canceled": True, "receiverUserId": receiver_user_id}
+
     def remove_friend(self, db: Session, *, current_user_id: str, friend_user_id: str) -> dict:
         self._require_user(db, friend_user_id)
         self._ensure_friends(db, current_user_id=current_user_id, other_user_id=friend_user_id)
@@ -2007,19 +2016,20 @@ class ChatManagementService:
         )
         normalized_type = (conversation_type or "").strip().lower()
         for user_id in participant_ids:
+            target_conversation_id = current_user_id if normalized_type == "direct" and user_id != current_user_id else conversation_id
             await self.manager.send_event(user_id, {"type": "overview:refresh"})
             await self.manager.send_event(
                 user_id,
                 {
                     "type": "conversation:refresh",
                     "conversationType": normalized_type,
-                    "conversationId": conversation_id,
+                    "conversationId": target_conversation_id,
                 },
             )
             if normalized_type == "group":
-                await self.manager.send_event(user_id, {"type": "group:refresh", "groupId": conversation_id})
+                await self.manager.send_event(user_id, {"type": "group:refresh", "groupId": target_conversation_id})
             elif normalized_type == "community":
-                await self.manager.send_event(user_id, {"type": "community:refresh", "communityId": conversation_id})
+                await self.manager.send_event(user_id, {"type": "community:refresh", "communityId": target_conversation_id})
 
     def authenticate_websocket_user(self, token: str | None) -> str:
         if not token:
