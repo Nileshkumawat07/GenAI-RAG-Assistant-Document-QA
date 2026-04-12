@@ -38,31 +38,6 @@ function getAvatarLabel(title) {
     .join("");
 }
 
-function PersonSearchResults({ searchQuery, searchResults, searchLoading, handleSendFriendRequest }) {
-  if (!searchQuery.trim()) return <p className="status-item status-info">Search by name or username to start a new chat.</p>;
-  if (searchLoading) return <p className="status-item status-info">Searching people...</p>;
-  if (!(searchResults?.users || []).length) return <p className="status-item status-info">No people matched this search.</p>;
-
-  return (
-    <div className="workspace-chat-creator-results">
-      {(searchResults.users || []).map((user) => (
-        <article key={user.id} className="workspace-chat-discovery-card workspace-chat-creator-card">
-          <div className="workspace-chat-avatar">
-            {user.imageUrl ? <img src={buildChatAuthenticatedUrl(user.imageUrl)} alt={user.fullName} className="workspace-chat-avatar-image" /> : user.avatarLabel || getAvatarLabel(user.fullName)}
-          </div>
-          <div>
-            <strong title={user.fullName}>{truncateLabel(user.fullName, 20)}</strong>
-            <p>@{user.username}</p>
-          </div>
-          <button type="button" className="admin-table-action-button" disabled={user.relationshipState !== "none"} onClick={() => handleSendFriendRequest(user.id)}>
-            {user.relationshipState === "none" ? "Add" : user.relationshipState.replace("_", " ")}
-          </button>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 function GroupCreator({ createGroupState, setCreateGroupState, overviewFriends, handleCreateGroup }) {
   return (
     <div className="workspace-chat-creator-stack">
@@ -100,17 +75,10 @@ function ChatRecentListPane({
   selectedConversation,
   typingState,
   currentUser,
-  composerMode,
-  setComposerMode,
   setActiveTab,
   setListFilter,
   setRecentSearch,
   setSelectedConversation,
-  searchQuery,
-  setSearchQuery,
-  searchResults,
-  searchLoading,
-  handleSendFriendRequest,
   createGroupState,
   setCreateGroupState,
   handleCreateGroup,
@@ -130,22 +98,7 @@ function ChatRecentListPane({
           <div><span className="workspace-hub-eyebrow">Recent chats</span><h4>Messages</h4></div>
           <span className="workspace-section-summary">{items.length}</span>
         </div>
-
-        <div className="workspace-chat-top-actions">
-          <button type="button" className={`workspace-chat-top-action ${composerMode === "chat" ? "is-active" : ""}`} onClick={() => setComposerMode((current) => current === "chat" ? "" : "chat")}>New Chat</button>
-          <button type="button" className={`workspace-chat-top-action ${composerMode === "group" ? "is-active" : ""}`} onClick={() => setComposerMode((current) => current === "group" ? "" : "group")}>Create Group</button>
-          <button type="button" className={`workspace-chat-top-action ${composerMode === "community" ? "is-active" : ""}`} onClick={() => setComposerMode((current) => current === "community" ? "" : "community")}>Create Community</button>
-        </div>
-
-        {composerMode ? (
-          <div className="workspace-chat-creator-panel">
-            {composerMode === "chat" ? <PersonSearchResults searchQuery={searchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} /> : null}
-            {composerMode === "group" ? <GroupCreator createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} overviewFriends={overviewFriends} handleCreateGroup={handleCreateGroup} /> : null}
-            {composerMode === "community" ? <CommunityCreator createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} /> : null}
-          </div>
-        ) : null}
-
-        <input className="workspace-input workspace-command-search" value={composerMode === "chat" ? searchQuery : recentSearch} onChange={(event) => composerMode === "chat" ? setSearchQuery(event.target.value) : setRecentSearch(event.target.value)} placeholder={composerMode === "chat" ? "Search people" : `Search ${activeTab}`} />
+        <input className="workspace-input workspace-command-search" value={recentSearch} onChange={(event) => setRecentSearch(event.target.value)} placeholder={`Search ${activeTab}`} />
 
         <div className="workspace-chat-tab-row">
           {LEFT_TABS.map((tab) => (
@@ -158,6 +111,18 @@ function ChatRecentListPane({
             <button key={filter.id} type="button" className={`workspace-toggle-button ${listFilter === filter.id ? "is-active" : ""}`} onClick={() => setListFilter(filter.id)}>{filter.label}</button>
           ))}
         </div>
+
+        {activeTab === "groups" ? (
+          <div className="workspace-chat-creator-panel">
+            <GroupCreator createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} overviewFriends={overviewFriends} handleCreateGroup={handleCreateGroup} />
+          </div>
+        ) : null}
+
+        {activeTab === "communities" ? (
+          <div className="workspace-chat-creator-panel">
+            <CommunityCreator createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} />
+          </div>
+        ) : null}
       </div>
 
       <div className="workspace-chat-list">
