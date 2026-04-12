@@ -20,6 +20,7 @@ import {
   markWorkspaceNotificationRead,
 } from "./features/workspace/workspaceHubApi";
 
+let socket = null;
 function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
   const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
@@ -363,13 +364,13 @@ function App() {
       }, reconnectDelay);
       headerSocketReconnectAttemptRef.current += 1;
     };
-
+   
     const connectChatSocket = () => {
       if (disposed) {
         return;
       }
 
-      const socket = new WebSocket(getChatWebSocketUrl());
+      socket = new WebSocket(getChatWebSocketUrl());
       headerSocketRef.current = socket;
 
       socket.onopen = () => {
@@ -399,8 +400,10 @@ function App() {
       };
 
       socket.onmessage = (event) => {
+        console.log("SOCKET MESSAGE:", event.data);
         try {
           const payload = JSON.parse(event.data);
+          console.log("SOCKET PARSED:", payload);
           window.dispatchEvent(new CustomEvent("genai-chat-socket-message", { detail: payload }));
           if ([
             "message:new",
@@ -417,7 +420,8 @@ function App() {
             scheduleHeaderNotificationsRefresh();
           }
         } catch {
-          // Ignore malformed socket payloads.
+          console.error("SOCKET ERROR:", err);
+           
         }
       };
     };
