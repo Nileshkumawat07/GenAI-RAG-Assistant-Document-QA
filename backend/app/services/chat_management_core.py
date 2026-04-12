@@ -146,7 +146,10 @@ class ChatManagementService:
         if not prefix:
             return
         if storage_service.enabled:
-            storage_service.delete_prefix(prefix)
+            try:
+                storage_service.delete_prefix(prefix)
+            except StorageServiceError:
+                pass
             return
         folder = CHAT_UPLOADS_DIR / prefix
         if not folder.exists():
