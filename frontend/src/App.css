@@ -5283,6 +5283,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 6px;
 }
 
@@ -5297,6 +5298,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-chat-discovery-scroll {
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 6px;
 }
 
@@ -5325,6 +5327,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   background: rgba(255, 255, 255, 0.9);
   color: inherit;
   text-align: left;
+  min-width: 0;
 }
 
 .workspace-chat-list-item.is-active {
@@ -5336,12 +5339,12 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
   background: linear-gradient(135deg, #123d7a, #4a8ff5);
   color: #ffffff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   overflow: hidden;
 }
@@ -5362,16 +5365,28 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-chat-discovery-card strong,
 .workspace-chat-request-card strong {
   display: block;
-  font-size: 15px;
+  font-size: 13px;
   color: var(--primary-deep);
+  line-height: 1.35;
 }
 
 .workspace-chat-list-copy p,
 .workspace-chat-discovery-card p,
 .workspace-chat-request-card p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.workspace-chat-list-copy strong,
+.workspace-chat-list-copy p,
+.workspace-chat-list-status,
+.workspace-chat-section-heading h4,
+.workspace-chat-member-card strong,
+.workspace-chat-member-card p {
+  word-break: break-word;
 }
 
 .workspace-chat-list-head {
@@ -5550,6 +5565,110 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-side-section {
   margin-top: 6px;
+  min-width: 0;
+}
+
+.workspace-chat-settings-card,
+.workspace-chat-settings-subcard {
+  padding: 14px;
+  border: 1px solid rgba(18, 61, 122, 0.1);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.95));
+  box-shadow: 0 12px 30px rgba(18, 43, 85, 0.06);
+}
+
+.workspace-chat-settings-subcard {
+  padding: 12px;
+}
+
+.workspace-chat-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-chat-section-heading-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspace-chat-section-heading h4 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--primary-deep);
+}
+
+.workspace-chat-section-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(18, 61, 122, 0.12), rgba(74, 143, 245, 0.2));
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.workspace-chat-discovery-panel .workspace-section-heading {
+  margin-bottom: 4px;
+}
+
+.workspace-chat-discovery-panel .workspace-section-summary {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.workspace-chat-discovery-panel .workspace-chat-tab-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.workspace-chat-discovery-panel .workspace-toggle-button {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.workspace-chat-discovery-panel .workspace-chat-chip-row {
+  grid-template-columns: 1fr;
+}
+
+.workspace-chat-discovery-panel .workspace-inline-action,
+.workspace-chat-discovery-panel .admin-table-action-button,
+.workspace-chat-discovery-panel .hero-button,
+.workspace-chat-discovery-panel .workspace-chat-attach-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.workspace-chat-discovery-panel .workspace-inline-action {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.workspace-chat-discovery-panel .workspace-chat-member-list,
+.workspace-chat-discovery-panel .workspace-chat-request-list,
+.workspace-chat-discovery-panel .workspace-chat-discovery-list {
+  min-width: 0;
+}
+
+.workspace-chat-discovery-panel .workspace-chat-request-card,
+.workspace-chat-discovery-panel .workspace-chat-discovery-card {
+  padding: 12px;
+}
+
+.workspace-chat-discovery-panel .workspace-chat-media-card {
+  text-decoration: none;
+}
+
+.workspace-chat-discovery-panel .workspace-chat-composer-input {
+  min-height: 108px;
 }
 
 .workspace-chat-whatsapp-shell {

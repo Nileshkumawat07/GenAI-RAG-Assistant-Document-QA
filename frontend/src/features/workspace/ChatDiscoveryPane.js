@@ -24,6 +24,21 @@ function labelize(value) {
   return value.replace(/[A-Z]/g, (match) => ` ${match}`).replace(/^./, (char) => char.toUpperCase());
 }
 
+function DiscoverySectionTitle({ eyebrow, title, summary, icon }) {
+  return (
+    <div className="workspace-chat-section-heading">
+      <div className="workspace-chat-section-heading-main">
+        <span className="workspace-chat-section-icon" aria-hidden="true">{icon}</span>
+        <div>
+          <span className="workspace-hub-eyebrow">{eyebrow}</span>
+          <h4>{title}</h4>
+        </div>
+      </div>
+      {summary ? <span className="workspace-section-summary">{summary}</span> : null}
+    </div>
+  );
+}
+
 function ChatDiscoveryPane({
   overview,
   searchQuery,
@@ -246,8 +261,8 @@ function ChatDiscoveryPane({
           {searchQuery.trim() && !searchLoading && !(searchResults?.users?.length || searchResults?.messages?.length) ? <p className="status-item status-info">No people or messages matched this search.</p> : null}
         </div>
 
-        <div className="workspace-chat-side-section">
-          <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Create</span><h4>Group</h4></div></div>
+        <div className="workspace-chat-side-section workspace-chat-settings-card">
+          <DiscoverySectionTitle eyebrow="Create" title="Group" icon="◫" />
           <input className="workspace-input workspace-command-search" value={createGroupState.name} onChange={(event) => setCreateGroupState((current) => ({ ...current, name: event.target.value }))} placeholder="Group name" />
           <textarea className="question-input workspace-chat-composer-input" rows={2} value={createGroupState.description} onChange={(event) => setCreateGroupState((current) => ({ ...current, description: event.target.value }))} placeholder="Group description" />
           <label className="workspace-chat-attach-button">Group image<input type="file" accept="image/*" onChange={(event) => setCreateGroupState((current) => ({ ...current, image: event.target.files?.[0] || null }))} /></label>
@@ -255,8 +270,8 @@ function ChatDiscoveryPane({
           <button type="button" className="hero-button hero-button-secondary" onClick={handleCreateGroup}>Create Group</button>
         </div>
 
-        <div className="workspace-chat-side-section">
-          <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Create</span><h4>Community</h4></div></div>
+        <div className="workspace-chat-side-section workspace-chat-settings-card">
+          <DiscoverySectionTitle eyebrow="Create" title="Community" icon="◎" />
           <input className="workspace-input workspace-command-search" value={createCommunityState.name} onChange={(event) => setCreateCommunityState((current) => ({ ...current, name: event.target.value }))} placeholder="Community name" />
           <textarea className="question-input workspace-chat-composer-input" rows={2} value={createCommunityState.description} onChange={(event) => setCreateCommunityState((current) => ({ ...current, description: event.target.value }))} placeholder="Community description" />
           <label className="workspace-chat-attach-button">Community image<input type="file" accept="image/*" onChange={(event) => setCreateCommunityState((current) => ({ ...current, image: event.target.files?.[0] || null }))} /></label>
@@ -264,7 +279,7 @@ function ChatDiscoveryPane({
         </div>
 
         {details ? (
-          <div className="workspace-chat-side-section">
+          <div className="workspace-chat-side-section workspace-chat-settings-card">
             <div className="workspace-chat-sidebar-profile">
               <div className="workspace-chat-avatar workspace-chat-avatar-large">{detailImageUrl ? <img src={detailImageUrl} alt={details.title} className="workspace-chat-avatar-image" /> : details.avatarLabel}</div>
               <strong>{details.title}</strong>
@@ -301,42 +316,42 @@ function ChatDiscoveryPane({
               </select>
             </label>
 
-            <div className="workspace-chat-side-section">
-              <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Shared media</span><h4>{details.sharedMedia?.length || 0}</h4></div></div>
+            <div className="workspace-chat-side-section workspace-chat-settings-subcard">
+              <DiscoverySectionTitle eyebrow="Shared media" title={`${details.sharedMedia?.length || 0} items`} icon="▣" />
               <div className="workspace-chat-member-list">
                 {(details.sharedMedia || []).map((item) => <a key={item.id} href={buildChatFileUrl(item.id)} target="_blank" rel="noreferrer" className="workspace-chat-member-card workspace-chat-media-card"><strong>{item.fileName || item.messageType}</strong><p>{item.senderName}</p></a>)}
                 {!details.sharedMedia?.length ? <p className="status-item status-info">No shared media yet.</p> : null}
               </div>
             </div>
 
-            <div className="workspace-chat-side-section">
-              <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Starred</span><h4>Messages</h4></div></div>
+            <div className="workspace-chat-side-section workspace-chat-settings-subcard">
+              <DiscoverySectionTitle eyebrow="Starred" title="Messages" icon="★" />
               <div className="workspace-chat-member-list">{(details.starredMessages || []).map((item) => <article key={item.id} className="workspace-chat-member-card"><strong>{item.senderName}</strong><p>{item.body || item.fileName || item.messageType}</p></article>)}{!details.starredMessages?.length ? <p className="status-item status-info">No starred messages yet.</p> : null}</div>
             </div>
 
-            <div className="workspace-chat-side-section">
-              <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Pinned</span><h4>Messages</h4></div></div>
+            <div className="workspace-chat-side-section workspace-chat-settings-subcard">
+              <DiscoverySectionTitle eyebrow="Pinned" title="Messages" icon="⌘" />
               <div className="workspace-chat-member-list">{(details.pinnedMessages || []).map((item) => <article key={item.id} className="workspace-chat-member-card"><strong>{item.senderName}</strong><p>{item.body || item.fileName || item.messageType}</p></article>)}{!details.pinnedMessages?.length ? <p className="status-item status-info">No pinned messages yet.</p> : null}</div>
             </div>
 
             {(isGroup || isCommunity) ? (
-              <div className="workspace-chat-side-section">
-                <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Members</span><h4>{details.memberCount}</h4></div></div>
+              <div className="workspace-chat-side-section workspace-chat-settings-subcard">
+                <DiscoverySectionTitle eyebrow="Members" title={`${details.memberCount}`} icon="◉" />
                 {isGroup && canManageMembers ? <><div className="workspace-chat-chip-row">{overviewFriends.map((friend) => <button key={friend.id} type="button" className={`workspace-inline-action ${memberInviteIds.includes(friend.id) ? "is-active" : ""}`} onClick={() => setMemberInviteIds((current) => current.includes(friend.id) ? current.filter((item) => item !== friend.id) : [...current, friend.id])}>{friend.fullName}</button>)}</div><button type="button" className="admin-table-action-button" onClick={() => runAndRefresh(() => addGroupMembers(selectedConversation.conversationId, memberInviteIds))}>Add selected members</button></> : null}
                 <div className="workspace-chat-member-list">{(details.members || []).map((member) => <article key={member.id} className="workspace-chat-member-card"><strong>{member.user.fullName}</strong><p>{member.role}</p>{isGroup && canManageMembers && member.userId !== currentUser?.id ? <div className="workspace-chat-inline-actions"><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => updateGroupMemberRole(selectedConversation.conversationId, member.userId, member.role === "admin" ? "member" : "admin"))}>{member.role === "admin" ? "Demote" : "Promote"}</button><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => removeGroupMember(selectedConversation.conversationId, member.userId))}>Remove</button></div> : null}</article>)}</div>
               </div>
             ) : null}
 
             {isCommunity ? (
-              <div className="workspace-chat-side-section">
-                <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Groups</span><h4>{details.groups?.length || 0}</h4></div></div>
+              <div className="workspace-chat-side-section workspace-chat-settings-subcard">
+                <DiscoverySectionTitle eyebrow="Groups" title={`${details.groups?.length || 0}`} icon="▥" />
                 {canManageMembers ? <><div className="workspace-chat-chip-row">{overviewGroups.map((group) => <button key={group.id} type="button" className={`workspace-inline-action ${communityGroupId === group.id ? "is-active" : ""}`} onClick={() => setCommunityGroupId(group.id)}>{group.title}</button>)}</div><button type="button" className="admin-table-action-button" onClick={() => runAndRefresh(() => addGroupToCommunity(selectedConversation.conversationId, communityGroupId))}>Add group</button></> : null}
                 <div className="workspace-chat-member-list">{(details.groups || []).map((group) => <article key={group.id} className="workspace-chat-member-card"><strong>{group.name}</strong><p>{group.memberCount} members</p>{canManageMembers ? <button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => removeGroupFromCommunity(selectedConversation.conversationId, group.id))}>Remove</button> : null}</article>)}</div>
               </div>
             ) : null}
 
-            <div className="workspace-chat-side-section">
-              <div className="workspace-section-heading"><div><span className="workspace-hub-eyebrow">Settings</span><h4>Chat controls</h4></div></div>
+            <div className="workspace-chat-side-section workspace-chat-settings-subcard">
+              <DiscoverySectionTitle eyebrow="Settings" title="Chat controls" icon="✦" />
               <div className="workspace-chat-tab-row">{SETTINGS_TABS.map((tab) => <button key={tab} type="button" className={`workspace-toggle-button ${activeSettingsTab === tab ? "is-active" : ""}`} onClick={() => setActiveSettingsTab(tab)}>{labelize(tab)}</button>)}</div>
               {settingsLoading ? <p className="status-item status-info">Loading chat settings...</p> : null}
               {activeSettingsTab === "account" ? <div className="workspace-form-stack"><input className="workspace-input workspace-command-search" value={accountForm.fullName} onChange={(event) => setAccountForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Display name" /><textarea className="question-input workspace-chat-composer-input" rows={3} value={accountForm.bio} onChange={(event) => setAccountForm((current) => ({ ...current, bio: event.target.value }))} placeholder="Bio" /><label className="workspace-chat-attach-button">Profile photo<input type="file" accept="image/*" onChange={(event) => setAccountForm((current) => ({ ...current, image: event.target.files?.[0] || null }))} /></label><button type="button" className="hero-button hero-button-secondary" onClick={saveAccount} disabled={settingsSaving === "account"}>Save account</button></div> : null}
