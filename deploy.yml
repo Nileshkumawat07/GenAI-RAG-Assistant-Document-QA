@@ -5,6 +5,12 @@
     groq_api_key_value: "{{ groq_api_key | default(lookup('env', 'GROQ_API_KEY'), true) }}"
     frontend_origin_value: "{{ frontend_origin | default(lookup('env', 'FRONTEND_ORIGIN'), true) }}"
     app_base_url_value: "{{ app_base_url | default(lookup('env', 'APP_BASE_URL'), true) }}"
+    aws_region_value: "{{ aws_region | default(lookup('env', 'AWS_REGION'), true) }}"
+    ses_from_email_value: "{{ ses_from_email | default(lookup('env', 'SES_FROM_EMAIL'), true) }}"
+    aws_access_key_id_value: "{{ aws_access_key_id | default(lookup('env', 'AWS_ACCESS_KEY_ID'), true) }}"
+    aws_secret_access_key_value: "{{ aws_secret_access_key | default(lookup('env', 'AWS_SECRET_ACCESS_KEY'), true) }}"
+    aws_s3_bucket_value: "{{ aws_s3_bucket | default(lookup('env', 'AWS_S3_BUCKET'), true) }}"
+    aws_s3_public_base_url_value: "{{ aws_s3_public_base_url | default(lookup('env', 'AWS_S3_PUBLIC_BASE_URL'), true) }}"
     mysql_root_password_value: "{{ mysql_root_password | default('genai_root_123', true) }}"
     mysql_database_value: "{{ mysql_database | default('genai_app', true) }}"
     mysql_user_value: "{{ mysql_user | default('genai_user', true) }}"
@@ -24,6 +30,11 @@
           - groq_api_key_value | length > 0
           - frontend_origin_value | length > 0
           - app_base_url_value | length > 0
+          - aws_region_value | length > 0
+          - ses_from_email_value | length > 0
+          - aws_access_key_id_value | length > 0
+          - aws_secret_access_key_value | length > 0
+          - aws_s3_bucket_value | length > 0
           - mysql_root_password_value | length > 0
           - mysql_database_value | length > 0
           - mysql_user_value | length > 0
@@ -114,6 +125,12 @@
         --link genai-mysql:mysql
         -v genai-hf-cache:/app/.cache/huggingface
         -e GROQ_API_KEY={{ groq_api_key_value | quote }}
+        -e AWS_REGION={{ aws_region_value | quote }}
+        -e SES_FROM_EMAIL={{ ses_from_email_value | quote }}
+        -e AWS_ACCESS_KEY_ID={{ aws_access_key_id_value | quote }}
+        -e AWS_SECRET_ACCESS_KEY={{ aws_secret_access_key_value | quote }}
+        -e AWS_S3_BUCKET={{ aws_s3_bucket_value | quote }}
+        -e AWS_S3_PUBLIC_BASE_URL={{ aws_s3_public_base_url_value | quote }}
         -e FRONTEND_ORIGIN={{ frontend_origin_value | default('http://localhost:3000', true) | quote }}
         -e APP_BASE_URL={{ app_base_url_value | quote }}
         -e MYSQL_HOST=mysql
