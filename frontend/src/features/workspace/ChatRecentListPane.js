@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import { buildChatAuthenticatedUrl } from "./chatManagementApi";
 
@@ -17,55 +17,191 @@ const LIST_FILTERS = [
 function formatDate(value) {
   if (!value) return "";
   try {
-    return new Date(value).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    return new Date(value).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }
 }
 
-function ChatRecentListPane({ activeTab, items, listFilter, recentSearch, selectedConversation, typingState, setActiveTab, setListFilter, setRecentSearch, setSelectedConversation }) {
+function truncateLabel(value, length = 16) {
+  if (!value) return "";
+  return value.length > length ? `${value.slice(0, length - 3)}...` : value;
+}
+
+function getAvatarLabel(title) {
+  if (!title) return "?";
+  return title
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
+
+function PersonSearchResults({ searchQuery, searchResults, searchLoading, handleSendFriendRequest }) {
+  if (!searchQuery.trim()) return <p className="status-item status-info">Search by name or username to start a new chat.</p>;
+  if (searchLoading) return <p className="status-item status-info">Searching people...</p>;
+  if (!(searchResults?.users || []).length) return <p className="status-item status-info">No people matched this search.</p>;
+
   return (
-    <aside className="workspace-hub-card workspace-chat-column">
-      <div className="workspace-section-heading">
-        <div><span className="workspace-hub-eyebrow">Recent chats</span><h4>Switcher</h4></div>
-        <span className="workspace-section-summary">{items.length}</span>
-      </div>
-      <div className="workspace-chat-tab-row">
-        {LEFT_TABS.map((tab) => (
-          <button key={tab.id} type="button" className={`workspace-toggle-button ${activeTab === tab.id ? "is-active" : ""}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>
-        ))}
-      </div>
-      <div className="workspace-chat-tab-row workspace-chat-filter-row">
-        {LIST_FILTERS.map((filter) => (
-          <button key={filter.id} type="button" className={`workspace-toggle-button ${listFilter === filter.id ? "is-active" : ""}`} onClick={() => setListFilter(filter.id)}>{filter.label}</button>
-        ))}
-      </div>
-      <input className="workspace-input workspace-command-search" value={recentSearch} onChange={(event) => setRecentSearch(event.target.value)} placeholder={`Search ${activeTab}`} />
-      <div className="workspace-chat-list">
-        {items.length > 0 ? items.map((item) => (
-          <button key={`${item.conversationType}-${item.id}`} type="button" className={`workspace-chat-list-item ${selectedConversation?.conversationType === item.conversationType && selectedConversation?.conversationId === item.id ? "is-active" : ""}`} onClick={() => setSelectedConversation({ conversationType: item.conversationType, conversationId: item.id })}>
-            <div className="workspace-chat-avatar">
-              {item.imageUrl ? <img src={buildChatAuthenticatedUrl(item.imageUrl)} alt={item.title} className="workspace-chat-avatar-image" /> : item.avatarLabel}
-            </div>
-            <div className="workspace-chat-list-copy">
-              <div className="workspace-chat-list-head">
-                <strong>{item.title}</strong>
-                <span>{formatDate(item.lastMessageAt)}</span>
-              </div>
-              <p>
-                {typingState?.isTyping && typingState.conversationType === item.conversationType && typingState.conversationId === item.id
-                  ? "Typing..."
-                  : item.lastMessagePreview || item.subtitle || item.statusText}
-              </p>
-              <span className="workspace-chat-list-status">{item.presenceStatus === "online" ? "Online" : item.statusText}</span>
-            </div>
-            <div className="workspace-chat-list-meta">
-              {item.isPinned ? <span className="workspace-chat-meta-icon" title="Pinned">Pin</span> : null}
-              {item.isMuted ? <span className="workspace-chat-meta-icon" title="Muted">Mute</span> : null}
-            </div>
-            {item.unreadCount > 0 ? <span className="workspace-chat-unread-badge">{item.unreadCount}</span> : null}
+    <div className="workspace-chat-creator-results">
+      {(searchResults.users || []).map((user) => (
+        <article key={user.id} className="workspace-chat-discovery-card workspace-chat-creator-card">
+          <div className="workspace-chat-avatar">
+            {user.imageUrl ? <img src={buildChatAuthenticatedUrl(user.imageUrl)} alt={user.fullName} className="workspace-chat-avatar-image" /> : user.avatarLabel || getAvatarLabel(user.fullName)}
+          </div>
+          <div>
+            <strong title={user.fullName}>{truncateLabel(user.fullName, 20)}</strong>
+            <p>@{user.username}</p>
+          </div>
+          <button type="button" className="admin-table-action-button" disabled={user.relationshipState !== "none"} onClick={() => handleSendFriendRequest(user.id)}>
+            {user.relationshipState === "none" ? "Add" : user.relationshipState.replace("_", " ")}
           </button>
-        )) : <p className="status-item status-info">No items in this tab yet.</p>}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function GroupCreator({ createGroupState, setCreateGroupState, overviewFriends, handleCreateGroup }) {
+  return (
+    <div className="workspace-chat-creator-stack">
+      <input className="workspace-input workspace-command-search" value={createGroupState.name} onChange={(event) => setCreateGroupState((current) => ({ ...current, name: event.target.value }))} placeholder="Group name" />
+      <textarea className="question-input workspace-chat-composer-input workspace-chat-creator-textarea" rows={2} value={createGroupState.description} onChange={(event) => setCreateGroupState((current) => ({ ...current, description: event.target.value }))} placeholder="Group description" />
+      <label className="workspace-chat-attach-button workspace-chat-creator-upload">Group photo<input type="file" accept="image/*" onChange={(event) => setCreateGroupState((current) => ({ ...current, image: event.target.files?.[0] || null }))} /></label>
+      <div className="workspace-chat-chip-row workspace-chat-creator-chip-row">
+        {overviewFriends.map((friend) => (
+          <button key={friend.id} type="button" className={`workspace-inline-action ${createGroupState.memberIds.includes(friend.id) ? "is-active" : ""}`} onClick={() => setCreateGroupState((current) => ({ ...current, memberIds: current.memberIds.includes(friend.id) ? current.memberIds.filter((item) => item !== friend.id) : [...current.memberIds, friend.id] }))}>
+            {truncateLabel(friend.fullName, 18)}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="hero-button hero-button-secondary" onClick={handleCreateGroup}>Create Group</button>
+    </div>
+  );
+}
+
+function CommunityCreator({ createCommunityState, setCreateCommunityState, handleCreateCommunity }) {
+  return (
+    <div className="workspace-chat-creator-stack">
+      <input className="workspace-input workspace-command-search" value={createCommunityState.name} onChange={(event) => setCreateCommunityState((current) => ({ ...current, name: event.target.value }))} placeholder="Community name" />
+      <textarea className="question-input workspace-chat-composer-input workspace-chat-creator-textarea" rows={2} value={createCommunityState.description} onChange={(event) => setCreateCommunityState((current) => ({ ...current, description: event.target.value }))} placeholder="Community description" />
+      <label className="workspace-chat-attach-button workspace-chat-creator-upload">Community photo<input type="file" accept="image/*" onChange={(event) => setCreateCommunityState((current) => ({ ...current, image: event.target.files?.[0] || null }))} /></label>
+      <button type="button" className="hero-button hero-button-secondary" onClick={handleCreateCommunity}>Create Community</button>
+    </div>
+  );
+}
+
+function ChatRecentListPane({
+  activeTab,
+  items,
+  listFilter,
+  recentSearch,
+  selectedConversation,
+  typingState,
+  currentUser,
+  composerMode,
+  setComposerMode,
+  setActiveTab,
+  setListFilter,
+  setRecentSearch,
+  setSelectedConversation,
+  searchQuery,
+  setSearchQuery,
+  searchResults,
+  searchLoading,
+  handleSendFriendRequest,
+  createGroupState,
+  setCreateGroupState,
+  handleCreateGroup,
+  createCommunityState,
+  setCreateCommunityState,
+  handleCreateCommunity,
+  overviewFriends,
+  onOpenSelfProfile,
+  onOpenSettings,
+}) {
+  const profileImageUrl = useMemo(() => buildChatAuthenticatedUrl(currentUser?.profileImageUrl || ""), [currentUser?.profileImageUrl]);
+
+  return (
+    <aside className="workspace-hub-card workspace-chat-column workspace-chat-left-panel">
+      <div className="workspace-chat-left-header">
+        <div className="workspace-section-heading">
+          <div><span className="workspace-hub-eyebrow">Recent chats</span><h4>Messages</h4></div>
+          <span className="workspace-section-summary">{items.length}</span>
+        </div>
+
+        <div className="workspace-chat-top-actions">
+          <button type="button" className={`workspace-chat-top-action ${composerMode === "chat" ? "is-active" : ""}`} onClick={() => setComposerMode((current) => current === "chat" ? "" : "chat")}>New Chat</button>
+          <button type="button" className={`workspace-chat-top-action ${composerMode === "group" ? "is-active" : ""}`} onClick={() => setComposerMode((current) => current === "group" ? "" : "group")}>Create Group</button>
+          <button type="button" className={`workspace-chat-top-action ${composerMode === "community" ? "is-active" : ""}`} onClick={() => setComposerMode((current) => current === "community" ? "" : "community")}>Create Community</button>
+        </div>
+
+        {composerMode ? (
+          <div className="workspace-chat-creator-panel">
+            {composerMode === "chat" ? <PersonSearchResults searchQuery={searchQuery} searchResults={searchResults} searchLoading={searchLoading} handleSendFriendRequest={handleSendFriendRequest} /> : null}
+            {composerMode === "group" ? <GroupCreator createGroupState={createGroupState} setCreateGroupState={setCreateGroupState} overviewFriends={overviewFriends} handleCreateGroup={handleCreateGroup} /> : null}
+            {composerMode === "community" ? <CommunityCreator createCommunityState={createCommunityState} setCreateCommunityState={setCreateCommunityState} handleCreateCommunity={handleCreateCommunity} /> : null}
+          </div>
+        ) : null}
+
+        <input className="workspace-input workspace-command-search" value={composerMode === "chat" ? searchQuery : recentSearch} onChange={(event) => composerMode === "chat" ? setSearchQuery(event.target.value) : setRecentSearch(event.target.value)} placeholder={composerMode === "chat" ? "Search people" : `Search ${activeTab}`} />
+
+        <div className="workspace-chat-tab-row">
+          {LEFT_TABS.map((tab) => (
+            <button key={tab.id} type="button" className={`workspace-toggle-button ${activeTab === tab.id ? "is-active" : ""}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>
+          ))}
+        </div>
+
+        <div className="workspace-chat-tab-row workspace-chat-filter-row">
+          {LIST_FILTERS.map((filter) => (
+            <button key={filter.id} type="button" className={`workspace-toggle-button ${listFilter === filter.id ? "is-active" : ""}`} onClick={() => setListFilter(filter.id)}>{filter.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="workspace-chat-list">
+        {items.length > 0 ? items.map((item) => {
+          const isTyping = typingState?.isTyping && typingState.conversationType === item.conversationType && typingState.conversationId === item.id;
+          const avatarUrl = item.imageUrl ? buildChatAuthenticatedUrl(item.imageUrl) : "";
+
+          return (
+            <button key={`${item.conversationType}-${item.id}`} type="button" className={`workspace-chat-list-item workspace-chat-list-card ${selectedConversation?.conversationType === item.conversationType && selectedConversation?.conversationId === item.id ? "is-active" : ""}`} onClick={() => setSelectedConversation({ conversationType: item.conversationType, conversationId: item.id })}>
+              <div className="workspace-chat-avatar workspace-chat-avatar-list">
+                {avatarUrl ? <img src={avatarUrl} alt={item.title} className="workspace-chat-avatar-image" /> : item.avatarLabel || getAvatarLabel(item.title)}
+              </div>
+              <div className="workspace-chat-list-copy">
+                <div className="workspace-chat-list-head">
+                  <strong title={item.title}>{truncateLabel(item.title, 16)}</strong>
+                  <span>{formatDate(item.lastMessageAt)}</span>
+                </div>
+                <p title={isTyping ? "typing..." : item.lastMessagePreview || item.subtitle || item.statusText}>
+                  {isTyping ? "typing..." : truncateLabel(item.lastMessagePreview || item.subtitle || item.statusText, 28)}
+                </p>
+              </div>
+              <div className="workspace-chat-list-side">
+                <div className="workspace-chat-list-icons">
+                  {item.isMuted ? <span className="workspace-chat-meta-icon" title="Muted">&#128263;</span> : null}
+                  {item.isPinned ? <span className="workspace-chat-meta-icon" title="Pinned">&#128204;</span> : null}
+                </div>
+                {item.unreadCount > 0 ? <span className="workspace-chat-unread-badge">{item.unreadCount}</span> : <span className={`workspace-chat-presence-dot ${item.presenceStatus === "online" ? "is-online" : ""}`} />}
+              </div>
+            </button>
+          );
+        }) : <p className="status-item status-info">No items in this tab yet.</p>}
+      </div>
+
+      <div className="workspace-chat-self-card">
+        <button type="button" className="workspace-chat-self-main" onClick={onOpenSelfProfile}>
+          <div className="workspace-chat-avatar workspace-chat-avatar-list">
+            {profileImageUrl ? <img src={profileImageUrl} alt={currentUser?.fullName || "Profile"} className="workspace-chat-avatar-image" /> : getAvatarLabel(currentUser?.fullName || currentUser?.name || "You")}
+          </div>
+          <div className="workspace-chat-self-copy">
+            <strong title={currentUser?.fullName || currentUser?.name || "You"}>{truncateLabel(currentUser?.fullName || currentUser?.name || "You", 18)}</strong>
+            <span>Profile</span>
+          </div>
+        </button>
+        <button type="button" className="workspace-chat-self-settings" onClick={onOpenSettings} aria-label="Settings">&#9881;</button>
       </div>
     </aside>
   );

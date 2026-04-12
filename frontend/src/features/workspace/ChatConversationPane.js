@@ -14,13 +14,18 @@ function formatDate(value, options) {
 }
 
 function statusTicks(status) {
-  if (status === "read") return "\u2713\u2713";
-  if (status === "delivered") return "\u2713\u2713";
-  return "\u2713";
+  if (status === "read") return "✓✓";
+  if (status === "delivered") return "✓✓";
+  return "✓";
 }
 
 function formatBubbleTime(value) {
   return formatDate(value, { hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase();
+}
+
+function formatLastSeen(value) {
+  if (!value) return "offline";
+  return `last seen ${formatDate(value, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}`;
 }
 
 function formatDayDivider(value) {
@@ -139,23 +144,27 @@ function ChatConversationPane({
   loadOlderMessages,
   handleUpdateConversationBackground,
   handleClearConversationBackground,
-  handleRemoveFriend,
   onOpenProfile,
+  onForwardMessage,
 }) {
   const groupedMessages = buildConversationGroups(messages || []);
   const messageIndex = useMemo(() => new Map((messages || []).map((message) => [message.id, message])), [messages]);
   const chatTitle = selectedItem?.title || "Select a chat";
-  const chatPresence = selectedTyping ? "Typing..." : selectedItem?.subtitle || selectedItem?.statusText || "Tap a conversation to start chatting";
+  const chatPresence = selectedTyping
+    ? "typing..."
+    : selectedItem?.presenceStatus === "online"
+      ? "online"
+      : selectedItem?.lastSeenAt
+        ? formatLastSeen(selectedItem.lastSeenAt)
+        : selectedItem?.statusText || selectedItem?.subtitle || "Select a conversation";
   const attachmentAccept = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip";
   const streamRef = useRef(null);
   const wallpaperInputRef = useRef(null);
   const popupRef = useRef(null);
-  const headerMenuRef = useRef(null);
   const [messageMenu, setMessageMenu] = useState(null);
   const [backgroundMenu, setBackgroundMenu] = useState(null);
   const [messageInfo, setMessageInfo] = useState(null);
   const [attachmentViewer, setAttachmentViewer] = useState(null);
-  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
 
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
   const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
@@ -167,7 +176,6 @@ function ChatConversationPane({
     setBackgroundMenu(null);
     setMessageInfo(null);
     setAttachmentViewer(null);
-    setHeaderMenuOpen(false);
   }, [selectedConversation]);
 
   useEffect(() => {
@@ -183,9 +191,6 @@ function ChatConversationPane({
         setMessageMenu(null);
         setBackgroundMenu(null);
       }
-      if (!headerMenuRef.current?.contains(event.target)) {
-        setHeaderMenuOpen(false);
-      }
     };
 
     document.addEventListener("click", handleDocumentClick);
@@ -195,26 +200,17 @@ function ChatConversationPane({
   const openMessageMenu = (event, message, anchorElement = null) => {
     event.preventDefault();
     event.stopPropagation();
-    const position = getMenuPosition(streamRef.current, event, 220, 320, anchorElement);
-
+    const position = getMenuPosition(streamRef.current, event, 220, 340, anchorElement);
     setBackgroundMenu(null);
-    setMessageMenu({
-      message,
-      x: position.x,
-      y: position.y,
-    });
+    setMessageMenu({ message, x: position.x, y: position.y });
   };
 
   const openBackgroundMenu = (event) => {
     event.preventDefault();
     event.stopPropagation();
-
     const position = getMenuPosition(streamRef.current, event, 200, 140);
     setMessageMenu(null);
-    setBackgroundMenu({
-      x: position.x,
-      y: position.y,
-    });
+    setBackgroundMenu({ x: position.x, y: position.y });
   };
 
   const handleStreamContextMenu = (event) => {
@@ -239,7 +235,6 @@ function ChatConversationPane({
     try {
       await navigator.clipboard.writeText(textToCopy);
     } catch {
-      // Ignore clipboard errors.
     }
 
     setMessageMenu(null);
@@ -272,7 +267,7 @@ function ChatConversationPane({
   };
 
   const handleDownloadAttachment = (message) => {
-    if (!message?.fileUrl) return;
+    if (!message?.id) return;
     const link = document.createElement("a");
     link.href = buildChatFileUrl(message.id);
     link.download = message.fileName || "attachment";
@@ -287,48 +282,24 @@ function ChatConversationPane({
   return (
     <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell">
       <div className="workspace-chat-mobile-header">
-        <button type="button" className="workspace-chat-icon-button" aria-label="Back">
-          <span aria-hidden="true">&#8592;</span>
-        </button>
-
-        <button type="button" className="workspace-chat-contact-row workspace-chat-contact-trigger" onClick={() => onOpenProfile?.()}>
+        <button type="button" className="workspace-chat-contact-row workspace-chat-contact-trigger workspace-chat-header-trigger" onClick={() => onOpenProfile?.()}>
           <div className="workspace-chat-avatar workspace-chat-avatar-large">
             {headerAvatarImage ? <img src={headerAvatarImage} alt={chatTitle} className="workspace-chat-avatar-image" /> : getAvatarLabel(chatTitle)}
           </div>
           <div className="workspace-chat-contact-copy">
-            <strong>{chatTitle}</strong>
-            <span>{chatPresence}</span>
+            <strong title={chatTitle}>{chatTitle}</strong>
+            <span title={chatPresence}>{chatPresence}</span>
           </div>
         </button>
 
         <div className="workspace-chat-header-actions">
-          <button type="button" className="workspace-chat-icon-button" aria-label="Video call">
-            <span aria-hidden="true">&#9633;</span>
-          </button>
+          {selectedItem?.isMuted || selectedItem?.preferences?.isMuted ? <span className="workspace-chat-header-badge" title="Muted">&#128263;</span> : null}
           <button type="button" className="workspace-chat-icon-button" aria-label="Voice call">
             <span aria-hidden="true">&#9742;</span>
           </button>
-          <button type="button" className="workspace-chat-icon-button" aria-label="More options" onClick={() => setHeaderMenuOpen((current) => !current)}>
-            <span aria-hidden="true">&#8942;</span>
+          <button type="button" className="workspace-chat-icon-button" aria-label="Video call">
+            <span aria-hidden="true">&#9654;</span>
           </button>
-          {headerMenuOpen ? (
-            <div ref={headerMenuRef} className="workspace-chat-header-menu">
-              {selectedConversation?.conversationType === "direct" ? (
-                <button
-                  type="button"
-                  className="workspace-chat-popup-item workspace-chat-popup-item-danger"
-                  onClick={() => {
-                    setHeaderMenuOpen(false);
-                    if (window.confirm(`Remove ${chatTitle} from friends and delete this direct chat?`)) {
-                      handleRemoveFriend?.();
-                    }
-                  }}
-                >
-                  Remove friend
-                </button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -482,14 +453,10 @@ function ChatConversationPane({
           <p className="status-item status-info">Select a chat, group, or community to start messaging.</p>
         )}
 
-        {selectedTyping ? <p className="status-item status-info">Someone is typing...</p> : null}
+        {selectedTyping ? <p className="workspace-chat-typing-indicator">typing...</p> : null}
 
         {messageMenu ? (
-          <div
-            ref={popupRef}
-            className="workspace-chat-popup-menu"
-            style={{ left: `${messageMenu.x}px`, top: `${messageMenu.y}px` }}
-          >
+          <div ref={popupRef} className="workspace-chat-popup-menu" style={{ left: `${messageMenu.x}px`, top: `${messageMenu.y}px` }}>
             <div className="workspace-chat-reaction-row workspace-chat-popup-reactions">
               {REACTION_EMOJIS.map((emoji) => (
                 <button key={emoji} type="button" className="workspace-chat-reaction-chip" onClick={() => { handleToggleReaction(messageMenu.message.id, emoji); setMessageMenu(null); }}>
@@ -497,88 +464,28 @@ function ChatConversationPane({
                 </button>
               ))}
             </div>
-            <button type="button" className="workspace-chat-popup-item" onClick={() => { setMessageInfo(messageMenu.message); setMessageMenu(null); }}>
-              Message info
-            </button>
-            {messageMenu.message.fileUrl ? (
-              <button type="button" className="workspace-chat-popup-item" onClick={() => handleOpenAttachment(messageMenu.message)}>
-                View
-              </button>
-            ) : null}
-            {messageMenu.message.fileUrl ? (
-              <button type="button" className="workspace-chat-popup-item" onClick={() => handleDownloadAttachment(messageMenu.message)}>
-                Download
-              </button>
-            ) : null}
-            <button type="button" className="workspace-chat-popup-item" onClick={() => { setReplyToMessage(messageMenu.message); setMessageMenu(null); }}>
-              Reply
-            </button>
-            <button type="button" className="workspace-chat-popup-item" onClick={() => { handleToggleStar(messageMenu.message.id); setMessageMenu(null); }}>
-              {messageMenu.message.isStarred ? "Unstar" : "Star"}
-            </button>
-            <button type="button" className="workspace-chat-popup-item" onClick={() => { handleTogglePin(messageMenu.message.id); setMessageMenu(null); }}>
-              {messageMenu.message.isPinned ? "Unpin" : "Pin"}
-            </button>
-            <button type="button" className="workspace-chat-popup-item" onClick={() => handleCopyMessage(messageMenu.message)}>
-              Copy
-            </button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { setMessageInfo(messageMenu.message); setMessageMenu(null); }}>Message info</button>
+            {messageMenu.message.fileUrl ? <button type="button" className="workspace-chat-popup-item" onClick={() => handleOpenAttachment(messageMenu.message)}>View</button> : null}
+            {messageMenu.message.fileUrl ? <button type="button" className="workspace-chat-popup-item" onClick={() => handleDownloadAttachment(messageMenu.message)}>Download</button> : null}
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { setReplyToMessage(messageMenu.message); setMessageMenu(null); }}>Reply</button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { onForwardMessage?.(messageMenu.message); setMessageMenu(null); }}>Forward</button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { handleToggleStar(messageMenu.message.id); setMessageMenu(null); }}>{messageMenu.message.isStarred ? "Unstar" : "Star"}</button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { handleTogglePin(messageMenu.message.id); setMessageMenu(null); }}>{messageMenu.message.isPinned ? "Unpin" : "Pin"}</button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => handleCopyMessage(messageMenu.message)}>Copy</button>
             {messageMenu.message.canEdit ? (
-              <button
-                type="button"
-                className="workspace-chat-popup-item"
-                onClick={() => {
-                  setEditingMessageId(messageMenu.message.id);
-                  setEditingDraft(messageMenu.message.body || "");
-                  setMessageMenu(null);
-                }}
-              >
+              <button type="button" className="workspace-chat-popup-item" onClick={() => { setEditingMessageId(messageMenu.message.id); setEditingDraft(messageMenu.message.body || ""); setMessageMenu(null); }}>
                 Edit
               </button>
             ) : null}
-            <button
-              type="button"
-              className="workspace-chat-popup-item workspace-chat-popup-item-danger"
-              onClick={() => {
-                handleDeleteMessage(messageMenu.message.id, "me");
-                setMessageMenu(null);
-              }}
-            >
-              Delete for me
-            </button>
-            {messageMenu.message.canDeleteForEveryone ? (
-              <button
-                type="button"
-                className="workspace-chat-popup-item workspace-chat-popup-item-danger"
-                onClick={() => {
-                  handleDeleteMessage(messageMenu.message.id, "everyone");
-                  setMessageMenu(null);
-                }}
-              >
-                Delete for everyone
-              </button>
-            ) : null}
+            <button type="button" className="workspace-chat-popup-item workspace-chat-popup-item-danger" onClick={() => { handleDeleteMessage(messageMenu.message.id, "me"); setMessageMenu(null); }}>Delete for me</button>
+            {messageMenu.message.canDeleteForEveryone ? <button type="button" className="workspace-chat-popup-item workspace-chat-popup-item-danger" onClick={() => { handleDeleteMessage(messageMenu.message.id, "everyone"); setMessageMenu(null); }}>Delete for everyone</button> : null}
           </div>
         ) : null}
 
         {backgroundMenu ? (
-          <div
-            ref={popupRef}
-            className="workspace-chat-popup-menu workspace-chat-background-menu"
-            style={{ left: `${backgroundMenu.x}px`, top: `${backgroundMenu.y}px` }}
-          >
-            <button type="button" className="workspace-chat-popup-item" onClick={() => wallpaperInputRef.current?.click()}>
-              Change background
-            </button>
-            <button
-              type="button"
-              className="workspace-chat-popup-item"
-              onClick={() => {
-                handleClearConversationBackground?.();
-                setBackgroundMenu(null);
-              }}
-            >
-              Reset background
-            </button>
+          <div ref={popupRef} className="workspace-chat-popup-menu workspace-chat-background-menu" style={{ left: `${backgroundMenu.x}px`, top: `${backgroundMenu.y}px` }}>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => wallpaperInputRef.current?.click()}>Change background</button>
+            <button type="button" className="workspace-chat-popup-item" onClick={() => { handleClearConversationBackground?.(); setBackgroundMenu(null); }}>Reset background</button>
           </div>
         ) : null}
       </div>
@@ -589,31 +496,15 @@ function ChatConversationPane({
             <div className="workspace-chat-viewer-header">
               <strong>{attachmentViewer.fileName}</strong>
               <div className="workspace-chat-viewer-actions">
-                <button type="button" className="inline-text-button" onClick={() => handleDownloadAttachment({ id: attachmentViewer.id, fileUrl: attachmentViewer.url, fileName: attachmentViewer.fileName })}>
-                  Download
-                </button>
-                <button type="button" className="inline-text-button" onClick={() => setAttachmentViewer(null)}>
-                  Close
-                </button>
+                <button type="button" className="inline-text-button" onClick={() => handleDownloadAttachment({ id: attachmentViewer.id, fileName: attachmentViewer.fileName })}>Download</button>
+                <button type="button" className="inline-text-button" onClick={() => setAttachmentViewer(null)}>Close</button>
               </div>
             </div>
             <div className="workspace-chat-viewer-body">
-              {attachmentViewer.kind === "image" ? (
-                <img src={attachmentViewer.url} alt={attachmentViewer.fileName} className="workspace-chat-viewer-image" />
-              ) : null}
-              {attachmentViewer.kind === "video" ? (
-                <video className="workspace-chat-viewer-media" controls autoPlay preload="metadata">
-                  <source src={attachmentViewer.url} type={attachmentViewer.mimeType || "video/mp4"} />
-                </video>
-              ) : null}
-              {attachmentViewer.kind === "audio" ? (
-                <audio className="workspace-chat-viewer-audio" controls autoPlay preload="metadata">
-                  <source src={attachmentViewer.url} type={attachmentViewer.mimeType || "audio/mpeg"} />
-                </audio>
-              ) : null}
-              {attachmentViewer.kind === "pdf" ? (
-                <iframe title={attachmentViewer.fileName} src={attachmentViewer.url} className="workspace-chat-viewer-frame" />
-              ) : null}
+              {attachmentViewer.kind === "image" ? <img src={attachmentViewer.url} alt={attachmentViewer.fileName} className="workspace-chat-viewer-image" /> : null}
+              {attachmentViewer.kind === "video" ? <video className="workspace-chat-viewer-media" controls autoPlay preload="metadata"><source src={attachmentViewer.url} type={attachmentViewer.mimeType || "video/mp4"} /></video> : null}
+              {attachmentViewer.kind === "audio" ? <audio className="workspace-chat-viewer-audio" controls autoPlay preload="metadata"><source src={attachmentViewer.url} type={attachmentViewer.mimeType || "audio/mpeg"} /></audio> : null}
+              {attachmentViewer.kind === "pdf" ? <iframe title={attachmentViewer.fileName} src={attachmentViewer.url} className="workspace-chat-viewer-frame" /> : null}
             </div>
           </div>
         </div>
@@ -625,9 +516,7 @@ function ChatConversationPane({
         <div className="workspace-chat-compose-preview">
           <span>Replying to {replyToMessage.senderName}</span>
           <strong>{replyToMessage.body || replyToMessage.fileName || "Attachment"}</strong>
-          <button type="button" className="inline-text-button" onClick={() => setReplyToMessage(null)}>
-            Clear
-          </button>
+          <button type="button" className="inline-text-button" onClick={() => setReplyToMessage(null)}>Clear</button>
         </div>
       ) : null}
 
@@ -635,9 +524,7 @@ function ChatConversationPane({
         <div className="workspace-chat-compose-preview">
           <span>{messageInfo.senderName || (messageInfo.senderId === currentUser?.id ? "You" : "Message")}</span>
           <strong>{formatDate(messageInfo.createdAt, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}{messageInfo.status ? ` · ${messageInfo.status}` : ""}</strong>
-          <button type="button" className="inline-text-button" onClick={() => setMessageInfo(null)}>
-            Clear
-          </button>
+          <button type="button" className="inline-text-button" onClick={() => setMessageInfo(null)}>Clear</button>
         </div>
       ) : null}
 
@@ -645,9 +532,7 @@ function ChatConversationPane({
         <div className="workspace-chat-compose-preview">
           <span>Attachment ready</span>
           <strong>{selectedAttachment.name}</strong>
-          <button type="button" className="inline-text-button" onClick={() => setSelectedAttachment(null)}>
-            Remove
-          </button>
+          <button type="button" className="inline-text-button" onClick={() => setSelectedAttachment(null)}>Remove</button>
         </div>
       ) : null}
 
@@ -655,40 +540,14 @@ function ChatConversationPane({
 
       <div className="workspace-chat-composer workspace-chat-mobile-composer">
         <div className="workspace-chat-input-shell">
-          <button type="button" className="workspace-chat-emoji-trigger" aria-label="Emoji picker">
-            <span aria-hidden="true">&#9786;</span>
-          </button>
-
-          <textarea
-            className="question-input workspace-chat-composer-input workspace-chat-mobile-input"
-            rows={1}
-            value={messageDraft}
-            onChange={(event) => handleDraftChange(event.target.value)}
-            placeholder={selectedItem ? `Message ${selectedItem.title}` : "Select a conversation to message"}
-            disabled={!selectedConversation}
-          />
-
-          <label className="workspace-chat-attach-button" aria-label="Attach file">
-            <span aria-hidden="true">&#128206;</span>
-            <input type="file" accept={attachmentAccept} onChange={(event) => setSelectedAttachment(event.target.files?.[0] || null)} />
-          </label>
-
-          <button type="button" className="workspace-chat-emoji-button workspace-chat-inline-icon" aria-label="Payments">
-            <span aria-hidden="true">&#8377;</span>
-          </button>
-
-          <button type="button" className="workspace-chat-camera-button" aria-label="Camera">
-            <span aria-hidden="true">&#128247;</span>
-          </button>
+          <button type="button" className="workspace-chat-emoji-trigger" aria-label="Emoji picker"><span aria-hidden="true">&#9786;</span></button>
+          <textarea className="question-input workspace-chat-composer-input workspace-chat-mobile-input" rows={1} value={messageDraft} onChange={(event) => handleDraftChange(event.target.value)} placeholder={selectedItem ? `Message ${selectedItem.title}` : "Select a conversation to message"} disabled={!selectedConversation} />
+          <label className="workspace-chat-attach-button" aria-label="Attach file"><span aria-hidden="true">&#128206;</span><input type="file" accept={attachmentAccept} onChange={(event) => setSelectedAttachment(event.target.files?.[0] || null)} /></label>
+          <button type="button" className="workspace-chat-emoji-button workspace-chat-inline-icon" aria-label="Payments"><span aria-hidden="true">&#8377;</span></button>
+          <button type="button" className="workspace-chat-camera-button" aria-label="Camera"><span aria-hidden="true">&#128247;</span></button>
         </div>
 
-        <button
-          type="button"
-          className="workspace-chat-send-fab"
-          onClick={handleSendMessage}
-          disabled={!selectedConversation || isSending}
-          aria-label={composerActionLabel}
-        >
+        <button type="button" className="workspace-chat-send-fab" onClick={handleSendMessage} disabled={!selectedConversation || isSending} aria-label={composerActionLabel}>
           <span aria-hidden="true">{!messageDraft.trim() && !selectedAttachment ? "\uD83C\uDFA4" : isSending ? "..." : "\u27A4"}</span>
         </button>
       </div>
