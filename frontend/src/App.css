@@ -6094,20 +6094,23 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-camera-stage {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   align-self: stretch;
-  padding: 12px;
-  border-radius: 20px;
-  background: rgba(17, 27, 33, 0.86);
-  box-shadow: 0 14px 30px rgba(17, 27, 33, 0.22);
+  min-height: 100%;
+  height: 100%;
+  padding: 14px;
+  border-radius: 0;
+  background: #000000;
+  box-shadow: none;
 }
 
 .workspace-chat-camera-feed {
   width: 100%;
-  min-height: 280px;
-  max-height: 56vh;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
   object-fit: cover;
-  border-radius: 16px;
+  border-radius: 18px;
   background: #0f1418;
 }
 
@@ -6134,6 +6137,20 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-hidden-canvas {
   display: none;
+}
+
+.workspace-chat-whatsapp-shell.is-camera-open {
+  padding: 0;
+  overflow: hidden;
+  background: #000000;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-conversation-stream.is-camera-open {
+  padding: 0;
+  gap: 0;
+  background: #000000;
+  background-image: none;
+  overflow: hidden;
 }
 
 .workspace-chat-day-group {

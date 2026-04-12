@@ -174,6 +174,7 @@ function ChatConversationPane({
   const [cameraMode, setCameraMode] = useState("idle");
   const [cameraError, setCameraError] = useState("");
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const isCameraOpen = cameraMode !== "idle";
 
   const backgroundImageUrl = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.backgroundUrl || ""), [selectedItem?.backgroundUrl]);
   const headerAvatarImage = useMemo(() => buildChatAuthenticatedUrl(selectedItem?.imageUrl || ""), [selectedItem?.imageUrl]);
@@ -200,6 +201,12 @@ function ChatConversationPane({
       window.URL.revokeObjectURL(capturedPhoto.previewUrl);
     }
   }, [capturedPhoto]);
+
+  useEffect(() => {
+    if (cameraMode !== "live" || !cameraVideoRef.current || !mediaStreamRef.current) return;
+    cameraVideoRef.current.srcObject = mediaStreamRef.current;
+    cameraVideoRef.current.play().catch(() => {});
+  }, [cameraMode]);
 
   useEffect(() => {
     if (!highlightedMessageId) return;
@@ -324,6 +331,7 @@ function ChatConversationPane({
       }
       setCapturedPhoto(null);
       stopCameraStream();
+      setCameraMode("live");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
         audio: false,
@@ -333,7 +341,6 @@ function ChatConversationPane({
         cameraVideoRef.current.srcObject = stream;
         await cameraVideoRef.current.play().catch(() => {});
       }
-      setCameraMode("live");
     } catch {
       setCameraMode("idle");
       setCameraError("Camera unavailable.");
@@ -389,7 +396,8 @@ function ChatConversationPane({
   };
 
   return (
-    <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell">
+    <section className={`workspace-hub-card workspace-chat-conversation-card workspace-chat-whatsapp-shell ${isCameraOpen ? "is-camera-open" : ""}`}>
+      {!isCameraOpen ? (
       <div className="workspace-chat-mobile-header">
         <button type="button" className="workspace-chat-icon-button" aria-label="Back">
           <span aria-hidden="true">&#8592;</span>
@@ -425,6 +433,7 @@ function ChatConversationPane({
           ) : null}
         </div>
       </div>
+      ) : null}
 
       <div
         ref={(node) => {
@@ -432,11 +441,11 @@ function ChatConversationPane({
           if (typeof conversationStreamRef === "function") conversationStreamRef(node);
           else if (conversationStreamRef) conversationStreamRef.current = node;
         }}
-        className={`workspace-chat-conversation-stream ${backgroundImageUrl ? "has-custom-background" : ""}`}
-        style={streamBackgroundStyle}
+        className={`workspace-chat-conversation-stream ${backgroundImageUrl ? "has-custom-background" : ""} ${isCameraOpen ? "is-camera-open" : ""}`}
+        style={isCameraOpen ? undefined : streamBackgroundStyle}
         onContextMenu={handleStreamContextMenu}
       >
-        {hasMoreMessages ? (
+        {!isCameraOpen && hasMoreMessages ? (
           <button type="button" className="hero-button hero-button-secondary workspace-chat-load-more" onClick={loadOlderMessages}>
             Load older messages
           </button>
@@ -444,7 +453,7 @@ function ChatConversationPane({
 
         {selectedConversation ? (
           <>
-            {cameraMode !== "idle" ? (
+            {isCameraOpen ? (
               <div className="workspace-chat-camera-stage">
                 {cameraMode === "live" ? (
                   <>
@@ -472,7 +481,7 @@ function ChatConversationPane({
               </div>
             ) : null}
 
-            {groupedMessages.map((group, groupIndex) => (
+            {!isCameraOpen ? groupedMessages.map((group, groupIndex) => (
               <div key={`${group.label || "messages"}-${groupIndex}`} className="workspace-chat-day-group">
                 {group.label ? (
                   <div className="workspace-chat-day-divider">
@@ -600,15 +609,15 @@ function ChatConversationPane({
                   );
                 })}
               </div>
-            ))}
+            )) : null}
           </>
         ) : (
           <p className="status-item status-info">Select a chat, group, or community to start messaging.</p>
         )}
 
-        {selectedTyping ? <p className="workspace-chat-typing-indicator">typing...</p> : null}
+        {!isCameraOpen && selectedTyping ? <p className="workspace-chat-typing-indicator">typing...</p> : null}
 
-        {messageMenu ? (
+        {!isCameraOpen && messageMenu ? (
           <div ref={popupRef} className="workspace-chat-popup-menu" style={{ left: `${messageMenu.x}px`, top: `${messageMenu.y}px` }}>
             <div className="workspace-chat-reaction-row workspace-chat-popup-reactions">
               {REACTION_EMOJIS.map((emoji) => (
@@ -635,7 +644,7 @@ function ChatConversationPane({
           </div>
         ) : null}
 
-        {backgroundMenu ? (
+        {!isCameraOpen && backgroundMenu ? (
           <div ref={popupRef} className="workspace-chat-popup-menu workspace-chat-background-menu" style={{ left: `${backgroundMenu.x}px`, top: `${backgroundMenu.y}px` }}>
             <button type="button" className="workspace-chat-popup-item" onClick={() => wallpaperInputRef.current?.click()}>Change background</button>
             <button type="button" className="workspace-chat-popup-item" onClick={() => { handleClearConversationBackground?.(); setBackgroundMenu(null); }}>Reset background</button>
@@ -665,7 +674,7 @@ function ChatConversationPane({
 
       <input ref={wallpaperInputRef} type="file" accept="image/*" className="workspace-chat-hidden-input" onChange={handleWallpaperUpload} />
 
-      {replyToMessage ? (
+      {!isCameraOpen && replyToMessage ? (
         <div className="workspace-chat-compose-preview">
           <span>Replying to {replyToMessage.senderName}</span>
           <strong>{replyToMessage.body || replyToMessage.fileName || "Attachment"}</strong>
@@ -673,7 +682,7 @@ function ChatConversationPane({
         </div>
       ) : null}
 
-      {messageInfo ? (
+      {!isCameraOpen && messageInfo ? (
         <div className="workspace-chat-compose-preview">
           <span>{messageInfo.senderName || (messageInfo.senderId === currentUser?.id ? "You" : "Message")}</span>
           <strong>{formatDate(messageInfo.createdAt, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}{messageInfo.status ? ` · ${messageInfo.status}` : ""}</strong>
@@ -681,7 +690,7 @@ function ChatConversationPane({
         </div>
       ) : null}
 
-      {selectedAttachment ? (
+      {!isCameraOpen && selectedAttachment ? (
         <div className="workspace-chat-compose-preview">
           <span>Attachment ready</span>
           <strong>{selectedAttachment.name}</strong>
@@ -689,9 +698,10 @@ function ChatConversationPane({
         </div>
       ) : null}
 
-      {attachmentPreviewUrl ? <img src={attachmentPreviewUrl} alt="attachment preview" className="workspace-chat-image-preview workspace-chat-compose-image" /> : null}
-      {cameraError ? <div className="workspace-chat-compose-preview"><span>{cameraError}</span></div> : null}
+      {!isCameraOpen && attachmentPreviewUrl ? <img src={attachmentPreviewUrl} alt="attachment preview" className="workspace-chat-image-preview workspace-chat-compose-image" /> : null}
+      {!isCameraOpen && cameraError ? <div className="workspace-chat-compose-preview"><span>{cameraError}</span></div> : null}
 
+      {!isCameraOpen ? (
       <div className="workspace-chat-composer workspace-chat-mobile-composer">
         <div className="workspace-chat-input-shell">
           <button type="button" className="workspace-chat-emoji-trigger" aria-label="Emoji picker"><span aria-hidden="true">&#9786;</span></button>
@@ -705,6 +715,7 @@ function ChatConversationPane({
           <span aria-hidden="true">{!messageDraft.trim() && !selectedAttachment ? "\uD83C\uDFA4" : isSending ? "..." : "\u27A4"}</span>
         </button>
       </div>
+      ) : null}
     </section>
   );
 }
