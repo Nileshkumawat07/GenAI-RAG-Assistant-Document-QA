@@ -22,6 +22,10 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").strip().rstrip
 DOCUMENTS_DIR = Path(os.getenv("DOCUMENTS_DIR", str(BASE_DIR / "documents"))).resolve()
 CHAT_UPLOADS_DIR = Path(os.getenv("CHAT_UPLOADS_DIR", str(BASE_DIR / "chat_uploads"))).resolve()
 CHAT_UPLOAD_MAX_BYTES = int(os.getenv("CHAT_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
+AWS_REGION = os.getenv("AWS_REGION", "").strip()
+AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "").strip()
+AWS_S3_PUBLIC_BASE_URL = os.getenv("AWS_S3_PUBLIC_BASE_URL", "").strip().rstrip("/")
+AWS_S3_URL_EXPIRATION = int(os.getenv("AWS_S3_URL_EXPIRATION", "3600"))
 EMBEDDING_MODEL_NAME = os.getenv(
     "EMBEDDING_MODEL_NAME",
     "all-MiniLM-L6-v2",

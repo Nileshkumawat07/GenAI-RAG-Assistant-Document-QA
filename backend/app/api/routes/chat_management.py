@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_authenticated_user_id
@@ -619,8 +619,10 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     async def download_message_file(message_id: str, token: str | None = Query(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
         current_user_id = resolve_download_user_id(authorization=authorization, token=token)
         try:
-            file_path, file_name, mime_type = chat_management_service.get_message_download_path(db, current_user_id=current_user_id, message_id=message_id)
-            return FileResponse(file_path, filename=file_name, media_type=mime_type)
+            download = chat_management_service.get_message_download_target(db, current_user_id=current_user_id, message_id=message_id)
+            if download.get("redirectUrl"):
+                return RedirectResponse(download["redirectUrl"], status_code=307)
+            return FileResponse(download["filePath"], filename=download["fileName"], media_type=download["mimeType"])
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -628,8 +630,10 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     async def download_entity_asset(entity_type: str, entity_id: str, file_name: str, token: str | None = Query(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
         current_user_id = resolve_download_user_id(authorization=authorization, token=token)
         try:
-            file_path, mime_type = chat_management_service.get_entity_asset_path(db, current_user_id=current_user_id, entity_type=entity_type, entity_id=entity_id, file_name=file_name)
-            return FileResponse(file_path, media_type=mime_type)
+            download = chat_management_service.get_entity_asset_target(db, current_user_id=current_user_id, entity_type=entity_type, entity_id=entity_id, file_name=file_name)
+            if download.get("redirectUrl"):
+                return RedirectResponse(download["redirectUrl"], status_code=307)
+            return FileResponse(download["filePath"], media_type=download["mimeType"])
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -652,14 +656,16 @@ def build_chat_management_router(chat_management_service: ChatManagementService)
     async def download_conversation_asset(conversation_type: str, conversation_key: str, file_name: str, token: str | None = Query(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
         current_user_id = resolve_download_user_id(authorization=authorization, token=token)
         try:
-            file_path, mime_type = chat_management_service.get_conversation_asset_path(
+            download = chat_management_service.get_conversation_asset_target(
                 db,
                 current_user_id=current_user_id,
                 conversation_type=conversation_type,
                 conversation_key=conversation_key,
                 file_name=file_name,
             )
-            return FileResponse(file_path, media_type=mime_type)
+            if download.get("redirectUrl"):
+                return RedirectResponse(download["redirectUrl"], status_code=307)
+            return FileResponse(download["filePath"], media_type=download["mimeType"])
         except ChatManagementServiceError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
     @router.websocket("/ws")

@@ -30,6 +30,7 @@ from app.models.user import User
 from app.models.user_setting import UserSetting
 from app.models.workspace_notification import WorkspaceNotification
 from app.services.auth_service import AuthService
+from app.services.storage_service import StorageServiceError, storage_service
 
 
 class ChatManagementServiceError(RuntimeError):
@@ -129,6 +130,42 @@ class ChatManagementService:
         self.auth_service = auth_service
         self.manager = ChatConnectionManager()
         CHAT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+    def _delete_storage_object(self, storage_path: str | None) -> None:
+        if not storage_path:
+            return
+        if storage_service.enabled:
+            storage_service.delete_object(storage_path)
+            return
+        try:
+            Path(storage_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def _delete_storage_prefix(self, prefix: str | None) -> None:
+        if not prefix:
+            return
+        if storage_service.enabled:
+            storage_service.delete_prefix(prefix)
+            return
+        folder = CHAT_UPLOADS_DIR / prefix
+        if not folder.exists():
+            return
+        for existing in folder.glob("*"):
+            if existing.is_file():
+                existing.unlink(missing_ok=True)
+
+    @staticmethod
+    def _attachment_storage_key(*, owner_id: str, message_id: str, file_name: str) -> str:
+        return f"{owner_id}/{message_id}-{file_name}"
+
+    @staticmethod
+    def _conversation_background_storage_key(*, conversation_type: str, conversation_key: str, file_name: str) -> str:
+        return f"conversation-backgrounds/{conversation_type}/{conversation_key}/{file_name}"
+
+    @staticmethod
+    def _entity_asset_storage_key(*, entity_type: str, entity_id: str, file_name: str) -> str:
+        return f"entities/{entity_type}/{entity_id}/{file_name}"
 
     def search_users(self, db: Session, *, current_user_id: str, query: str) -> list[dict]:
         cleaned_query = (query or "").strip().lower()
@@ -353,11 +390,8 @@ class ChatManagementService:
         removed_files = 0
         for item in direct_messages:
             if item.storage_path:
-                try:
-                    Path(item.storage_path).unlink(missing_ok=True)
-                    removed_files += 1
-                except Exception:
-                    pass
+                self._delete_storage_object(item.storage_path)
+                removed_files += 1
             db.delete(item)
 
         friendship_rows = db.execute(
@@ -399,10 +433,7 @@ class ChatManagementService:
         ).scalars().all()
         for item in background_rows:
             if item.storage_path:
-                try:
-                    Path(item.storage_path).unlink(missing_ok=True)
-                except Exception:
-                    pass
+                self._delete_storage_object(item.storage_path)
             db.delete(item)
 
         db.commit()
@@ -609,6 +640,7 @@ class ChatManagementService:
             background_id=background.id,
             file_name=safe_name,
             content=content,
+            content_type=content_type,
         )
         background.file_name = safe_name
         background.mime_type = content_type
@@ -645,10 +677,7 @@ class ChatManagementService:
             )
         ).scalar_one_or_none()
         if background:
-            try:
-                Path(background.storage_path).unlink(missing_ok=True)
-            except Exception:
-                pass
+            self._delete_storage_object(background.storage_path)
             db.delete(background)
             db.commit()
         return {
@@ -951,10 +980,7 @@ class ChatManagementService:
         for item in messages:
             if item.sender_user_id != current_user_id or not item.storage_path:
                 continue
-            try:
-                Path(item.storage_path).unlink(missing_ok=True)
-            except Exception:
-                pass
+            self._delete_storage_object(item.storage_path)
             item.storage_path = None
             item.file_url = None
             item.file_name = None
@@ -984,13 +1010,23 @@ class ChatManagementService:
         if len(content) > CHAT_UPLOAD_MAX_BYTES:
             raise ChatManagementServiceError("Profile photo exceeds the maximum upload size.")
         safe_name = self._sanitize_filename(upload.filename or "profile.png")
-        folder = CHAT_UPLOADS_DIR / "entities" / "profile" / user.id
-        folder.mkdir(parents=True, exist_ok=True)
-        for existing in folder.glob("*"):
-            if existing.is_file():
-                existing.unlink(missing_ok=True)
-        file_path = folder / safe_name
-        file_path.write_bytes(content)
+        if storage_service.enabled:
+            self._delete_storage_prefix(
+                self._entity_asset_storage_key(entity_type="profile", entity_id=user.id, file_name="").rstrip("/")
+            )
+            storage_service.upload_bytes(
+                key=self._entity_asset_storage_key(entity_type="profile", entity_id=user.id, file_name=safe_name),
+                content=content,
+                content_type=content_type,
+            )
+        else:
+            folder = CHAT_UPLOADS_DIR / "entities" / "profile" / user.id
+            folder.mkdir(parents=True, exist_ok=True)
+            for existing in folder.glob("*"):
+                if existing.is_file():
+                    existing.unlink(missing_ok=True)
+            file_path = folder / safe_name
+            file_path.write_bytes(content)
         user.profile_image_url = f"/chat/assets/profile/{user.id}/{safe_name}"
         db.commit()
         db.refresh(user)
@@ -1158,7 +1194,13 @@ class ChatManagementService:
         )
         db.add(message)
         db.flush()
-        storage_path = self._save_attachment_file(owner_id=current_user_id, message_id=message.id, file_name=safe_name, content=content)
+        storage_path = self._save_attachment_file(
+            owner_id=current_user_id,
+            message_id=message.id,
+            file_name=safe_name,
+            content=content,
+            content_type=content_type,
+        )
         message.file_name = upload.filename or safe_name
         message.file_size = len(content)
         message.mime_type = content_type
@@ -1265,6 +1307,7 @@ class ChatManagementService:
         if normalized_scope == "everyone":
             if message.sender_user_id != current_user_id:
                 raise ChatManagementServiceError("Only the sender can delete a message for everyone.")
+            self._delete_storage_object(message.storage_path)
             message.deleted_for_everyone = True
             message.deleted_by_sender = True
             message.deleted_by_receiver = True
@@ -1288,7 +1331,7 @@ class ChatManagementService:
         db.commit()
         return {"messageId": message.id, "scope": normalized_scope, "deletedForEveryone": bool(message.deleted_for_everyone)}
 
-    def get_message_download_path(self, db: Session, *, current_user_id: str, message_id: str) -> tuple[Path, str, str | None]:
+    def get_message_download_target(self, db: Session, *, current_user_id: str, message_id: str) -> dict:
         message = db.execute(select(ChatMessage).where(ChatMessage.id == message_id)).scalar_one_or_none()
         if not message or not message.storage_path or not message.file_name:
             raise ChatManagementServiceError("File was not found.")
@@ -1298,12 +1341,25 @@ class ChatManagementService:
             raise ChatManagementServiceError("File was not found.")
         if self._message_hidden_for_user(message, current_user_id) or self._message_is_expired(message):
             raise ChatManagementServiceError("File was not found.")
+        if storage_service.enabled:
+            try:
+                return {
+                    "redirectUrl": storage_service.generate_download_url(
+                        key=message.storage_path,
+                        download_name=message.file_name,
+                        content_type=message.mime_type,
+                    ),
+                    "fileName": message.file_name,
+                    "mimeType": message.mime_type,
+                }
+            except StorageServiceError as exc:
+                raise ChatManagementServiceError(str(exc)) from exc
         file_path = Path(message.storage_path)
         if not file_path.exists():
             raise ChatManagementServiceError("File is no longer available.")
-        return file_path, message.file_name, message.mime_type
+        return {"filePath": file_path, "fileName": message.file_name, "mimeType": message.mime_type}
 
-    def get_entity_asset_path(
+    def get_entity_asset_target(
         self,
         db: Session,
         *,
@@ -1311,7 +1367,7 @@ class ChatManagementService:
         entity_type: str,
         entity_id: str,
         file_name: str,
-    ) -> tuple[Path, str | None]:
+    ) -> dict:
         safe_entity_type = (entity_type or "").strip().lower()
         safe_file_name = self._sanitize_filename(file_name or "")
         if safe_entity_type not in {"group", "community", "profile"} or not safe_file_name:
@@ -1325,12 +1381,29 @@ class ChatManagementService:
                 raise ChatManagementServiceError("Asset was not found.")
             if current_user_id != entity_id and not self._profile_visible_to(db, target_user_id=entity_id, viewer_user_id=current_user_id):
                 raise ChatManagementServiceError("Asset was not found.")
+        mime_type = "image/png" if safe_file_name.lower().endswith(".png") else None
+        if storage_service.enabled:
+            try:
+                return {
+                    "redirectUrl": storage_service.generate_download_url(
+                        key=self._entity_asset_storage_key(
+                            entity_type=safe_entity_type,
+                            entity_id=entity_id,
+                            file_name=safe_file_name,
+                        ),
+                        download_name=safe_file_name,
+                        content_type=mime_type,
+                    ),
+                    "mimeType": mime_type,
+                }
+            except StorageServiceError as exc:
+                raise ChatManagementServiceError(str(exc)) from exc
         file_path = CHAT_UPLOADS_DIR / "entities" / safe_entity_type / entity_id / safe_file_name
         if not file_path.exists():
             raise ChatManagementServiceError("Asset was not found.")
-        return file_path, "image/png" if safe_file_name.lower().endswith(".png") else None
+        return {"filePath": file_path, "mimeType": mime_type}
 
-    def get_conversation_asset_path(
+    def get_conversation_asset_target(
         self,
         db: Session,
         *,
@@ -1338,7 +1411,7 @@ class ChatManagementService:
         conversation_type: str,
         conversation_key: str,
         file_name: str,
-    ) -> tuple[Path, str | None]:
+    ) -> dict:
         safe_conversation_type = (conversation_type or "").strip().lower()
         safe_conversation_key = (conversation_key or "").strip()
         safe_file_name = self._sanitize_filename(file_name or "")
@@ -1359,10 +1432,27 @@ class ChatManagementService:
         ).scalar_one_or_none()
         if not background:
             raise ChatManagementServiceError("Asset was not found.")
+        if storage_service.enabled:
+            try:
+                return {
+                    "redirectUrl": storage_service.generate_download_url(
+                        key=background.storage_path
+                        or self._conversation_background_storage_key(
+                            conversation_type=safe_conversation_type,
+                            conversation_key=safe_conversation_key,
+                            file_name=safe_file_name,
+                        ),
+                        download_name=safe_file_name,
+                        content_type=background.mime_type,
+                    ),
+                    "mimeType": background.mime_type,
+                }
+            except StorageServiceError as exc:
+                raise ChatManagementServiceError(str(exc)) from exc
         file_path = CHAT_UPLOADS_DIR / "conversation-backgrounds" / safe_conversation_type / safe_conversation_key / safe_file_name
         if not file_path.exists():
             raise ChatManagementServiceError("Asset was not found.")
-        return file_path, background.mime_type
+        return {"filePath": file_path, "mimeType": background.mime_type}
 
     def create_group(
         self,
@@ -1638,10 +1728,7 @@ class ChatManagementService:
         ).scalars().all()
         for item in community_messages:
             if item.storage_path:
-                try:
-                    Path(item.storage_path).unlink(missing_ok=True)
-                except Exception:
-                    pass
+                self._delete_storage_object(item.storage_path)
             db.delete(item)
 
         community_preferences = db.execute(
@@ -1661,10 +1748,7 @@ class ChatManagementService:
         ).scalars().all()
         for item in background_rows:
             if item.storage_path:
-                try:
-                    Path(item.storage_path).unlink(missing_ok=True)
-                except Exception:
-                    pass
+                self._delete_storage_object(item.storage_path)
             db.delete(item)
 
         membership_rows = db.execute(
@@ -3050,14 +3134,33 @@ class ChatManagementService:
         for friend_id in friend_ids:
             await self.manager.send_event(friend_id, payload)
 
-    def _save_attachment_file(self, *, owner_id: str, message_id: str, file_name: str, content: bytes) -> Path:
+    def _save_attachment_file(self, *, owner_id: str, message_id: str, file_name: str, content: bytes, content_type: str | None = None) -> str:
+        key = self._attachment_storage_key(owner_id=owner_id, message_id=message_id, file_name=file_name)
+        if storage_service.enabled:
+            return storage_service.upload_bytes(key=key, content=content, content_type=content_type)
         folder = CHAT_UPLOADS_DIR / owner_id
         folder.mkdir(parents=True, exist_ok=True)
         file_path = folder / f"{message_id}-{file_name}"
         file_path.write_bytes(content)
-        return file_path
+        return str(file_path)
 
-    def _save_conversation_background_file(self, *, conversation_type: str, conversation_key: str, background_id: str, file_name: str, content: bytes) -> Path:
+    def _save_conversation_background_file(self, *, conversation_type: str, conversation_key: str, background_id: str, file_name: str, content: bytes, content_type: str | None = None) -> str:
+        if storage_service.enabled:
+            prefix = self._conversation_background_storage_key(
+                conversation_type=conversation_type,
+                conversation_key=conversation_key,
+                file_name="",
+            ).rstrip("/")
+            self._delete_storage_prefix(prefix)
+            return storage_service.upload_bytes(
+                key=self._conversation_background_storage_key(
+                    conversation_type=conversation_type,
+                    conversation_key=conversation_key,
+                    file_name=file_name,
+                ),
+                content=content,
+                content_type=content_type,
+            )
         folder = CHAT_UPLOADS_DIR / "conversation-backgrounds" / conversation_type / conversation_key
         folder.mkdir(parents=True, exist_ok=True)
         for existing in folder.glob("*"):
@@ -3065,7 +3168,7 @@ class ChatManagementService:
                 existing.unlink(missing_ok=True)
         file_path = folder / file_name
         file_path.write_bytes(content)
-        return file_path
+        return str(file_path)
 
     def _store_entity_image(self, entity: ChatGroup | ChatCommunity, entity_type: str, upload: UploadFile) -> None:
         content_type = (upload.content_type or "").lower().strip()
@@ -3077,9 +3180,19 @@ class ChatManagementService:
         if len(content) > CHAT_UPLOAD_MAX_BYTES:
             raise ChatManagementServiceError("Image exceeds the maximum upload size.")
         safe_name = self._sanitize_filename(upload.filename or "image.png")
-        folder = CHAT_UPLOADS_DIR / "entities" / entity_type / entity.id
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / safe_name).write_bytes(content)
+        if storage_service.enabled:
+            self._delete_storage_prefix(
+                self._entity_asset_storage_key(entity_type=entity_type, entity_id=entity.id, file_name="").rstrip("/")
+            )
+            storage_service.upload_bytes(
+                key=self._entity_asset_storage_key(entity_type=entity_type, entity_id=entity.id, file_name=safe_name),
+                content=content,
+                content_type=content_type,
+            )
+        else:
+            folder = CHAT_UPLOADS_DIR / "entities" / entity_type / entity.id
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / safe_name).write_bytes(content)
         entity.image_url = f"/chat/assets/{entity_type}/{entity.id}/{safe_name}"
 
     @staticmethod
