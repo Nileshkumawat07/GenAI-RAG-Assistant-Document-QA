@@ -65,6 +65,7 @@ function ChatProfilePanel({
   const [account, setAccount] = useState({ fullName: "", bio: "", image: null });
   const [password, setPassword] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [otp, setOtp] = useState({ confirmation: null, code: "", sending: false, verifying: false });
+  const [groupEdit, setGroupEdit] = useState({ name: "", description: "", image: null });
   const otpRecaptchaId = useRef(`chat-profile-otp-${Math.random().toString(36).slice(2, 10)}`);
   const isSelf = mode === "self-profile" || mode === "settings";
   const isSettings = mode === "settings";
@@ -75,6 +76,14 @@ function ChatProfilePanel({
   useEffect(() => {
     setAccount({ fullName: currentUser?.fullName || currentUser?.name || "", bio: currentUser?.bio || "", image: null });
   }, [currentUser?.bio, currentUser?.fullName, currentUser?.name]);
+
+  useEffect(() => {
+    setGroupEdit({
+      name: details?.title || "",
+      description: details?.bio || details?.subtitle || "",
+      image: null,
+    });
+  }, [details?.bio, details?.subtitle, details?.title]);
 
   useEffect(() => {
     if (!isSelf || !currentUser?.id) return undefined;
@@ -175,6 +184,33 @@ function ChatProfilePanel({
     }
   };
 
+  const saveGroupOrCommunity = async () => {
+    if (!selectedConversation || !details) return;
+    try {
+      setSaving("group-profile");
+      if (details.conversationType === "group") {
+        await updateGroup(selectedConversation.conversationId, {
+          name: groupEdit.name,
+          description: groupEdit.description,
+          image: groupEdit.image || undefined,
+        });
+      } else if (details.conversationType === "community") {
+        await updateCommunity(selectedConversation.conversationId, {
+          name: groupEdit.name,
+          description: groupEdit.description,
+          image: groupEdit.image || undefined,
+        });
+      }
+      setGroupEdit((current) => ({ ...current, image: null }));
+      await loadOverview?.();
+      await refreshSelectedConversation?.();
+    } catch (error) {
+      setPanelError(error.message || "Failed to update details.");
+    } finally {
+      setSaving("");
+    }
+  };
+
   return (
     <section className="workspace-hub-card workspace-chat-conversation-card workspace-chat-profile-panel">
       <div className="workspace-chat-profile-header">
@@ -231,6 +267,17 @@ function ChatProfilePanel({
 
         {!isSelf && (details?.conversationType === "group" || details?.conversationType === "community") ? (
           <>
+            {canManageMembers ? (
+              <article className="workspace-chat-settings-card">
+                <div className="workspace-chat-section-heading"><div className="workspace-chat-section-heading-main"><span className="workspace-chat-section-icon" aria-hidden="true">ED</span><div><span className="workspace-hub-eyebrow">{details?.conversationType === "group" ? "Group" : "Community"}</span><h4>Edit details</h4></div></div></div>
+                <div className="workspace-form-stack">
+                  <input className="workspace-input workspace-command-search" value={groupEdit.name} onChange={(event) => setGroupEdit((current) => ({ ...current, name: event.target.value }))} placeholder={details?.conversationType === "group" ? "Group name" : "Community name"} />
+                  <textarea className="question-input workspace-chat-composer-input workspace-chat-creator-textarea" rows={3} value={groupEdit.description} onChange={(event) => setGroupEdit((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
+                  <label className="workspace-chat-attach-button workspace-chat-creator-upload">{details?.conversationType === "group" ? "Group photo" : "Community photo"}<input type="file" accept="image/*" onChange={(event) => setGroupEdit((current) => ({ ...current, image: event.target.files?.[0] || null }))} /></label>
+                  <button type="button" className="hero-button hero-button-secondary" onClick={saveGroupOrCommunity} disabled={saving === "group-profile"}>Save details</button>
+                </div>
+              </article>
+            ) : null}
             <article className="workspace-chat-settings-card"><div className="workspace-chat-section-heading"><div className="workspace-chat-section-heading-main"><span className="workspace-chat-section-icon" aria-hidden="true">MB</span><div><span className="workspace-hub-eyebrow">{details?.conversationType === "group" ? "Group" : "Community"}</span><h4>Members</h4></div></div></div>{details?.conversationType === "group" && canManageMembers ? <><div className="workspace-chat-chip-row workspace-chat-profile-action-grid">{overviewFriends.map((friend) => <button key={friend.id} type="button" className={`workspace-inline-action ${memberInviteIds.includes(friend.id) ? "is-active" : ""}`} onClick={() => setMemberInviteIds((current) => current.includes(friend.id) ? current.filter((item) => item !== friend.id) : [...current, friend.id])}>{friend.fullName}</button>)}</div><button type="button" className="hero-button hero-button-secondary" onClick={() => runAndRefresh(() => addGroupMembers(selectedConversation.conversationId, memberInviteIds))}>Add members</button></> : null}<div className="workspace-chat-member-list">{(details?.members || []).map((member) => <article key={member.id} className="workspace-chat-member-card"><strong>{member.user.fullName}</strong><p>{member.role}</p>{details?.conversationType === "group" && canManageMembers && member.userId !== currentUser?.id ? <div className="workspace-chat-inline-actions"><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => updateGroupMemberRole(selectedConversation.conversationId, member.userId, member.role === "admin" ? "member" : "admin"))}>{member.role === "admin" ? "Remove admin" : "Make admin"}</button><button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => removeGroupMember(selectedConversation.conversationId, member.userId))}>Remove</button></div> : null}</article>)}</div></article>
             {details?.conversationType === "community" ? <article className="workspace-chat-settings-card"><div className="workspace-chat-section-heading"><div className="workspace-chat-section-heading-main"><span className="workspace-chat-section-icon" aria-hidden="true">GP</span><div><span className="workspace-hub-eyebrow">Community</span><h4>Groups</h4></div></div></div>{canManageMembers ? <><div className="workspace-chat-chip-row workspace-chat-profile-action-grid">{overviewGroups.map((group) => <button key={group.id} type="button" className={`workspace-inline-action ${communityGroupId === group.id ? "is-active" : ""}`} onClick={() => setCommunityGroupId(group.id)}>{group.title}</button>)}</div><button type="button" className="hero-button hero-button-secondary" onClick={() => runAndRefresh(() => addGroupToCommunity(selectedConversation.conversationId, communityGroupId))}>Add group</button></> : null}<div className="workspace-chat-member-list">{(details?.groups || []).map((group) => <article key={group.id} className="workspace-chat-member-card"><strong>{group.name}</strong><p>{group.memberCount} members</p>{canManageMembers ? <button type="button" className="inline-text-button" onClick={() => runAndRefresh(() => removeGroupFromCommunity(selectedConversation.conversationId, group.id))}>Remove</button> : null}</article>)}</div></article> : null}
             <article className="workspace-chat-settings-card"><div className="workspace-chat-section-heading"><div className="workspace-chat-section-heading-main"><span className="workspace-chat-section-icon" aria-hidden="true">ST</span><div><span className="workspace-hub-eyebrow">Settings</span><h4>{details?.conversationType === "group" ? "Group settings" : "Community settings"}</h4></div></div></div><div className="workspace-chat-chip-row workspace-chat-profile-action-grid"><button type="button" className={`workspace-inline-action ${details?.preferences?.isMuted ? "is-active" : ""}`} onClick={() => runAndRefresh(() => (details?.conversationType === "group" ? updateGroup(selectedConversation.conversationId, { isMuted: !details?.preferences?.isMuted }) : updateCommunity(selectedConversation.conversationId, { isMuted: !details?.preferences?.isMuted })))}>{details?.preferences?.isMuted ? "Unmute notifications" : "Mute notifications"}</button>{details?.conversationType === "group" ? <button type="button" className="workspace-inline-action" onClick={() => runAndRefresh(() => exitGroup(selectedConversation.conversationId), true)}>Exit group</button> : null}{details?.conversationType === "group" && canManageMembers ? <button type="button" className="workspace-inline-action workspace-inline-action-danger" onClick={() => runAndRefresh(() => deleteGroup(selectedConversation.conversationId), true)}>Delete group</button> : null}{details?.conversationType === "community" && details?.createdByUserId !== currentUser?.id ? <button type="button" className="workspace-inline-action" onClick={() => runAndRefresh(() => leaveCommunity(selectedConversation.conversationId), true)}>Exit community</button> : null}{details?.conversationType === "community" && details?.createdByUserId === currentUser?.id ? <button type="button" className="workspace-inline-action workspace-inline-action-danger" onClick={() => handleDeleteCommunity?.()}>Delete community</button> : null}</div></article>

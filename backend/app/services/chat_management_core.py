@@ -634,14 +634,17 @@ class ChatManagementService:
             db.add(background)
             db.flush()
 
-        storage_path = self._save_conversation_background_file(
-            conversation_type=conversation["apiConversationType"],
-            conversation_key=conversation_key,
-            background_id=background.id,
-            file_name=safe_name,
-            content=content,
-            content_type=content_type,
-        )
+        try:
+            storage_path = self._save_conversation_background_file(
+                conversation_type=conversation["apiConversationType"],
+                conversation_key=conversation_key,
+                background_id=background.id,
+                file_name=safe_name,
+                content=content,
+                content_type=content_type,
+            )
+        except StorageServiceError as exc:
+            raise ChatManagementServiceError(str(exc)) from exc
         background.file_name = safe_name
         background.mime_type = content_type
         background.storage_path = str(storage_path)
@@ -677,7 +680,10 @@ class ChatManagementService:
             )
         ).scalar_one_or_none()
         if background:
-            self._delete_storage_object(background.storage_path)
+            try:
+                self._delete_storage_object(background.storage_path)
+            except StorageServiceError as exc:
+                raise ChatManagementServiceError(str(exc)) from exc
             db.delete(background)
             db.commit()
         return {
@@ -1010,23 +1016,26 @@ class ChatManagementService:
         if len(content) > CHAT_UPLOAD_MAX_BYTES:
             raise ChatManagementServiceError("Profile photo exceeds the maximum upload size.")
         safe_name = self._sanitize_filename(upload.filename or "profile.png")
-        if storage_service.enabled:
-            self._delete_storage_prefix(
-                self._entity_asset_storage_key(entity_type="profile", entity_id=user.id, file_name="").rstrip("/")
-            )
-            storage_service.upload_bytes(
-                key=self._entity_asset_storage_key(entity_type="profile", entity_id=user.id, file_name=safe_name),
-                content=content,
-                content_type=content_type,
-            )
-        else:
-            folder = CHAT_UPLOADS_DIR / "entities" / "profile" / user.id
-            folder.mkdir(parents=True, exist_ok=True)
-            for existing in folder.glob("*"):
-                if existing.is_file():
-                    existing.unlink(missing_ok=True)
-            file_path = folder / safe_name
-            file_path.write_bytes(content)
+        try:
+            if storage_service.enabled:
+                self._delete_storage_prefix(
+                    self._entity_asset_storage_key(entity_type="profile", entity_id=user.id, file_name="").rstrip("/")
+                )
+                storage_service.upload_bytes(
+                    key=self._entity_asset_storage_key(entity_type="profile", entity_id=user.id, file_name=safe_name),
+                    content=content,
+                    content_type=content_type,
+                )
+            else:
+                folder = CHAT_UPLOADS_DIR / "entities" / "profile" / user.id
+                folder.mkdir(parents=True, exist_ok=True)
+                for existing in folder.glob("*"):
+                    if existing.is_file():
+                        existing.unlink(missing_ok=True)
+                file_path = folder / safe_name
+                file_path.write_bytes(content)
+        except StorageServiceError as exc:
+            raise ChatManagementServiceError(str(exc)) from exc
         user.profile_image_url = f"/chat/assets/profile/{user.id}/{safe_name}"
         db.commit()
         db.refresh(user)
