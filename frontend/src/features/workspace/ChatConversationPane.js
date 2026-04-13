@@ -582,10 +582,20 @@ function ChatConversationPane({
                               </audio>
                             ) : isPdf ? (
                               <button type="button" className="workspace-chat-file-chip workspace-chat-document-card" onClick={(event) => { event.stopPropagation(); handleOpenAttachment(message); }}>
-                                <span className="workspace-chat-document-icon" aria-hidden="true">PDF</span>
-                                <span className="workspace-chat-document-copy">
-                                  <strong>{message.fileName || "Document.pdf"}</strong>
-                                  <span>{fileMeta}</span>
+                                <span className="workspace-chat-document-preview-shell" aria-hidden="true">
+                                  <iframe
+                                    title={`${message.fileName || "Document"} preview`}
+                                    src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=FitH`}
+                                    className="workspace-chat-document-preview"
+                                    tabIndex={-1}
+                                  />
+                                </span>
+                                <span className="workspace-chat-document-meta">
+                                  <span className="workspace-chat-document-icon" aria-hidden="true">PDF</span>
+                                  <span className="workspace-chat-document-copy">
+                                    <strong>{message.fileName || "Document.pdf"}</strong>
+                                    <span>{fileMeta}</span>
+                                  </span>
                                 </span>
                               </button>
                             ) : (

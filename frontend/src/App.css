@@ -6257,6 +6257,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   padding: 18px 14px;
   display: grid;
   gap: 12px;
+  align-content: start;
   background:
     linear-gradient(rgba(229, 221, 213, 0.94), rgba(229, 221, 213, 0.94)),
     var(--workspace-chat-custom-bg, none),
@@ -6342,6 +6343,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-chat-day-group {
   display: grid;
   gap: 10px;
+  align-content: start;
+  justify-items: stretch;
 }
 
 .workspace-chat-day-divider {
@@ -6463,8 +6466,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-video-link,
 .workspace-chat-media-link {
-  display: block;
-  width: fit-content;
+  display: inline-block;
+  width: auto;
   max-width: 100%;
   padding: 0;
   border: none;
@@ -6472,7 +6475,14 @@ body.workspace-body-mode .contact-request-empty-card p {
   line-height: 0;
   overflow: hidden;
   border-radius: 10px;
+  justify-self: start;
+  align-self: start;
   cursor: pointer;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-user .workspace-chat-media-link,
+.workspace-chat-whatsapp-shell .workspace-chat-bubble.is-user .workspace-chat-video-link {
+  justify-self: end;
 }
 
 .workspace-chat-whatsapp-shell .workspace-chat-compose-image {
@@ -6489,20 +6499,47 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-chat-whatsapp-shell .workspace-chat-document-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
   min-width: 240px;
   max-width: 100%;
-  padding: 12px 14px;
+  padding: 10px;
   text-align: left;
 }
 
-.workspace-chat-document-icon {
-  width: 40px;
-  height: 40px;
+.workspace-chat-document-preview-shell {
+  display: block;
+  width: 100%;
+  height: 90px;
+  overflow: hidden;
   border-radius: 10px;
-  background: #e11d48;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(17, 27, 33, 0.08);
+}
+
+.workspace-chat-document-preview {
+  width: 100%;
+  height: 150px;
+  border: none;
+  background: #ffffff;
+  pointer-events: none;
+  transform: scale(1);
+  transform-origin: top center;
+}
+
+.workspace-chat-document-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.workspace-chat-document-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #f02849;
   color: #ffffff;
   display: inline-flex;
   align-items: center;
@@ -6510,6 +6547,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
 .workspace-chat-document-copy {
