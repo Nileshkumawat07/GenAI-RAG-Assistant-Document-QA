@@ -6354,6 +6354,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   align-items: center;
   justify-content: center;
   min-height: 28px;
+  min-width: 78px;
   padding: 0 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.88);
@@ -6374,6 +6375,11 @@ body.workspace-body-mode .contact-request-empty-card p {
   box-shadow: 0 1px 1px rgba(17, 27, 33, 0.16);
   align-self: start;
   box-sizing: border-box;
+}
+
+.workspace-chat-whatsapp-shell .workspace-direct-message.is-media-only {
+  gap: 4px;
+  padding: 6px 6px 4px;
 }
 
 .workspace-chat-whatsapp-shell .workspace-direct-message.is-highlighted {
@@ -6447,17 +6453,25 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-chat-whatsapp-shell .workspace-chat-image-preview {
-  width: 100%;
+  display: block;
+  width: auto;
   max-width: min(320px, 100%);
+  height: auto;
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(17, 27, 33, 0.14);
 }
 
 .workspace-chat-video-link,
 .workspace-chat-media-link {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
   padding: 0;
   border: none;
   background: transparent;
+  line-height: 0;
+  overflow: hidden;
+  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -6471,6 +6485,55 @@ body.workspace-body-mode .contact-request-empty-card p {
   background: rgba(17, 27, 33, 0.05);
   border: none;
   color: #0b6f5d;
+}
+
+.workspace-chat-whatsapp-shell .workspace-chat-document-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 240px;
+  max-width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.workspace-chat-document-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #e11d48;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.workspace-chat-document-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.workspace-chat-document-copy strong,
+.workspace-chat-document-copy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-chat-document-copy strong {
+  font-size: 14px;
+  color: #111b21;
+}
+
+.workspace-chat-document-copy span {
+  font-size: 12px;
+  color: #667781;
 }
 
 .workspace-chat-search-message-card {
@@ -6709,6 +6772,12 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-chat-viewer-image {
   width: auto;
   object-fit: contain;
+}
+
+.workspace-chat-viewer-frame {
+  height: calc(92vh - 120px);
+  min-height: 480px;
+  background: #ffffff;
 }
 
 .workspace-chat-viewer-audio {

@@ -24,6 +24,14 @@ function formatBubbleTime(value) {
   return formatDate(value, { hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase();
 }
 
+function formatFileSize(value) {
+  const size = Number(value || 0);
+  if (!size) return "";
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} kB`;
+  return `${size} B`;
+}
+
 function formatLastSeen(value) {
   if (!value) return "offline";
   return `last seen ${formatDate(value, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}`;
@@ -516,14 +524,26 @@ function ChatConversationPane({
                   const isImage = message.messageType === "image";
                   const isVideo = message.messageType === "video";
                   const isVoice = message.messageType === "voice";
+                  const attachmentKind = getAttachmentKind(message);
+                  const isPdf = attachmentKind === "pdf";
                   const hasPreview = canPreviewAttachment(message);
                   const fileUrl = message.fileUrl ? buildChatFileUrl(message.id) : "";
+                  const isMediaOnly = Boolean(message.fileUrl && !message.body);
+                  const fileMeta = [isPdf ? "PDF" : "File", formatFileSize(message.fileSize)].filter(Boolean).join(" | ");
+                  const bubbleClassName = [
+                    "workspace-chat-bubble",
+                    mine ? "is-user" : "is-assistant",
+                    "workspace-direct-message",
+                    highlightedMessageId === message.id ? "is-highlighted" : "",
+                    isMediaOnly ? "is-media-only" : "",
+                    isPdf ? "is-document" : "",
+                  ].filter(Boolean).join(" ");
 
                   return (
                     <article
                       key={message.id}
                       data-chat-message-id={message.id}
-                      className={`workspace-chat-bubble ${mine ? "is-user" : "is-assistant"} workspace-direct-message ${highlightedMessageId === message.id ? "is-highlighted" : ""}`}
+                      className={bubbleClassName}
                       onContextMenu={(event) => openMessageMenu(event, message, event.currentTarget)}
                     >
                       {!mine && selectedConversation.conversationType !== "direct" ? <strong className="workspace-chat-sender-line">{message.senderName}</strong> : null}
@@ -560,6 +580,14 @@ function ChatConversationPane({
                               <audio className="workspace-chat-audio-preview" controls preload="metadata">
                                 <source src={fileUrl} type={message.mimeType || "audio/mpeg"} />
                               </audio>
+                            ) : isPdf ? (
+                              <button type="button" className="workspace-chat-file-chip workspace-chat-document-card" onClick={(event) => { event.stopPropagation(); handleOpenAttachment(message); }}>
+                                <span className="workspace-chat-document-icon" aria-hidden="true">PDF</span>
+                                <span className="workspace-chat-document-copy">
+                                  <strong>{message.fileName || "Document.pdf"}</strong>
+                                  <span>{fileMeta}</span>
+                                </span>
+                              </button>
                             ) : (
                               <button type="button" className="workspace-chat-file-chip" onClick={(event) => { event.stopPropagation(); handleOpenAttachment(message); }}>
                                 {hasPreview ? `View ${message.fileName || "file"}` : (message.fileName || "Open file")}
@@ -640,7 +668,7 @@ function ChatConversationPane({
               {attachmentViewer.kind === "image" ? <img src={attachmentViewer.url} alt={attachmentViewer.fileName} className="workspace-chat-viewer-image" /> : null}
               {attachmentViewer.kind === "video" ? <video className="workspace-chat-viewer-media" controls autoPlay preload="metadata"><source src={attachmentViewer.url} type={attachmentViewer.mimeType || "video/mp4"} /></video> : null}
               {attachmentViewer.kind === "audio" ? <audio className="workspace-chat-viewer-audio" controls autoPlay preload="metadata"><source src={attachmentViewer.url} type={attachmentViewer.mimeType || "audio/mpeg"} /></audio> : null}
-              {attachmentViewer.kind === "pdf" ? <iframe title={attachmentViewer.fileName} src={attachmentViewer.url} className="workspace-chat-viewer-frame" /> : null}
+              {attachmentViewer.kind === "pdf" ? <iframe title={attachmentViewer.fileName} src={`${attachmentViewer.url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`} className="workspace-chat-viewer-frame" /> : null}
             </div>
           </div>
         </div>
