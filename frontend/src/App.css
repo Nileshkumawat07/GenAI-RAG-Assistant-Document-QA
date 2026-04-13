@@ -6363,12 +6363,17 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-chat-whatsapp-shell .workspace-direct-message {
-  max-width: min(68%, 520px);
-  padding: 9px 11px 7px;
+  display: inline-grid;
+  width: fit-content;
+  max-width: min(65%, 520px);
+  min-width: 0;
+  gap: 6px;
+  padding: 8px 10px 6px;
   border: none;
   border-radius: 14px;
   box-shadow: 0 1px 1px rgba(17, 27, 33, 0.16);
-  overflow-wrap: anywhere;
+  align-self: start;
+  box-sizing: border-box;
 }
 
 .workspace-chat-whatsapp-shell .workspace-direct-message.is-highlighted {
@@ -6394,11 +6399,14 @@ body.workspace-body-mode .contact-request-empty-card p {
   color: #111b21;
 }
 
-.workspace-chat-bubble-copy {
+.workspace-chat-whatsapp-shell .workspace-chat-bubble-copy {
   margin: 0;
-  white-space: pre-wrap;
+  max-width: 100%;
+  width: fit-content;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
   word-break: break-word;
-  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   line-height: 1.5;
   font-size: 14px;
 }
@@ -6423,8 +6431,9 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-chat-whatsapp-shell .workspace-chat-bubble-foot {
+  width: 100%;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
   margin-top: 2px;
 }
 
