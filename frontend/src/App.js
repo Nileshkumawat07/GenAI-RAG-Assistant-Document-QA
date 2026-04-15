@@ -562,11 +562,11 @@ function App() {
 
   return (
     <main
-      className={`app-root app-shell ${
+      className={`app-root mobile-app app-shell ${
         isWorkspace ? "workspace-app-shell workspace-shell-mode" : "marketing-shell-mode"
       }`}
     >
-      <div className={`sidebar-overlay ${mobileSidebarOpen ? "active" : ""}`} onClick={closeMobileSidebar} />
+      <div className={`overlay sidebar-overlay ${mobileSidebarOpen ? "active" : ""}`} onClick={closeMobileSidebar} />
       <aside className={`mobile-sidebar ${mobileSidebarOpen ? "open" : ""}`}>
         <div className="mobile-sidebar-head">
           <div className="mobile-sidebar-brand">
