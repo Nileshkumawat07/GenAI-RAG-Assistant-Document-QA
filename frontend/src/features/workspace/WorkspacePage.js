@@ -217,7 +217,6 @@ const INFO_PAGE_CONFIG = {
   careers: {
     title: "Careers",
     description: "Explore live roles, hiring culture, and application progress",
-    message: "Review live openings, apply with a full profile, and manage applicant workflows from the same workspace experience.",
     statusTitle: "Careers Studio",
     statusItems: ["Live openings", "Structured applications", "Management queue", "Opening publishing controls"],
     tabs: [
