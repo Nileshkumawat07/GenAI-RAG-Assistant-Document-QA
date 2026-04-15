@@ -1259,6 +1259,21 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   }, []);
 
   useEffect(() => {
+    const handleMobileWorkspaceSection = (event) => {
+      const section = event?.detail?.section;
+      if (!section) {
+        return;
+      }
+      setActiveSection(section);
+    };
+
+    window.addEventListener("genai-mobile-workspace-section", handleMobileWorkspaceSection);
+    return () => {
+      window.removeEventListener("genai-mobile-workspace-section", handleMobileWorkspaceSection);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!selectedInfoPage && activeSection === "chat-history") {
       loadWorkspaceThreadMessages(activeWorkspaceThreadId);
     }
