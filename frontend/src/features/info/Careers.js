@@ -20,6 +20,10 @@ const DEFAULT_TABS = [
   { id: "applications", label: "Applications" },
 ];
 
+const MANAGEMENT_TABS = [
+  { id: "studio", label: "Careers Studio" },
+];
+
 const OPENING_TEMPLATE = {
   title: "",
   department: "Engineering",
@@ -176,7 +180,7 @@ function Careers({
     setLocalCategory(nextCategory);
   };
 
-  const tabs = DEFAULT_TABS;
+  const tabs = canAccessManagement ? [...DEFAULT_TABS, ...MANAGEMENT_TABS] : DEFAULT_TABS;
 
   const reload = async () => {
     try {
@@ -431,44 +435,45 @@ function Careers({
         </div>
       </section>
 
-      <section style={styles.openingsGrid}>
-        <div style={styles.roleRail}>
-          {(openings || []).map((opening) => (
-            <button
-              key={opening.id}
-              type="button"
-              onClick={() => setSelectedOpeningId(opening.id)}
-              style={{
-                ...styles.roleCard,
-                ...(selectedOpening?.id === opening.id ? styles.roleCardActive : {}),
-              }}
-            >
-              <div style={styles.roleCardHeader}>
-                <div>
-                  <strong>{opening.title}</strong>
-                  <p>{opening.department}</p>
+      {openings.length > 0 || canAccessManagement ? (
+        <section style={styles.openingsGrid}>
+          <div style={styles.roleRail}>
+            {(openings || []).map((opening) => (
+              <button
+                key={opening.id}
+                type="button"
+                onClick={() => setSelectedOpeningId(opening.id)}
+                style={{
+                  ...styles.roleCard,
+                  ...(selectedOpening?.id === opening.id ? styles.roleCardActive : {}),
+                }}
+              >
+                <div style={styles.roleCardHeader}>
+                  <div>
+                    <strong>{opening.title}</strong>
+                    <p>{opening.department}</p>
+                  </div>
+                  {opening.isFeatured ? <span style={styles.featureBadge}>Featured</span> : null}
                 </div>
-                {opening.isFeatured ? <span style={styles.featureBadge}>Featured</span> : null}
-              </div>
-              <div style={styles.roleMetaRow}>
-                <span>{opening.location}</span>
-                <span>{opening.workMode}</span>
-                <span>{opening.employmentType}</span>
-              </div>
-              <div style={styles.roleMetaRow}>
-                <span>{opening.experienceLevel}</span>
-                <span>{opening.salaryRange || "Compensation discussed with shortlisted candidates"}</span>
-              </div>
-              <div style={styles.roleMetaRow}>
-                <span>{opening.totalApplications || 0} applications</span>
-                <span>{opening.seatsOpen} seats</span>
-              </div>
-            </button>
-          ))}
-        </div>
+                <div style={styles.roleMetaRow}>
+                  <span>{opening.location}</span>
+                  <span>{opening.workMode}</span>
+                  <span>{opening.employmentType}</span>
+                </div>
+                <div style={styles.roleMetaRow}>
+                  <span>{opening.experienceLevel}</span>
+                  <span>{opening.salaryRange || "Compensation discussed with shortlisted candidates"}</span>
+                </div>
+                <div style={styles.roleMetaRow}>
+                  <span>{opening.totalApplications || 0} applications</span>
+                  <span>{opening.seatsOpen} seats</span>
+                </div>
+              </button>
+            ))}
+          </div>
 
-        <div style={styles.roleDetailCard}>
-          {selectedOpening ? (
+          <div style={styles.roleDetailCard}>
+            {selectedOpening ? (
             <>
               <div style={styles.roleDetailHead}>
                 <div>
@@ -521,15 +526,172 @@ function Careers({
                 </div>
               </div>
             </>
-          ) : (
-            <div style={styles.emptyState}>
-              <h4>No openings published yet</h4>
-              <p>Management and admin can publish openings from the careers studio once the first role is ready.</p>
+            ) : canAccessManagement ? (
+              <div style={styles.emptyState}>
+                <h4>Careers studio is ready</h4>
+                <p>Create and publish the first opening from the new Careers Studio tab.</p>
+                <div style={styles.actionRow}>
+                  <button type="button" style={styles.primaryButton} onClick={() => setCategory("studio")}>
+                    Open Careers Studio
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+
+  const renderStudio = () => (
+    <div style={styles.stack}>
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <div>
+            <h3 style={styles.panelTitle}>Openings Studio</h3>
+            <p style={styles.panelCopy}>Admin and management can publish polished hiring briefs and update openings without touching any other workspace module.</p>
+          </div>
+        </div>
+        <div style={styles.managementLayout}>
+          <div style={styles.managementList}>
+            {(managementOverview.openings || []).map((opening) => (
+              <button
+                key={opening.id}
+                type="button"
+                style={styles.managementListItem}
+                onClick={() => selectOpeningForEdit(opening)}
+              >
+                <strong>{opening.title}</strong>
+                <span>{opening.department} | {opening.totalApplications || 0} applicants</span>
+              </button>
+            ))}
+            <button type="button" style={styles.primaryButton} onClick={() => selectOpeningForEdit(null)}>
+              Create New Opening
+            </button>
+          </div>
+          <div style={styles.managementEditor}>
+            <div style={styles.formGrid}>
+              <input style={styles.input} placeholder="Role title" value={openingForm.title} onChange={(e) => setOpeningForm((c) => ({ ...c, title: e.target.value }))} />
+              <input style={styles.input} placeholder="Department" value={openingForm.department} onChange={(e) => setOpeningForm((c) => ({ ...c, department: e.target.value }))} />
+              <input style={styles.input} placeholder="Location" value={openingForm.location} onChange={(e) => setOpeningForm((c) => ({ ...c, location: e.target.value }))} />
+              <select style={styles.input} value={openingForm.workMode} onChange={(e) => setOpeningForm((c) => ({ ...c, workMode: e.target.value }))}>
+                <option>Remote</option>
+                <option>Hybrid</option>
+                <option>On-site</option>
+              </select>
+              <select style={styles.input} value={openingForm.employmentType} onChange={(e) => setOpeningForm((c) => ({ ...c, employmentType: e.target.value }))}>
+                <option>Full-time</option>
+                <option>Part-time</option>
+                <option>Contract</option>
+                <option>Internship</option>
+              </select>
+              <input style={styles.input} placeholder="Experience level" value={openingForm.experienceLevel} onChange={(e) => setOpeningForm((c) => ({ ...c, experienceLevel: e.target.value }))} />
+              <input style={styles.input} placeholder="Salary range" value={openingForm.salaryRange} onChange={(e) => setOpeningForm((c) => ({ ...c, salaryRange: e.target.value }))} />
+              <input style={styles.input} type="number" min="1" placeholder="Seats open" value={openingForm.seatsOpen} onChange={(e) => setOpeningForm((c) => ({ ...c, seatsOpen: e.target.value }))} />
+              <input style={styles.input} type="datetime-local" value={openingForm.applicationDeadline} onChange={(e) => setOpeningForm((c) => ({ ...c, applicationDeadline: e.target.value }))} />
+              <textarea style={styles.textareaWide} rows={4} placeholder="Role summary" value={openingForm.summary} onChange={(e) => setOpeningForm((c) => ({ ...c, summary: e.target.value }))} />
+              <textarea style={styles.textareaWide} rows={4} placeholder="Responsibilities, one per line" value={openingForm.responsibilities} onChange={(e) => setOpeningForm((c) => ({ ...c, responsibilities: e.target.value }))} />
+              <textarea style={styles.textareaWide} rows={4} placeholder="Requirements, one per line" value={openingForm.requirements} onChange={(e) => setOpeningForm((c) => ({ ...c, requirements: e.target.value }))} />
+              <textarea style={styles.textareaWide} rows={4} placeholder="Perks, one per line" value={openingForm.perks} onChange={(e) => setOpeningForm((c) => ({ ...c, perks: e.target.value }))} />
+              <textarea style={styles.textareaWide} rows={3} placeholder="Skills, one per line" value={openingForm.skills} onChange={(e) => setOpeningForm((c) => ({ ...c, skills: e.target.value }))} />
+              <label style={styles.checkboxField}>
+                <input type="checkbox" checked={openingForm.isPublished} onChange={(e) => setOpeningForm((c) => ({ ...c, isPublished: e.target.checked }))} />
+                <span>Publish this opening</span>
+              </label>
+              <label style={styles.checkboxField}>
+                <input type="checkbox" checked={openingForm.isFeatured} onChange={(e) => setOpeningForm((c) => ({ ...c, isFeatured: e.target.checked }))} />
+                <span>Feature on top</span>
+              </label>
+              <button type="button" style={styles.primaryButton} onClick={handleSaveOpening} disabled={savingOpening}>
+                {savingOpening ? "Saving..." : editingOpeningId ? "Update Opening" : "Create Opening"}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </section>
-    </>
+
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <div>
+            <h3 style={styles.panelTitle}>Applicant Pipeline</h3>
+            <p style={styles.panelCopy}>Management can review applicants, assign owners, download resumes, and update the status just like your structured support workflows.</p>
+          </div>
+          <div style={styles.filterRow}>
+            <input style={styles.inputCompact} placeholder="Search applicant" value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)} />
+            <select style={styles.inputCompact} value={queueFilter} onChange={(e) => setQueueFilter(e.target.value)}>
+              <option value="all">All statuses</option>
+              {APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={styles.pipelineSummary}>
+          {[
+            ["Openings", managementOverview.summary.totalOpenings || 0],
+            ["Applications", managementOverview.summary.totalApplications || 0],
+            ["In Review", managementOverview.summary.inReview || 0],
+            ["Shortlisted", managementOverview.summary.shortlisted || 0],
+            ["Interviews", managementOverview.summary.interviewScheduled || 0],
+          ].map(([label, value]) => (
+            <div key={label} style={styles.statCard}>
+              <strong>{value}</strong>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+        <div style={styles.stack}>
+          {applicantQueue.length === 0 ? (
+            <div style={styles.emptyState}>
+              <h4>No applicants matched</h4>
+              <p>Adjust the filters or wait for new submissions to arrive.</p>
+            </div>
+          ) : applicantQueue.map((application) => {
+            const draft = applicationDrafts[application.id] || {
+              status: application.status,
+              adminMessage: application.adminMessage || "",
+              assignedManagerUserId: application.assignedManagerUserId || "",
+            };
+            return (
+              <article key={application.id} style={styles.pipelineCard}>
+                <div style={styles.applicationCardHead}>
+                  <div>
+                    <strong>{application.fullName}</strong>
+                    <p>{application.openingTitle} | {application.email} | {application.mobile}</p>
+                  </div>
+                  <span style={{ ...styles.statusPill, ...statusStyle(application.status) }}>{application.status}</span>
+                </div>
+                <div style={styles.applicationMeta}>
+                  <span>#{application.applicationCode}</span>
+                  <span>{application.currentRole || "Role not shared"} @ {application.currentCompany || "No company"}</span>
+                  <span>{application.totalExperience || "Experience not shared"}</span>
+                </div>
+                <div style={styles.formGrid}>
+                  <select style={styles.input} value={draft.status} onChange={(e) => handleApplicationDraftChange(application.id, "status", e.target.value)}>
+                    {APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                  <select style={styles.input} value={draft.assignedManagerUserId || ""} onChange={(e) => handleApplicationDraftChange(application.id, "assignedManagerUserId", e.target.value)}>
+                    <option value="">Unassigned</option>
+                    {managementUsers.filter((item) => !item.accessSuspended).map((manager) => (
+                      <option key={manager.id} value={manager.id}>{manager.fullName}</option>
+                    ))}
+                  </select>
+                  <textarea style={styles.textareaWide} rows={4} placeholder="Internal note or candidate update" value={draft.adminMessage || ""} onChange={(e) => handleApplicationDraftChange(application.id, "adminMessage", e.target.value)} />
+                </div>
+                <div style={styles.actionRow}>
+                  {application.hasResume ? (
+                    <button type="button" style={styles.ghostButton} onClick={() => downloadCareerResume(application.id)}>
+                      Download Resume
+                    </button>
+                  ) : null}
+                  <button type="button" style={styles.primaryButton} onClick={() => handleApplicationStatusSave(application.id)}>
+                    Save Update
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    </div>
   );
 
   const renderApplications = () => (
@@ -629,156 +791,6 @@ function Careers({
         )}
       </section>
 
-      {canAccessManagement ? (
-        <>
-          <section style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>Openings Studio</h3>
-                <p style={styles.panelCopy}>Admin and management can publish polished hiring briefs and update openings without touching any other workspace module.</p>
-              </div>
-            </div>
-            <div style={styles.managementLayout}>
-              <div style={styles.managementList}>
-                {(managementOverview.openings || []).map((opening) => (
-                  <button
-                    key={opening.id}
-                    type="button"
-                    style={styles.managementListItem}
-                    onClick={() => selectOpeningForEdit(opening)}
-                  >
-                    <strong>{opening.title}</strong>
-                    <span>{opening.department} | {opening.totalApplications || 0} applicants</span>
-                  </button>
-                ))}
-                <button type="button" style={styles.primaryButton} onClick={() => selectOpeningForEdit(null)}>
-                  Create New Opening
-                </button>
-              </div>
-              <div style={styles.managementEditor}>
-                <div style={styles.formGrid}>
-                  <input style={styles.input} placeholder="Role title" value={openingForm.title} onChange={(e) => setOpeningForm((c) => ({ ...c, title: e.target.value }))} />
-                  <input style={styles.input} placeholder="Department" value={openingForm.department} onChange={(e) => setOpeningForm((c) => ({ ...c, department: e.target.value }))} />
-                  <input style={styles.input} placeholder="Location" value={openingForm.location} onChange={(e) => setOpeningForm((c) => ({ ...c, location: e.target.value }))} />
-                  <select style={styles.input} value={openingForm.workMode} onChange={(e) => setOpeningForm((c) => ({ ...c, workMode: e.target.value }))}>
-                    <option>Remote</option>
-                    <option>Hybrid</option>
-                    <option>On-site</option>
-                  </select>
-                  <select style={styles.input} value={openingForm.employmentType} onChange={(e) => setOpeningForm((c) => ({ ...c, employmentType: e.target.value }))}>
-                    <option>Full-time</option>
-                    <option>Part-time</option>
-                    <option>Contract</option>
-                    <option>Internship</option>
-                  </select>
-                  <input style={styles.input} placeholder="Experience level" value={openingForm.experienceLevel} onChange={(e) => setOpeningForm((c) => ({ ...c, experienceLevel: e.target.value }))} />
-                  <input style={styles.input} placeholder="Salary range" value={openingForm.salaryRange} onChange={(e) => setOpeningForm((c) => ({ ...c, salaryRange: e.target.value }))} />
-                  <input style={styles.input} type="number" min="1" placeholder="Seats open" value={openingForm.seatsOpen} onChange={(e) => setOpeningForm((c) => ({ ...c, seatsOpen: e.target.value }))} />
-                  <input style={styles.input} type="datetime-local" value={openingForm.applicationDeadline} onChange={(e) => setOpeningForm((c) => ({ ...c, applicationDeadline: e.target.value }))} />
-                  <textarea style={styles.textareaWide} rows={4} placeholder="Role summary" value={openingForm.summary} onChange={(e) => setOpeningForm((c) => ({ ...c, summary: e.target.value }))} />
-                  <textarea style={styles.textareaWide} rows={4} placeholder="Responsibilities, one per line" value={openingForm.responsibilities} onChange={(e) => setOpeningForm((c) => ({ ...c, responsibilities: e.target.value }))} />
-                  <textarea style={styles.textareaWide} rows={4} placeholder="Requirements, one per line" value={openingForm.requirements} onChange={(e) => setOpeningForm((c) => ({ ...c, requirements: e.target.value }))} />
-                  <textarea style={styles.textareaWide} rows={4} placeholder="Perks, one per line" value={openingForm.perks} onChange={(e) => setOpeningForm((c) => ({ ...c, perks: e.target.value }))} />
-                  <textarea style={styles.textareaWide} rows={3} placeholder="Skills, one per line" value={openingForm.skills} onChange={(e) => setOpeningForm((c) => ({ ...c, skills: e.target.value }))} />
-                  <label style={styles.checkboxField}>
-                    <input type="checkbox" checked={openingForm.isPublished} onChange={(e) => setOpeningForm((c) => ({ ...c, isPublished: e.target.checked }))} />
-                    <span>Publish this opening</span>
-                  </label>
-                  <label style={styles.checkboxField}>
-                    <input type="checkbox" checked={openingForm.isFeatured} onChange={(e) => setOpeningForm((c) => ({ ...c, isFeatured: e.target.checked }))} />
-                    <span>Feature on top</span>
-                  </label>
-                  <button type="button" style={styles.primaryButton} onClick={handleSaveOpening} disabled={savingOpening}>
-                    {savingOpening ? "Saving..." : editingOpeningId ? "Update Opening" : "Create Opening"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>Applicant Pipeline</h3>
-                <p style={styles.panelCopy}>Management can review applicants, assign owners, download resumes, and update the status just like your structured support workflows.</p>
-              </div>
-              <div style={styles.filterRow}>
-                <input style={styles.inputCompact} placeholder="Search applicant" value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)} />
-                <select style={styles.inputCompact} value={queueFilter} onChange={(e) => setQueueFilter(e.target.value)}>
-                  <option value="all">All statuses</option>
-                  {APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={styles.pipelineSummary}>
-              {[
-                ["Openings", managementOverview.summary.totalOpenings || 0],
-                ["Applications", managementOverview.summary.totalApplications || 0],
-                ["In Review", managementOverview.summary.inReview || 0],
-                ["Shortlisted", managementOverview.summary.shortlisted || 0],
-                ["Interviews", managementOverview.summary.interviewScheduled || 0],
-              ].map(([label, value]) => (
-                <div key={label} style={styles.statCard}>
-                  <strong>{value}</strong>
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
-            <div style={styles.stack}>
-              {applicantQueue.length === 0 ? (
-                <div style={styles.emptyState}>
-                  <h4>No applicants matched</h4>
-                  <p>Adjust the filters or wait for new submissions to arrive.</p>
-                </div>
-              ) : applicantQueue.map((application) => {
-                const draft = applicationDrafts[application.id] || {
-                  status: application.status,
-                  adminMessage: application.adminMessage || "",
-                  assignedManagerUserId: application.assignedManagerUserId || "",
-                };
-                return (
-                  <article key={application.id} style={styles.pipelineCard}>
-                    <div style={styles.applicationCardHead}>
-                      <div>
-                        <strong>{application.fullName}</strong>
-                        <p>{application.openingTitle} | {application.email} | {application.mobile}</p>
-                      </div>
-                      <span style={{ ...styles.statusPill, ...statusStyle(application.status) }}>{application.status}</span>
-                    </div>
-                    <div style={styles.applicationMeta}>
-                      <span>#{application.applicationCode}</span>
-                      <span>{application.currentRole || "Role not shared"} @ {application.currentCompany || "No company"}</span>
-                      <span>{application.totalExperience || "Experience not shared"}</span>
-                    </div>
-                    <div style={styles.formGrid}>
-                      <select style={styles.input} value={draft.status} onChange={(e) => handleApplicationDraftChange(application.id, "status", e.target.value)}>
-                        {APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-                      </select>
-                      <select style={styles.input} value={draft.assignedManagerUserId || ""} onChange={(e) => handleApplicationDraftChange(application.id, "assignedManagerUserId", e.target.value)}>
-                        <option value="">Unassigned</option>
-                        {managementUsers.filter((item) => !item.accessSuspended).map((manager) => (
-                          <option key={manager.id} value={manager.id}>{manager.fullName}</option>
-                        ))}
-                      </select>
-                      <textarea style={styles.textareaWide} rows={4} placeholder="Internal note or candidate update" value={draft.adminMessage || ""} onChange={(e) => handleApplicationDraftChange(application.id, "adminMessage", e.target.value)} />
-                    </div>
-                    <div style={styles.actionRow}>
-                      {application.hasResume ? (
-                        <button type="button" style={styles.ghostButton} onClick={() => downloadCareerResume(application.id)}>
-                          Download Resume
-                        </button>
-                      ) : null}
-                      <button type="button" style={styles.primaryButton} onClick={() => handleApplicationStatusSave(application.id)}>
-                        Save Update
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        </>
-      ) : null}
     </div>
   );
 
@@ -813,7 +825,13 @@ function Careers({
     if (selectedCategory === "process") {
       return renderStaticSection("Hiring Process", PROCESS_STEPS, "#8f5a21");
     }
-    return renderApplications();
+    if (selectedCategory === "applications") {
+      return renderApplications();
+    }
+    if (selectedCategory === "studio" && canAccessManagement) {
+      return renderStudio();
+    }
+    return renderOpeningHighlights();
   })();
 
   return (
