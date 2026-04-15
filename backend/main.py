@@ -20,7 +20,7 @@ from app.api.routes.management import build_management_router
 from app.api.routes.object_detection import build_object_detection_router
 from app.api.routes.payments import build_payment_router
 from app.api.routes.workspace_hub import build_workspace_hub_router
-from app.core.config import FRONTEND_ORIGIN
+from app.core.config import ALLOWED_FRONTEND_ORIGINS
 from app.core.database import Base, engine
 import app.models  # Ensure ORM models are registered before create_all().
 from app.models.user import User
@@ -523,7 +523,10 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[FRONTEND_ORIGIN, "http://127.0.0.1:3000"],
+        allow_origins=[
+            *ALLOWED_FRONTEND_ORIGINS,
+            "http://127.0.0.1:3000",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

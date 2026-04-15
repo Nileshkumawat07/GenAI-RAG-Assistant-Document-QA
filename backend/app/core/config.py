@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -17,8 +18,44 @@ OBJECT_DETECTION_MODEL = os.getenv(
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "700"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
 TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "8"))
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000").strip()
+def _expand_origin_variants(*raw_origins: str) -> list[str]:
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    for raw_origin in raw_origins:
+        origin = (raw_origin or "").strip().rstrip("/")
+        if not origin:
+            continue
+
+        candidates = [origin]
+        parsed = urlparse(origin)
+        hostname = (parsed.hostname or "").strip().lower()
+
+        if hostname and "." in hostname and hostname != "localhost":
+            sibling_hostnames = []
+            if hostname.startswith("www."):
+                sibling_hostnames.append(hostname[4:])
+            else:
+                sibling_hostnames.append(f"www.{hostname}")
+
+            for sibling_hostname in sibling_hostnames:
+                sibling_origin = f"{parsed.scheme}://{sibling_hostname}"
+                if parsed.port:
+                    sibling_origin = f"{sibling_origin}:{parsed.port}"
+                candidates.append(sibling_origin)
+
+        for candidate in candidates:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            variants.append(candidate)
+
+    return variants
+
+
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000").strip().rstrip("/")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").strip().rstrip("/")
+ALLOWED_FRONTEND_ORIGINS = _expand_origin_variants(FRONTEND_ORIGIN)
 DOCUMENTS_DIR = Path(os.getenv("DOCUMENTS_DIR", str(BASE_DIR / "documents"))).resolve()
 CHAT_UPLOADS_DIR = Path(os.getenv("CHAT_UPLOADS_DIR", str(BASE_DIR / "chat_uploads"))).resolve()
 CHAT_UPLOAD_MAX_BYTES = int(os.getenv("CHAT_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))

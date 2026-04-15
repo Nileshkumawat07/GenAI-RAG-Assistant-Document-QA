@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from urllib.parse import urlparse
 
 from app.core.config import APP_BASE_URL
 from app.core.database import get_db
@@ -48,8 +49,27 @@ def build_linked_provider_router(
             email=item.email,
         )
 
+    def resolve_public_base_url(request: Request) -> str:
+        request_base_url = str(request.base_url).rstrip("/")
+        configured_base_url = APP_BASE_URL.rstrip("/")
+
+        if not configured_base_url:
+            return request_base_url
+
+        request_host = (urlparse(request_base_url).hostname or "").lower()
+        configured_host = (urlparse(configured_base_url).hostname or "").lower()
+        allowed_hosts = {configured_host}
+        if configured_host.startswith("www."):
+            allowed_hosts.add(configured_host[4:])
+        elif configured_host:
+            allowed_hosts.add(f"www.{configured_host}")
+
+        if request_host and request_host in allowed_hosts:
+            return request_base_url
+        return configured_base_url
+
     def build_callback_url(request: Request, provider_key: str) -> str:
-        public_base_url = APP_BASE_URL or str(request.base_url).rstrip("/")
+        public_base_url = resolve_public_base_url(request)
         return f"{public_base_url.rstrip('/')}/auth/{provider_key}/callback"
 
     def handle_provider_oauth_callback(
