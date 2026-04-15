@@ -7867,3 +7867,412 @@ body.workspace-body-mode .contact-request-empty-card p {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+
+@media (max-width: 768px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  .app-shell,
+  .app-body,
+  .landing-page,
+  .landing-hero,
+  .auth-page,
+  .signup-page,
+  .workspace-page,
+  .workspace-shell,
+  .workspace-sidebar,
+  .workspace-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0 !important;
+    gap: 0;
+  }
+
+  .marketing-shell-mode,
+  .workspace-shell-mode,
+  .app-body,
+  .workspace-app-body {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .app-header {
+    position: sticky;
+    top: 0;
+    margin: 0 !important;
+    padding: calc(8px + env(safe-area-inset-top)) 10px 10px;
+    border-radius: 0 0 20px 20px;
+  }
+
+  .app-header-inner {
+    gap: 10px;
+  }
+
+  .app-brand-mini-tag,
+  .profile-button-text,
+  .profile-plan-badge {
+    display: none;
+  }
+
+  .app-title {
+    font-size: 15px;
+    line-height: 1.2;
+  }
+
+  .app-header-actions,
+  .header-user-block {
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .header-utility-button,
+  .profile-button,
+  .header-notification-button,
+  .hero-button,
+  .auth-primary-button,
+  .auth-secondary-button,
+  .primary-button,
+  .inline-field-button,
+  .workspace-inline-action,
+  .admin-table-action-button {
+    min-height: 44px !important;
+  }
+
+  .profile-button {
+    min-width: 44px;
+    padding: 0 10px;
+  }
+
+  .header-dropdown-menu,
+  .profile-dropdown-menu,
+  .header-notification-menu {
+    position: fixed;
+    top: calc(66px + env(safe-area-inset-top));
+    left: 10px;
+    right: 10px;
+    width: auto;
+    min-width: 0;
+    max-height: calc(100dvh - 90px);
+    overflow-y: auto;
+    border-radius: 20px;
+  }
+
+  .landing-page,
+  .landing-hero,
+  .auth-page,
+  .signup-page {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    padding: 10px !important;
+  }
+
+  .landing-copy,
+  .landing-visual,
+  .auth-showcase,
+  .auth-card,
+  .signup-card {
+    padding: 18px !important;
+    border-radius: 20px !important;
+  }
+
+  .hero-actions,
+  .password-shell,
+  .inline-action-field,
+  .captcha-row,
+  .auth-card-head {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .workspace-page {
+    min-height: 100%;
+    padding: 0 0 calc(104px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .workspace-shell {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px;
+    height: auto !important;
+    min-height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .workspace-sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom)) !important;
+    border: none;
+    border-top: 1px solid rgba(18, 61, 122, 0.12);
+    background: rgba(244, 248, 255, 0.96);
+    box-shadow: 0 -12px 30px rgba(13, 36, 76, 0.12);
+    backdrop-filter: blur(18px);
+  }
+
+  .sidebar-title,
+  .sidebar-description,
+  .sidebar-boost-card {
+    display: none !important;
+  }
+
+  .sidebar-tabs {
+    display: grid !important;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(96px, 1fr);
+    gap: 8px;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-tab {
+    min-height: 56px;
+    padding: 10px 12px !important;
+    border-radius: 16px;
+    font-size: 11px;
+    line-height: 1.25;
+    text-align: center;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .workspace-content {
+    padding: 10px 10px calc(116px + env(safe-area-inset-bottom)) !important;
+    overflow: visible;
+    background: transparent;
+  }
+
+  .info-card,
+  .content-card,
+  .tool-card,
+  .answer-section,
+  .insight-card,
+  .workspace-mini-card,
+  .workspace-hub-card,
+  .workspace-chat-list-item,
+  .workspace-chat-discovery-card,
+  .workspace-chat-request-card,
+  .workspace-chat-member-card,
+  .workspace-chat-settings-card,
+  .workspace-chat-settings-subcard,
+  .workspace-chat-thread-tile,
+  .visual-card,
+  .highlight-card,
+  .auth-helper-card,
+  .terms-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 14px !important;
+    border-radius: 16px !important;
+    box-sizing: border-box;
+  }
+
+  .content-card {
+    margin-top: 0 !important;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+  }
+
+  .workspace-content [class*="grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .workspace-content .workspace-command-toolbar,
+  .workspace-content .workspace-analytics-control-bar,
+  .workspace-content .workspace-focus-meta,
+  .workspace-content .workspace-analytics-focus-meta,
+  .workspace-content .workspace-filter-strip,
+  .workspace-content .workspace-toggle-strip,
+  .workspace-content .workspace-chat-list-head,
+  .workspace-content .workspace-chat-thread-head,
+  .workspace-content .workspace-chat-bubble-head,
+  .workspace-content .workspace-chat-setting-row,
+  .workspace-content .workspace-chat-header-actions,
+  .workspace-content .workspace-chat-contact-row,
+  .workspace-content .settings-toolbar-row,
+  .workspace-content .billing-action-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px;
+    align-items: stretch !important;
+  }
+
+  .auth-input,
+  .question-input,
+  .workspace-input,
+  .workspace-command-search,
+  .workspace-chat-mobile-input,
+  .workspace-chat-edit-input,
+  textarea,
+  select {
+    min-height: 44px;
+  }
+
+  .workspace-chat-management-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+  }
+
+  .workspace-chat-column,
+  .workspace-chat-left-panel,
+  .workspace-chat-discovery-panel,
+  .workspace-chat-conversation-card,
+  .workspace-chat-profile-panel {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .workspace-chat-conversation-card,
+  .workspace-chat-profile-panel {
+    order: -1;
+  }
+
+  .workspace-chat-conversation-card.workspace-chat-whatsapp-shell,
+  .workspace-chat-profile-panel {
+    min-height: calc(100dvh - 220px) !important;
+    max-height: calc(100dvh - 220px);
+    border-radius: 22px !important;
+    overflow: hidden;
+  }
+
+  .workspace-chat-mobile-header,
+  .workspace-chat-profile-header {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    padding: 12px 14px;
+  }
+
+  .workspace-chat-conversation-stream,
+  .workspace-chat-profile-scroll {
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .workspace-chat-conversation-stream {
+    padding-bottom: 18px;
+  }
+
+  .workspace-chat-mobile-composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(229, 221, 213, 0.78), rgba(229, 221, 213, 0.98));
+    backdrop-filter: blur(10px);
+  }
+
+  .workspace-chat-input-shell {
+    min-height: 56px;
+    align-items: flex-end;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  .workspace-chat-mobile-input,
+  .workspace-chat-edit-input {
+    min-height: 44px;
+    max-height: 120px;
+  }
+
+  .workspace-chat-send-fab,
+  .workspace-chat-icon-button,
+  .workspace-chat-camera-button,
+  .workspace-chat-emoji-trigger,
+  .workspace-chat-attach-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .workspace-chat-list,
+  .workspace-chat-discovery-scroll {
+    max-height: 36vh;
+    padding-right: 0;
+  }
+
+  .workspace-chat-list-item,
+  .workspace-chat-discovery-card,
+  .workspace-chat-request-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .workspace-chat-list-meta,
+  .workspace-chat-list-side,
+  .workspace-chat-list-icons {
+    margin-left: 0;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .workspace-chat-whatsapp-shell .workspace-direct-message {
+    width: fit-content;
+    max-width: 88%;
+  }
+
+  .workspace-chat-bubble-foot {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between;
+    align-items: center !important;
+    gap: 8px;
+  }
+
+  .workspace-chat-popup-menu,
+  .workspace-chat-header-menu,
+  .workspace-chat-viewer-modal,
+  .admin-user-modal,
+  .admin-user-modal-backdrop .admin-user-modal {
+    max-width: calc(100vw - 20px);
+  }
+}
