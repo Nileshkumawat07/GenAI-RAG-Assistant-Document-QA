@@ -1,68 +1,130 @@
 # GenAI RAG Assistant Document QA
 
-A full-stack document question answering application that lets users upload a PDF or TXT file, ask natural-language questions about it, and receive concise answers grounded only in the uploaded content.
-
-This project combines a React frontend with a FastAPI backend and a lightweight retrieval-augmented generation (RAG) pipeline. It is designed for local development and can also be deployed as a single Docker container to AWS.
+A full-stack AI workspace built with React and FastAPI. The repository started as a document question answering app and now includes a broader product surface with authentication, workspace dashboards, team collaboration, chat management, contact workflows, payments, image generation, object detection, and deployment tooling.
 
 ## Overview
 
-The application provides a focused workspace for document-based question answering:
+This project combines a React frontend with a FastAPI backend and a MySQL-backed data layer. It supports document retrieval with retrieval-augmented generation, user and admin workflows, subscription and billing flows, and several AI-powered features in a single application.
 
-- Upload a document in `.pdf` or `.txt` format
-- Extract readable text from the uploaded file
-- Split the document into chunks for retrieval
-- Find the most relevant chunks for the user question
-- Generate a concise answer using a Groq-hosted LLM through the OpenAI-compatible API
-- Display a clean frontend interface for upload, question input, and answer viewing
+At a high level, the app includes:
 
-## Features
+- Document upload and question answering for PDF and TXT files
+- User signup, login, session-aware workspace access, and OTP support
+- Social and linked provider integration scaffolding
+- Workspace dashboards, notifications, and analytics panels
+- Chat history, conversations, teams, and collaboration-oriented workspace sections
+- Admin center and management tooling for contact and support workflows
+- Razorpay payment and subscription transaction flows
+- Image generation and object detection endpoints and UI panels
+- Docker-based local deployment and AWS-oriented deployment automation
 
-- Document upload support for PDF and TXT files
-- FastAPI backend with upload, query, and health endpoints
-- React frontend with a simple document assistant UI
-- Lightweight keyword-overlap retrieval for relevant chunk selection
-- LLM-based answer generation restricted to uploaded document context
-- Status-aware frontend feedback for uploads and questions
-- Dockerized production setup for AWS-friendly deployment
-- Single-container deployment flow serving both frontend and backend
+## Current Product Scope
+
+The repository is no longer just a simple RAG demo. The codebase currently exposes the following product areas:
+
+### Document Retrieval
+
+- Upload PDF and TXT files
+- Extract and chunk document text
+- Retrieve relevant chunks using embedding and retrieval logic
+- Ask natural-language questions grounded in uploaded content
+- Return answers with source context
+
+### Authentication and Account Flows
+
+- Signup and login UI
+- Backend auth routes and service layer
+- Persistent session storage on the frontend
+- OTP/email-related backend dependencies and service support
+- Social OAuth configuration support
+- Linked provider management routes and services
+
+### Workspace Experience
+
+- Workspace dashboard and notifications
+- Team management panel
+- Chat management and conversation panes
+- Chat discovery, history, and recent activity views
+- User settings and profile panels
+- Analytics and billing-related workspace views
+
+### Admin and Management
+
+- Admin center API and service layer
+- Contact request intake and management workflows
+- Reply templates, assignment history, audit logging, and admin notifications
+- Management-focused support tooling and seed data
+
+### AI Features Beyond RAG
+
+- Object detection route and frontend panel
+- Image generation route and frontend panel
+- Shared AI workspace layout across features
+
+### Payments and Subscription Support
+
+- Razorpay integration variables and payment service support
+- Subscription transaction models and billing metadata
+- Billing API helpers in the frontend
 
 ## Tech Stack
 
 ### Frontend
 
 - React 18
-- CSS
+- Plain CSS
 - `react-scripts`
+- Firebase client libraries for selected auth-related integrations
 
 ### Backend
 
 - FastAPI
 - Uvicorn
-- Python 3.13
-- `pypdf`
-- `python-multipart`
-- `python-dotenv`
-- OpenAI Python SDK configured for Groq's OpenAI-compatible endpoint
+- SQLAlchemy
+- PyMySQL
+- Alembic
+- OpenAI-compatible model access for Groq-hosted LLM calls
+- Sentence Transformers
+- FAISS CPU
+- PyTorch CPU wheels
+- Diffusers and Hugging Face model loading for image generation
+- `pypdf` for PDF parsing
+- `boto3` for AWS integrations
+- `razorpay` for payments
+
+### Database and Storage
+
+- MySQL 8.4 via Docker Compose
+- SQLAlchemy ORM models for users, workspace data, chat, admin flows, and subscriptions
+- Local document storage
+- Optional AWS S3-backed asset/storage configuration
 
 ### Deployment
 
-- Docker multi-stage build
-- AWS-ready single container deployment model
+- Multi-stage Docker build
+- Docker Compose for app + MySQL
+- Ansible deployment playbook
 
-## Project Structure
+## Repository Structure
 
 ```text
 GenAI-RAG-Assistant-Document-QA/
 |-- backend/
+|   |-- alembic/
+|   |   `-- versions/
 |   |-- app/
 |   |   |-- api/
 |   |   |   `-- routes/
 |   |   |-- core/
+|   |   |-- models/
 |   |   |-- schemas/
 |   |   `-- services/
+|   |-- documents/
+|   |-- tests/
+|   |-- .env.example
 |   |-- main.py
 |   |-- requirements.txt
-|   `-- documents/
+|   `-- requirements-otp.txt
 |-- frontend/
 |   |-- public/
 |   |-- src/
@@ -70,156 +132,241 @@ GenAI-RAG-Assistant-Document-QA/
 |   |   `-- shared/
 |   |-- package.json
 |   `-- package-lock.json
+|-- mysql/
+|   `-- mysql.env.example
 |-- Dockerfile
-|-- .dockerignore
+|-- docker-compose.yml
+|-- deploy.ps1
+|-- deploy.yml
 `-- README.md
 ```
 
-### Structure Notes
+## Backend Modules
 
-- `backend/main.py` is the single backend entrypoint and app bootstrap
-- `backend/app` contains the route, config, schema, and service layers
-- `frontend/src/features` contains feature-specific UI like document retrieval and object detection
-- `frontend/src/shared` contains shared API, session, and formatting helpers
+### API Routes
 
-## How It Works
+The FastAPI app wires these route groups:
 
-### 1. Document ingestion
+- `auth`
+- `admin_center`
+- `chat_management`
+- `contact_requests`
+- `documents`
+- `frontend`
+- `health`
+- `image_generation`
+- `linked_providers`
+- `management`
+- `object_detection`
+- `payments`
+- `workspace_hub`
 
-The backend accepts an uploaded file through the `/documents/upload` endpoint.
+### Service Layer
 
-- PDF files are parsed with `pypdf`
-- TXT files are decoded as UTF-8 text
-- Empty or unreadable files are rejected
+The backend service layer currently includes:
 
-### 2. Chunking
+- `auth_service`
+- `admin_audit_service`
+- `admin_center_service`
+- `chat_management_core`
+- `chat_management_service`
+- `contact_request_service`
+- `image_generation_service`
+- `linked_provider_service`
+- `management_service`
+- `object_detection_service`
+- `otp_service`
+- `payment_service`
+- `rag_service`
+- `social_oauth_service`
+- `storage_service`
+- `subscription_transaction_service`
+- `workspace_hub_service`
 
-The extracted text is split into smaller chunks using configurable chunk size and overlap settings.
+### Data Model Coverage
 
-This improves retrieval quality by allowing the system to compare the user question against smaller, more relevant document segments instead of the entire file at once.
+The ORM layer includes models for:
 
-### 3. Retrieval
+- Users, archives, login sessions, and user settings
+- Team workspaces and team members
+- Workspace notifications, chat threads, and chat messages
+- Chat groups, communities, members, reactions, pins, stars, and preferences
+- Contact requests, management notes, reply templates, and assignment history
+- Linked providers and social OAuth configuration
+- Subscription transactions, billing notes, security events, and admin audit entities
 
-The backend uses a lightweight lexical overlap approach:
+### Database Bootstrap Behavior
 
-- tokenize the question
-- tokenize each chunk
-- remove common stopwords
-- rank chunks by overlap score
+`backend/main.py` performs startup-time schema checks and bootstrap logic for:
 
-The top matching chunks are selected and passed into the model prompt as document context.
+- user/social link compatibility
+- contact request schema updates
+- user subscription/profile/admin fields
+- user settings and login session tables
+- management support tables
+- workspace hub and chat-related tables
+- subscription transaction enrichment
+- seed data for reply templates and admin center defaults
 
-### 4. Answer generation
+## Frontend Modules
 
-The selected chunks are sent to the Groq API using the OpenAI SDK. The model is instructed to:
+The frontend is organized around feature folders:
 
-- answer only from the provided document context
-- avoid outside knowledge
-- return a concise direct answer
-- reply `Not in document.` if the answer is not clearly present
+- `auth`
+- `document-retrieval`
+- `image-generation`
+- `info`
+- `object-detection`
+- `workspace`
 
-## API Endpoints
+The main app shell handles:
 
-### `GET /health`
-
-Returns service health and indexing status.
-
-### `POST /documents/upload`
-
-Uploads and indexes a PDF or TXT document.
-
-### `POST /query`
-
-Accepts a JSON payload:
-
-```json
-{
-  "question": "What skills are listed in the resume?"
-}
-```
-
-Returns an answer plus source excerpts from the retrieved chunks.
-
-### `GET /object-detection/health`
-
-Returns the object-detection route status and configured model.
-
-### `POST /object-detection/detect`
-
-Uploads an image and returns:
-
-- a short summary
-- detected objects
-- counts
-- approximate locations
-- confidence levels
+- route state with hash-based navigation
+- session-aware screen selection
+- header notifications and recent activity
+- workspace routing and mobile sidebar interactions
 
 ## Environment Variables
 
-Copy `backend/.env.example` to `backend/.env` for local development, then fill in your real values.
+Copy `backend/.env.example` to `backend/.env` and set the values needed for your environment.
+
+Core application variables:
 
 ```env
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=llama-3.1-8b-instant
-CHUNK_SIZE=650
+OBJECT_DETECTION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+CHUNK_SIZE=700
 CHUNK_OVERLAP=120
-TOP_K_RESULTS=4
+TOP_K_RESULTS=8
 FRONTEND_ORIGIN=http://localhost:3000
+APP_BASE_URL=http://localhost:8000
 ```
 
-### Variable reference
+Database variables:
 
-- `GROQ_API_KEY`: Required. API key used to call Groq.
-- `GROQ_MODEL`: Model name used for answer generation.
-- `CHUNK_SIZE`: Maximum approximate chunk size.
-- `CHUNK_OVERLAP`: Overlap between chunk boundaries.
-- `TOP_K_RESULTS`: Number of retrieved chunks to send to the model.
-- `FRONTEND_ORIGIN`: Allowed frontend origin for CORS during local development.
+```env
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_DATABASE=genai_app
+MYSQL_USER=genai_user
+MYSQL_PASSWORD=genai_user_123
+```
 
-## Local Development Setup
+Embedding and image generation variables:
+
+```env
+EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
+IMAGE_GENERATION_BASE_MODEL=stabilityai/stable-diffusion-xl-base-1.0
+IMAGE_GENERATION_REPO=ByteDance/SDXL-Lightning
+IMAGE_GENERATION_UNET_WEIGHTS=sdxl_lightning_4step_unet.safetensors
+IMAGE_GENERATION_STEPS=4
+IMAGE_GENERATION_GUIDANCE_SCALE=0
+IMAGE_GENERATION_WIDTH=512
+IMAGE_GENERATION_HEIGHT=512
+IMAGE_GENERATION_LOCAL_FILES_ONLY=false
+```
+
+Email and OTP variables:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_gmail_app_password
+SMTP_FROM_EMAIL=your_email@gmail.com
+OTP_LENGTH=6
+OTP_TTL_SECONDS=600
+OTP_RESEND_COOLDOWN_SECONDS=30
+```
+
+Social OAuth variables:
+
+```env
+SOCIAL_OAUTH_STATE_SECRET=your_social_oauth_state_secret
+SOCIAL_OAUTH_STATE_TTL_SECONDS=600
+FACEBOOK_OAUTH_ENABLED=false
+FACEBOOK_OAUTH_CLIENT_ID=
+FACEBOOK_OAUTH_CLIENT_SECRET=
+LINKEDIN_OAUTH_ENABLED=false
+LINKEDIN_OAUTH_CLIENT_ID=
+LINKEDIN_OAUTH_CLIENT_SECRET=
+```
+
+Payment variables:
+
+```env
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_COMPANY_NAME=Unified AI Workspace
+```
+
+Optional AWS-related variables are referenced by the deployment tooling and storage configuration:
+
+```env
+AWS_REGION=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_S3_BUCKET=
+AWS_S3_PUBLIC_BASE_URL=
+SES_FROM_EMAIL=
+```
+
+## Local Development
 
 ### Prerequisites
 
-- Python 3.13 or compatible Python 3 version
-- Node.js 20 or later recommended
+- Python 3.10 or later compatible with the backend dependencies
+- Node.js 20+
 - npm
-- A valid Groq API key
+- MySQL, or Docker for the included Compose setup
 
-### Start the project
-
-After installing dependencies and creating `backend/.env`, run the project with these two commands in separate terminals:
-
-Backend:
+### Backend Setup
 
 ```bash
 cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+pip install -r requirements-otp.txt
+```
+
+Create `backend/.env` from `backend/.env.example`, then run:
+
+```bash
 python main.py
 ```
 
-Frontend:
+The API starts on `http://127.0.0.1:8000`.
+
+### Frontend Setup
 
 ```bash
 cd frontend
+npm install
 npm start
 ```
 
-The backend runs on `http://127.0.0.1:8000` and the frontend runs on `http://localhost:3000`.
+The frontend runs on `http://localhost:3000`.
 
-Because the frontend `package.json` includes a proxy to `http://127.0.0.1:8000`, local API calls work without manually setting an API base URL in development.
+The frontend `package.json` includes a proxy to `http://127.0.0.1:8000` for local development.
 
-## Production Docker Setup
+## Docker
 
-This project includes a multi-stage Docker build that:
+This repository ships with a multi-stage Dockerfile that:
 
 - builds the React frontend
-- installs the Python backend
-- copies the production frontend build into the final image
-- serves both the frontend and API from a single FastAPI container
+- installs backend dependencies
+- installs OTP/email-related backend dependencies
+- preloads the default sentence-transformer model
+- copies the frontend production build into the runtime image
+- serves both frontend and backend from the FastAPI container
 
-### Start with Docker
+Build and run manually:
 
 ```bash
-docker run -p 8000:8000 -e GROQ_API_KEY=your_groq_api_key genai-rag-assistant
+docker build -t genai-rag-assistant .
+docker run -p 8000:8000 --env-file backend/.env genai-rag-assistant
 ```
 
 Then open:
@@ -228,19 +375,14 @@ Then open:
 http://localhost:8000
 ```
 
-## Docker Compose With MySQL
+## Docker Compose
 
-This repository now includes a separate MySQL service through Docker Compose without changing the current application logic.
+`docker-compose.yml` starts:
 
-The app will still run exactly as it does today, and MySQL will be available alongside it for future persistence work.
+- `app`: the FastAPI + frontend container
+- `mysql`: a MySQL 8.4 database container
 
-### Files added for MySQL
-
-- `docker-compose.yml`: starts the current app container and a MySQL container together
-- `mysql/mysql.env.example`: sample MySQL credentials file
-- `mysql/init/`: optional SQL init scripts folder for future schema setup
-
-### One-time setup
+### Compose Setup
 
 1. Copy the MySQL env template:
 
@@ -248,123 +390,56 @@ The app will still run exactly as it does today, and MySQL will be available alo
 copy mysql\mysql.env.example mysql\mysql.env
 ```
 
-2. Open `mysql/mysql.env` and set your passwords:
+2. Fill in your MySQL credentials in `mysql/mysql.env`.
 
-```env
-MYSQL_ROOT_PASSWORD=your_root_password
-MYSQL_DATABASE=genai_app
-MYSQL_USER=genai_user
-MYSQL_PASSWORD=your_app_password
-```
+3. Make sure `backend/.env` is present and populated.
 
-3. Make sure `backend/.env` already contains your current app values like `GROQ_API_KEY`.
-
-### Start app + MySQL together
+4. Start the stack:
 
 ```bash
-docker compose up --build -d
+docker compose up --build
 ```
 
-### Stop the stack
+The application is exposed on `http://localhost:8000`.
+
+## Deployment Tooling
+
+The repository includes:
+
+- `deploy.yml`: an Ansible playbook that pulls Docker images, provisions MySQL, injects runtime variables, and launches the app container
+- `deploy.ps1`: PowerShell helper script for deployment workflow
+- `inventory.ini`: inventory configuration placeholder
+
+The Ansible playbook expects environment-specific values for:
+
+- Groq runtime configuration
+- MySQL credentials
+- AWS/S3/SES values
+- social OAuth values
+- Razorpay values
+
+## Testing
+
+The backend includes pytest coverage for selected areas, including:
+
+- workspace hub service
+- linked provider routes
+- chat management service
+- chat management API
+
+Run tests from `backend/` with:
 
 ```bash
-docker compose down
+pytest
 ```
 
-### Service endpoints
+## Key Notes
 
-- App: `http://localhost:8000`
-- MySQL from your host machine: `localhost:3306`
-- MySQL from the app container/network: `mysql:3306`
+- The backend currently uses MySQL by default through SQLAlchemy configuration.
+- The repository also contains `backend/app.db`, but the active runtime config points to MySQL unless `DATABASE_URL` is overridden.
+- Several startup helpers in `backend/main.py` perform schema evolution logic in code in addition to Alembic migrations.
+- Some capabilities depend on external credentials and model downloads, especially Groq, Razorpay, SMTP, Hugging Face, and optional AWS services.
 
-### Default MySQL connection values
+## Summary
 
-- Host: `localhost`
-- Port: `3306`
-- Database: value of `MYSQL_DATABASE`
-- Username: value of `MYSQL_USER`
-- Password: value of `MYSQL_PASSWORD`
-
-### Notes
-
-- MySQL data is persisted in the Docker volume `mysql_data`
-- Hugging Face model cache is persisted in the Docker volume `huggingface_cache`
-- The current project does not yet read or write MySQL data, so this setup is non-breaking and ready for future integration
-
-## AWS Deployment
-
-This repository is structured to deploy cleanly to container-based AWS services such as:
-
-- AWS App Runner
-- Amazon ECS with Fargate
-- Elastic Beanstalk with Docker
-
-### Recommended deployment flow
-
-1. Build the Docker image
-2. Push the image to Amazon ECR
-3. Deploy the image to your chosen AWS service
-4. Set `GROQ_API_KEY` and any other required environment variables in the AWS console or task definition
-5. Expose the service on port `8000` or map AWS traffic to the container `PORT`
-
-### Important production note
-
-The backend requires `GROQ_API_KEY` at startup. If it is missing, the application will fail to boot.
-
-## What Was Added in This Version
-
-The project was updated with production deployment support and a cleaner deployment story:
-
-- Added a root-level `Dockerfile`
-- Added `.dockerignore`
-- Updated the FastAPI backend to serve the built React frontend in production
-- Unified frontend and backend delivery into a single container for AWS deployment
-
-## Current Limitations
-
-- Uploaded documents are stored in memory for the running process and are not persisted across restarts
-- Retrieval uses keyword overlap rather than vector embeddings
-- The app currently supports one running backend instance's in-memory state only
-- There is no user authentication, database, or persistent storage layer yet
-
-## Future Improvements
-
-- Add persistent document storage
-- Add embeddings-based semantic retrieval
-- Store chat/query history
-- Support multiple documents and collections
-- Add user authentication and role-based access
-- Add automated tests and CI/CD workflows
-
-## Screens and User Flow
-
-The user workflow is straightforward:
-
-1. Open the app
-2. Upload a PDF or TXT document
-3. Wait for indexing to complete
-4. Ask a focused question
-5. Review the answer returned from the indexed document
-
-## Development Notes
-
-- The frontend uses `REACT_APP_API_BASE_URL` only for production-style custom API targeting
-- In local development, the frontend relies on the configured React proxy
-- In containerized production, FastAPI serves the React build directly
-
-## Repository Notes
-
-If you plan to publish this project on GitHub, it is a good idea to also add:
-
-- screenshots or a demo GIF
-- a license file
-- contribution guidelines
-- a `.gitignore` file if it is not already present
-
-## License
-
-Add your preferred license here, for example MIT, Apache-2.0, or a private/internal-use notice.
-
----
-
-Built as a full-stack document question answering assistant with React, FastAPI, Groq, and Docker for local use and AWS deployment.
+This repository is best described as an AI workspace platform centered on document QA, with additional collaboration, admin, payment, and multimodal AI features. If you plan to continue developing or presenting the project, this README should now match the real scope of what is in the codebase much more closely than the earlier MVP-focused version.
