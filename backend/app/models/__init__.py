@@ -15,6 +15,9 @@ from app.models.chat_message import ChatMessage
 from app.models.chat_message_pin import ChatMessagePin
 from app.models.chat_message_reaction import ChatMessageReaction
 from app.models.chat_message_star import ChatMessageStar
+from app.models.career_application import CareerApplication
+from app.models.career_application_assignment_history import CareerApplicationAssignmentHistory
+from app.models.career_opening import CareerOpening
 from app.models.communication import CommunicationLog, CommunicationTemplate
 from app.models.contact_request import ContactRequest
 from app.models.content_entry import ContentEntry
@@ -62,6 +65,9 @@ __all__ = [
     "ChatMessageReaction",
     "ChatMessageStar",
     "ChatMessagePin",
+    "CareerOpening",
+    "CareerApplication",
+    "CareerApplicationAssignmentHistory",
     "CommunicationTemplate",
     "CommunicationLog",
     "ContentEntry",

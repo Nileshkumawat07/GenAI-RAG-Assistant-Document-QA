@@ -11,6 +11,7 @@ from app.api.routes.auth import build_auth_router
 from app.api.routes.admin_center import build_admin_center_router
 from app.api.routes.contact_requests import build_contact_request_router
 from app.api.routes.chat_management import build_chat_management_router
+from app.api.routes.careers import build_career_router
 from app.api.routes.documents import build_document_router
 from app.api.routes.frontend import build_frontend_router, mount_frontend
 from app.api.routes.health import build_health_router
@@ -28,6 +29,7 @@ from app.services.auth_service import AuthService
 from app.services.admin_center_service import AdminCenterService
 from app.services.contact_request_service import ContactRequestService
 from app.services.chat_management_service import ChatManagementService
+from app.services.career_service import CareerService
 from app.services.linked_provider_service import LinkedProviderService
 from app.services.management_service import ManagementService
 from app.services.otp_service import OTPService
@@ -506,6 +508,7 @@ def create_app() -> FastAPI:
     otp_service = OTPService()
     auth_service = AuthService()
     contact_request_service = ContactRequestService()
+    career_service = CareerService()
     linked_provider_service = LinkedProviderService()
     management_service = ManagementService(auth_service)
     admin_center_service = AdminCenterService(auth_service)
@@ -536,6 +539,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router(rag_service))
     app.include_router(build_auth_router(otp_service, auth_service))
     app.include_router(build_contact_request_router(contact_request_service, auth_service))
+    app.include_router(build_career_router(career_service, auth_service))
     app.include_router(build_management_router(management_service, auth_service))
     app.include_router(build_admin_center_router(admin_center_service, auth_service))
     app.include_router(build_linked_provider_router(linked_provider_service, auth_service, social_oauth_service))

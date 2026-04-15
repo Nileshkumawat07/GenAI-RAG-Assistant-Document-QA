@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel";
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
+import Careers from "../info/Careers";
 import SettingsPanel from "./SettingsPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
 import ChatHistoryPanel from "./ChatHistoryPanel";
@@ -215,10 +216,10 @@ const INFO_PAGE_CONFIG = {
   },
   careers: {
     title: "Careers",
-    description: "Explore career opportunities with us",
-    message: "Review the same careers content through the main workspace experience.",
-    statusTitle: "Careers Notes",
-    statusItems: ["Use the sidebar tabs to move across open positions, culture, internships, process, and referrals."],
+    description: "Explore live roles, hiring culture, and application progress",
+    message: "Review live openings, apply with a full profile, and manage applicant workflows from the same workspace experience.",
+    statusTitle: "Careers Studio",
+    statusItems: ["Live openings", "Structured applications", "Management queue", "Opening publishing controls"],
     tabs: [
       {
         id: "positions",
@@ -270,16 +271,16 @@ const INFO_PAGE_CONFIG = {
         button: "View Hiring Guide",
       },
       {
-        id: "referral",
-        label: "Referral",
-        heading: "Referral Program",
+        id: "applications",
+        label: "Applications",
+        heading: "Applications",
         body: ["Know someone great? Refer them and earn up to Rs10,000 if they’re hired."],
         list: [
-          "Submit a referral form",
-          "Get notified if the referral is shortlisted",
-          "Receive bonus on successful hire",
+          "Submit a complete candidate profile",
+          "Review recruiter feedback and assignment updates",
+          "Follow application progress without leaving the workspace",
         ],
-        button: "Refer a Friend",
+        button: "View My Applications",
       },
     ],
   },
@@ -1998,6 +1999,23 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
 
   const renderInfoContent = () => {
     if (!activeInfoContent) return null;
+
+    if (selectedInfoPage === "careers") {
+      return (
+        <Careers
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          canAccessManagement={canAccessManagement}
+          activeCategory={activeInfoTab}
+          onCategoryChange={(nextTab) =>
+            setInfoTabs((current) => ({
+              ...current,
+              careers: nextTab,
+            }))
+          }
+        />
+      );
+    }
 
     if (selectedInfoPage === "administration" || selectedInfoPage === "management") {
       const totalRows = adminTables.reduce((sum, table) => sum + (table.rowCount || 0), 0);
