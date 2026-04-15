@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from app.core.config import APP_BASE_URL
 from app.core.database import get_db
@@ -14,6 +14,41 @@ from app.schemas.linked_provider import (
 from app.services.auth_service import AuthService, AuthServiceError
 from app.services.linked_provider_service import LinkedProviderService, LinkedProviderServiceError
 from app.services.social_oauth_service import SocialOAuthService, SocialOAuthServiceError
+
+
+def resolve_public_base_url(request: Request) -> str:
+    request_base_url = str(request.base_url).rstrip("/")
+    configured_base_url = APP_BASE_URL.rstrip("/")
+
+    if not configured_base_url:
+        return request_base_url
+
+    request_parts = urlparse(request_base_url)
+    configured_parts = urlparse(configured_base_url)
+    request_host = (request_parts.hostname or "").lower()
+    configured_host = (configured_parts.hostname or "").lower()
+
+    allowed_hosts = {configured_host}
+    if configured_host.startswith("www."):
+        allowed_hosts.add(configured_host[4:])
+    elif configured_host:
+        allowed_hosts.add(f"www.{configured_host}")
+
+    if not request_host or request_host not in allowed_hosts:
+        return configured_base_url
+
+    # Never downgrade a configured HTTPS public URL to HTTP because of proxy headers.
+    if configured_parts.scheme == "https" and request_parts.scheme != "https":
+        return configured_base_url
+
+    return request_base_url
+
+
+def build_callback_url(request: Request, provider_key: str) -> str:
+    public_base_url = resolve_public_base_url(request)
+    public_parts = urlparse(public_base_url)
+    callback_parts = public_parts._replace(path=f"/auth/{provider_key}/callback", params="", query="", fragment="")
+    return urlunparse(callback_parts)
 
 
 def build_linked_provider_router(
@@ -48,29 +83,6 @@ def build_linked_provider_router(
             providerId=item.provider_id,
             email=item.email,
         )
-
-    def resolve_public_base_url(request: Request) -> str:
-        request_base_url = str(request.base_url).rstrip("/")
-        configured_base_url = APP_BASE_URL.rstrip("/")
-
-        if not configured_base_url:
-            return request_base_url
-
-        request_host = (urlparse(request_base_url).hostname or "").lower()
-        configured_host = (urlparse(configured_base_url).hostname or "").lower()
-        allowed_hosts = {configured_host}
-        if configured_host.startswith("www."):
-            allowed_hosts.add(configured_host[4:])
-        elif configured_host:
-            allowed_hosts.add(f"www.{configured_host}")
-
-        if request_host and request_host in allowed_hosts:
-            return request_base_url
-        return configured_base_url
-
-    def build_callback_url(request: Request, provider_key: str) -> str:
-        public_base_url = resolve_public_base_url(request)
-        return f"{public_base_url.rstrip('/')}/auth/{provider_key}/callback"
 
     def handle_provider_oauth_callback(
         provider_key: str,
