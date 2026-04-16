@@ -412,7 +412,6 @@ function Careers({
       <section style={styles.heroSection}>
         <div style={styles.heroCopy}>
           <span style={styles.heroEyebrow}>Talent Studio</span>
-          <h3 style={styles.heroTitle}>Build with a team that ships serious AI products with polish, speed, and accountability.</h3>
           <p style={styles.heroText}>
             Explore live roles, understand the work environment, and apply through a hiring flow built to feel crisp and professional.
           </p>
@@ -433,17 +432,13 @@ function Careers({
         </div>
         <div style={styles.heroPanel}>
           <p style={styles.heroPanelLabel}>Why this page now feels premium</p>
-          <ul style={styles.heroList}>
-            <li>Live opening cards with responsibilities, requirements, skills, and perks</li>
-            <li>Structured application submission and candidate status tracking</li>
-            <li>Admin and management controls for openings plus recruiter-style queue handling</li>
-          </ul>
+          <p style={styles.heroPanelText}>Live roles, structured applications, and cleaner hiring operations in one focused careers workspace.</p>
         </div>
       </section>
 
       {openings.length > 0 || canAccessManagement ? (
         <section style={styles.openingsGrid}>
-          <div style={styles.roleRail}>
+          <div className="hidden-scrollbar" style={styles.roleRail}>
             {(openings || []).map((opening) => (
               <button
                 key={opening.id}
@@ -478,7 +473,7 @@ function Careers({
             ))}
           </div>
 
-          <div style={styles.roleDetailCard}>
+          <div className="hidden-scrollbar" style={styles.roleDetailCard}>
             {selectedOpening ? (
             <>
               <div style={styles.roleDetailHead}>
@@ -965,15 +960,14 @@ const styles = {
   inlineTab: { padding: "12px 16px", borderRadius: "999px", border: "1px solid #c6d3eb", background: "#f8fbff", color: "#22406f", cursor: "pointer", fontWeight: 600 },
   inlineTabActive: { background: "#17315f", color: "#fff", borderColor: "#17315f" },
   heroSection: { display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(320px, 0.9fr)", gap: "20px" },
-  heroCopy: { padding: "28px", borderRadius: "28px", background: "linear-gradient(135deg, #17315f 0%, #234e93 58%, #3f7ad8 100%)", color: "#fff", boxShadow: "0 20px 60px rgba(24,51,95,0.24)" },
+  heroCopy: { padding: "22px", borderRadius: "24px", background: "linear-gradient(135deg, #17315f 0%, #234e93 58%, #3f7ad8 100%)", color: "#fff", boxShadow: "0 20px 60px rgba(24,51,95,0.24)" },
   heroEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.8 },
-  heroTitle: { fontSize: "34px", lineHeight: 1.15, margin: "14px 0 12px" },
-  heroText: { fontSize: "15px", lineHeight: 1.7, maxWidth: "720px", opacity: 0.92 },
-  heroPanel: { padding: "24px", borderRadius: "28px", background: "linear-gradient(180deg, #fffdf7 0%, #fff7e8 100%)", border: "1px solid #f0ddaf", color: "#5f4b1b" },
+  heroText: { fontSize: "14px", lineHeight: 1.6, maxWidth: "720px", opacity: 0.92, margin: "10px 0 0" },
+  heroPanel: { padding: "20px", borderRadius: "24px", background: "linear-gradient(180deg, #fffdf7 0%, #fff7e8 100%)", border: "1px solid #f0ddaf", color: "#5f4b1b" },
   heroPanelLabel: { marginTop: 0, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700 },
-  heroList: { paddingLeft: "18px", lineHeight: 1.8 },
+  heroPanelText: { margin: "10px 0 0", lineHeight: 1.7 },
   heroStats: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginTop: "20px" },
-  statCard: { background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "18px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "6px" },
+  statCard: { background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "16px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" },
   openingsGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 0.8fr) minmax(0, 1.2fr)", gap: "18px", minHeight: 0, height: "660px", maxHeight: "660px", alignItems: "stretch" },
   roleRail: { display: "flex", flexDirection: "column", gap: "14px", height: "660px", overflowY: "auto", minHeight: 0, paddingRight: "8px" },
   roleCard: { borderRadius: "20px", border: "1px solid #d7e3f7", background: "#fff", padding: "18px", textAlign: "left", cursor: "pointer", boxShadow: "0 10px 30px rgba(22,43,79,0.06)", minHeight: "210px", flex: "0 0 auto" },
