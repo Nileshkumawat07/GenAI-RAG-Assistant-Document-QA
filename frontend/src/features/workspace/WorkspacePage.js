@@ -4447,16 +4447,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         </aside>
 
         <div className="workspace-content">
-          {infoConfig && selectedInfoPage !== "careers" && !(selectedInfoPage === "management" && activeInfoTab === "studio") ? (
-            <div className="info-card">
-              <p>{infoConfig.message}</p>
-            </div>
-          ) : workspaceMessage ? (
-            <div className="info-card">
-              <p>{workspaceMessage}</p>
-            </div>
-          ) : null}
-
           <div className={`content-card ${activeSection === "object-detection" || activeSection === "image-generation" ? "object-detection-mode" : ""}`}>
             {infoConfig ? (
               renderInfoContent()

@@ -1437,7 +1437,7 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 24px;
+  padding: 14px 24px 24px;
   background: linear-gradient(180deg, rgba(251, 253, 255, 0.96), rgba(244, 248, 255, 0.94));
   overflow: hidden;
 }
@@ -1466,7 +1466,7 @@ button {
 }
 
 .content-card {
-  margin-top: 12px;
+  margin-top: 0;
   background: rgba(255, 255, 255, 0.88);
   padding: 14px;
   display: flex;
@@ -2464,7 +2464,7 @@ body.workspace-body-mode .workspace-content {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 24px;
+  padding: 14px 24px 24px;
   background: linear-gradient(180deg, rgba(251, 253, 255, 0.96), rgba(244, 248, 255, 0.94));
   overflow: hidden;
 }
@@ -2486,7 +2486,7 @@ body.workspace-body-mode .info-card p {
 }
 
 body.workspace-body-mode .content-card {
-  margin-top: 12px;
+  margin-top: 0;
   background: rgba(255, 255, 255, 0.88);
   padding: 14px;
   border-radius: 4px;
