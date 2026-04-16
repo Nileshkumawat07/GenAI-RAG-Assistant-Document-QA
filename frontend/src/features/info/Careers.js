@@ -175,6 +175,7 @@ function Careers({
   const [queueFilter, setQueueFilter] = useState("all");
   const [queueSearch, setQueueSearch] = useState("");
   const [studioSection, setStudioSection] = useState("openings");
+  const [applicationsSection, setApplicationsSection] = useState("apply");
 
   const setCategory = (nextCategory) => {
     if (embedded) {
@@ -442,7 +443,7 @@ function Careers({
 
       {openings.length > 0 || canAccessManagement ? (
         <section style={styles.openingsGrid}>
-          <div className="hidden-scrollbar" style={styles.roleRail}>
+          <div style={styles.roleRail}>
             {(openings || []).map((opening) => (
               <button
                 key={opening.id}
@@ -477,7 +478,7 @@ function Careers({
             ))}
           </div>
 
-          <div className="hidden-scrollbar" style={styles.roleDetailCard}>
+          <div style={styles.roleDetailCard}>
             {selectedOpening ? (
             <>
               <div style={styles.roleDetailHead}>
@@ -755,105 +756,129 @@ function Careers({
     );
   };
 
-  const renderApplications = () => (
-    <div style={styles.stack}>
-      <section style={styles.panel}>
-        <div style={styles.panelHeader}>
-          <div>
-            <h3 style={styles.panelTitle}>Apply With A Complete Profile</h3>
-            <p style={styles.panelCopy}>Candidates can submit a proper professional profile with compensation, notice period, links, and resume attachment.</p>
-          </div>
-        </div>
+  const renderApplications = () => {
+    const applicationsNav = [
+      { id: "apply", label: "Apply" },
+      { id: "mine", label: "My Applications" },
+    ];
 
-        {!currentUser?.id ? (
-          <div style={styles.emptyState}>
-            <h4>Login required</h4>
-            <p>Sign in to apply for openings and track your application progress.</p>
-          </div>
-        ) : (
-          <div style={styles.formGrid}>
-            <select style={styles.input} value={applicationOpeningId} onChange={(event) => setApplicationOpeningId(event.target.value)}>
-              <option value="">Select an opening</option>
-              {openings.map((opening) => (
-                <option key={opening.id} value={opening.id}>
-                  {opening.title} | {opening.department}
-                </option>
-              ))}
-            </select>
-            <input style={styles.input} placeholder="Full name" value={applicationForm.fullName} onChange={(e) => handleApplicationChange("fullName", e.target.value)} />
-            <input style={styles.input} placeholder="Email" value={applicationForm.email} onChange={(e) => handleApplicationChange("email", e.target.value)} />
-            <input style={styles.input} placeholder="Mobile" value={applicationForm.mobile} onChange={(e) => handleApplicationChange("mobile", e.target.value)} />
-            <input style={styles.input} placeholder="City" value={applicationForm.city} onChange={(e) => handleApplicationChange("city", e.target.value)} />
-            <input style={styles.input} placeholder="Current company" value={applicationForm.currentCompany} onChange={(e) => handleApplicationChange("currentCompany", e.target.value)} />
-            <input style={styles.input} placeholder="Current role" value={applicationForm.currentRole} onChange={(e) => handleApplicationChange("currentRole", e.target.value)} />
-            <input style={styles.input} placeholder="Total experience" value={applicationForm.totalExperience} onChange={(e) => handleApplicationChange("totalExperience", e.target.value)} />
-            <input style={styles.input} placeholder="Notice period" value={applicationForm.noticePeriod} onChange={(e) => handleApplicationChange("noticePeriod", e.target.value)} />
-            <input style={styles.input} placeholder="Current CTC" value={applicationForm.currentCtc} onChange={(e) => handleApplicationChange("currentCtc", e.target.value)} />
-            <input style={styles.input} placeholder="Expected CTC" value={applicationForm.expectedCtc} onChange={(e) => handleApplicationChange("expectedCtc", e.target.value)} />
-            <input style={styles.input} placeholder="Portfolio URL" value={applicationForm.portfolioUrl} onChange={(e) => handleApplicationChange("portfolioUrl", e.target.value)} />
-            <input style={styles.input} placeholder="LinkedIn URL" value={applicationForm.linkedinUrl} onChange={(e) => handleApplicationChange("linkedinUrl", e.target.value)} />
-            <textarea style={styles.textareaWide} rows={5} placeholder="Cover letter" value={applicationForm.coverLetter} onChange={(e) => handleApplicationChange("coverLetter", e.target.value)} />
-            <div style={styles.fileField}>
-              <label style={styles.fileLabel}>Resume (PDF, DOC, DOCX)</label>
-              <input type="file" accept=".pdf,.doc,.docx" onChange={(event) => handleApplicationChange("resume", event.target.files?.[0] || null)} />
-              <span style={styles.helperText}>{applicationForm.resume?.name || "No file selected"}</span>
-            </div>
-            <button type="button" style={styles.primaryButton} onClick={handleSubmitApplication} disabled={submittingApplication}>
-              {submittingApplication ? "Submitting..." : "Submit Application"}
+    return (
+      <div style={styles.stack}>
+        <div style={styles.studioTabsRow}>
+          {applicationsNav.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setApplicationsSection(item.id)}
+              style={{
+                ...styles.studioPill,
+                ...(applicationsSection === item.id ? styles.studioPillActive : {}),
+              }}
+            >
+              {item.label}
             </button>
-          </div>
-        )}
-      </section>
-
-      <section style={styles.panel}>
-        <div style={styles.panelHeader}>
-          <div>
-            <h3 style={styles.panelTitle}>My Applications</h3>
-            <p style={styles.panelCopy}>Track every application with recruiter comments, assignments, and timeline-aware status updates.</p>
-          </div>
+          ))}
         </div>
-        {userApplications.length === 0 ? (
-          <div style={styles.emptyState}>
-            <h4>No applications yet</h4>
-            <p>Apply for one of the open roles and the status history will appear here.</p>
-          </div>
-        ) : (
-          <div style={styles.stack}>
-            {userApplications.map((item) => (
-              <article key={item.id} style={styles.applicationCard}>
-                <div style={styles.applicationCardHead}>
-                  <div>
-                    <strong>{item.openingTitle}</strong>
-                    <p>{item.openingDepartment} | {item.openingLocation}</p>
-                  </div>
-                  <span style={{ ...styles.statusPill, ...statusStyle(item.status) }}>{item.status}</span>
-                </div>
-                <div style={styles.applicationMeta}>
-                  <span>Application #{item.applicationCode}</span>
-                  <span>Submitted {formatDateTime(item.createdAt)}</span>
-                  <span>{item.assignedManagerName ? `Assigned to ${item.assignedManagerName}` : "Not assigned yet"}</span>
-                </div>
-                {item.adminMessage ? <p style={styles.applicationNote}>{item.adminMessage}</p> : null}
-                <div style={styles.actionRow}>
-                  {item.hasResume ? (
-                    <button type="button" style={styles.ghostButton} onClick={() => downloadCareerResume(item.id)}>
-                      Download Resume
-                    </button>
-                  ) : null}
-                  {!["Hired", "Rejected", "Withdrawn"].includes(item.status) ? (
-                    <button type="button" style={styles.ghostDangerButton} onClick={() => handleWithdraw(item.id)}>
-                      Withdraw
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
 
-    </div>
-  );
+        {applicationsSection === "apply" ? (
+          <section style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>Apply With A Complete Profile</h3>
+                <p style={styles.panelCopy}>Candidates can submit a proper professional profile with compensation, notice period, links, and resume attachment.</p>
+              </div>
+            </div>
+
+            {!currentUser?.id ? (
+              <div style={styles.emptyState}>
+                <h4>Login required</h4>
+                <p>Sign in to apply for openings and track your application progress.</p>
+              </div>
+            ) : (
+              <div style={styles.formGrid}>
+                <select style={styles.input} value={applicationOpeningId} onChange={(event) => setApplicationOpeningId(event.target.value)}>
+                  <option value="">Select an opening</option>
+                  {openings.map((opening) => (
+                    <option key={opening.id} value={opening.id}>
+                      {opening.title} | {opening.department}
+                    </option>
+                  ))}
+                </select>
+                <input style={styles.input} placeholder="Full name" value={applicationForm.fullName} onChange={(e) => handleApplicationChange("fullName", e.target.value)} />
+                <input style={styles.input} placeholder="Email" value={applicationForm.email} onChange={(e) => handleApplicationChange("email", e.target.value)} />
+                <input style={styles.input} placeholder="Mobile" value={applicationForm.mobile} onChange={(e) => handleApplicationChange("mobile", e.target.value)} />
+                <input style={styles.input} placeholder="City" value={applicationForm.city} onChange={(e) => handleApplicationChange("city", e.target.value)} />
+                <input style={styles.input} placeholder="Current company" value={applicationForm.currentCompany} onChange={(e) => handleApplicationChange("currentCompany", e.target.value)} />
+                <input style={styles.input} placeholder="Current role" value={applicationForm.currentRole} onChange={(e) => handleApplicationChange("currentRole", e.target.value)} />
+                <input style={styles.input} placeholder="Total experience" value={applicationForm.totalExperience} onChange={(e) => handleApplicationChange("totalExperience", e.target.value)} />
+                <input style={styles.input} placeholder="Notice period" value={applicationForm.noticePeriod} onChange={(e) => handleApplicationChange("noticePeriod", e.target.value)} />
+                <input style={styles.input} placeholder="Current CTC" value={applicationForm.currentCtc} onChange={(e) => handleApplicationChange("currentCtc", e.target.value)} />
+                <input style={styles.input} placeholder="Expected CTC" value={applicationForm.expectedCtc} onChange={(e) => handleApplicationChange("expectedCtc", e.target.value)} />
+                <input style={styles.input} placeholder="Portfolio URL" value={applicationForm.portfolioUrl} onChange={(e) => handleApplicationChange("portfolioUrl", e.target.value)} />
+                <input style={styles.input} placeholder="LinkedIn URL" value={applicationForm.linkedinUrl} onChange={(e) => handleApplicationChange("linkedinUrl", e.target.value)} />
+                <textarea style={styles.textareaWide} rows={5} placeholder="Cover letter" value={applicationForm.coverLetter} onChange={(e) => handleApplicationChange("coverLetter", e.target.value)} />
+                <div style={styles.fileField}>
+                  <label style={styles.fileLabel}>Resume (PDF, DOC, DOCX)</label>
+                  <input type="file" accept=".pdf,.doc,.docx" onChange={(event) => handleApplicationChange("resume", event.target.files?.[0] || null)} />
+                  <span style={styles.helperText}>{applicationForm.resume?.name || "No file selected"}</span>
+                </div>
+                <button type="button" style={styles.primaryButton} onClick={handleSubmitApplication} disabled={submittingApplication}>
+                  {submittingApplication ? "Submitting..." : "Submit Application"}
+                </button>
+              </div>
+            )}
+          </section>
+        ) : (
+          <section style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>My Applications</h3>
+                <p style={styles.panelCopy}>Track every application with recruiter comments, assignments, and timeline-aware status updates.</p>
+              </div>
+            </div>
+            {userApplications.length === 0 ? (
+              <div style={styles.emptyState}>
+                <h4>No applications yet</h4>
+                <p>Apply for one of the open roles and the status history will appear here.</p>
+              </div>
+            ) : (
+              <div style={styles.stack}>
+                {userApplications.map((item) => (
+                  <article key={item.id} style={styles.applicationCard}>
+                    <div style={styles.applicationCardHead}>
+                      <div>
+                        <strong>{item.openingTitle}</strong>
+                        <p>{item.openingDepartment} | {item.openingLocation}</p>
+                      </div>
+                      <span style={{ ...styles.statusPill, ...statusStyle(item.status) }}>{item.status}</span>
+                    </div>
+                    <div style={styles.applicationMeta}>
+                      <span>Application #{item.applicationCode}</span>
+                      <span>Submitted {formatDateTime(item.createdAt)}</span>
+                      <span>{item.assignedManagerName ? `Assigned to ${item.assignedManagerName}` : "Not assigned yet"}</span>
+                    </div>
+                    {item.adminMessage ? <p style={styles.applicationNote}>{item.adminMessage}</p> : null}
+                    <div style={styles.actionRow}>
+                      {item.hasResume ? (
+                        <button type="button" style={styles.ghostButton} onClick={() => downloadCareerResume(item.id)}>
+                          Download Resume
+                        </button>
+                      ) : null}
+                      {!["Hired", "Rejected", "Withdrawn"].includes(item.status) ? (
+                        <button type="button" style={styles.ghostDangerButton} onClick={() => handleWithdraw(item.id)}>
+                          Withdraw
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    );
+  };
 
   const renderStaticSection = (title, points, accent) => (
     <section style={styles.panel}>
@@ -949,14 +974,14 @@ const styles = {
   heroList: { paddingLeft: "18px", lineHeight: 1.8 },
   heroStats: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginTop: "20px" },
   statCard: { background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "18px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "6px" },
-  openingsGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 0.8fr) minmax(0, 1.2fr)", gap: "18px", minHeight: 0 },
-  roleRail: { display: "flex", flexDirection: "column", gap: "14px", maxHeight: "100%", overflowY: "auto", minHeight: 0, paddingRight: "4px", scrollbarWidth: "none", msOverflowStyle: "none" },
-  roleCard: { borderRadius: "20px", border: "1px solid #d7e3f7", background: "#fff", padding: "18px", textAlign: "left", cursor: "pointer", boxShadow: "0 10px 30px rgba(22,43,79,0.06)" },
+  openingsGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 0.8fr) minmax(0, 1.2fr)", gap: "18px", minHeight: 0, height: "660px", maxHeight: "660px", alignItems: "stretch" },
+  roleRail: { display: "flex", flexDirection: "column", gap: "14px", height: "660px", overflowY: "auto", minHeight: 0, paddingRight: "8px" },
+  roleCard: { borderRadius: "20px", border: "1px solid #d7e3f7", background: "#fff", padding: "18px", textAlign: "left", cursor: "pointer", boxShadow: "0 10px 30px rgba(22,43,79,0.06)", minHeight: "210px", flex: "0 0 auto" },
   roleCardActive: { borderColor: "#285ca8", boxShadow: "0 18px 44px rgba(40,92,168,0.18)" },
   roleCardHeader: { display: "flex", justifyContent: "space-between", gap: "12px" },
   featureBadge: { alignSelf: "flex-start", padding: "6px 10px", borderRadius: "999px", background: "#fff1c7", color: "#7d5e06", fontSize: "12px", fontWeight: 700 },
   roleMetaRow: { display: "flex", flexWrap: "wrap", gap: "10px", color: "#627089", fontSize: "13px", marginTop: "10px" },
-  roleDetailCard: { borderRadius: "28px", background: "#ffffff", border: "1px solid #dbe5f4", padding: "26px", boxShadow: "0 14px 42px rgba(21,40,74,0.08)", maxHeight: "100%", overflowY: "auto", minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" },
+  roleDetailCard: { borderRadius: "28px", background: "#ffffff", border: "1px solid #dbe5f4", padding: "26px", boxShadow: "0 14px 42px rgba(21,40,74,0.08)", height: "660px", overflowY: "auto", minHeight: 0 },
   roleDetailHead: { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" },
   roleDetailCode: { display: "inline-block", color: "#667894", fontSize: "12px", letterSpacing: "0.14em", textTransform: "uppercase" },
   roleDetailTitle: { margin: "10px 0 8px", fontSize: "32px", color: "#17315f" },
