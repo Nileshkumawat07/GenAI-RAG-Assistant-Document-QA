@@ -174,6 +174,7 @@ function Careers({
   const [applicationDrafts, setApplicationDrafts] = useState({});
   const [queueFilter, setQueueFilter] = useState("all");
   const [queueSearch, setQueueSearch] = useState("");
+  const [studioSection, setStudioSection] = useState("openings");
 
   const setCategory = (nextCategory) => {
     if (embedded) {
@@ -547,33 +548,60 @@ function Careers({
     </>
   );
 
-  const renderStudio = () => (
-    <div style={styles.stack}>
+  const renderStudio = () => {
+    const studioNav = [
+      { id: "openings", label: "Openings Studio", copy: "Create and refine hiring briefs." },
+      { id: "pipeline", label: "Applications Pipeline", copy: "Review received applications and move candidates forward." },
+    ];
+
+    const renderOpeningsStudio = () => (
       <section style={styles.panel}>
         <div style={styles.panelHeader}>
           <div>
             <h3 style={styles.panelTitle}>Openings Studio</h3>
-            <p style={styles.panelCopy}>Admin and management can publish polished hiring briefs and update openings without touching any other workspace module.</p>
+            <p style={styles.panelCopy}>Create, edit, publish, and feature polished career openings from one focused control surface.</p>
           </div>
         </div>
-        <div style={styles.managementLayout}>
-          <div style={styles.managementList}>
-            {(managementOverview.openings || []).map((opening) => (
-              <button
-                key={opening.id}
-                type="button"
-                style={styles.managementListItem}
-                onClick={() => selectOpeningForEdit(opening)}
-              >
-                <strong>{opening.title}</strong>
-                <span>{opening.department} | {opening.totalApplications || 0} applicants</span>
-              </button>
-            ))}
+        <div style={styles.studioGrid}>
+          <aside style={styles.studioRail}>
+            <div style={styles.studioRailHeader}>
+              <span style={styles.studioEyebrow}>Saved openings</span>
+              <strong>{(managementOverview.openings || []).length} role briefs</strong>
+              <p>Pick an opening to edit it, or start a fresh one with a clean form.</p>
+            </div>
+            <div style={styles.managementList}>
+              {(managementOverview.openings || []).map((opening) => (
+                <button
+                  key={opening.id}
+                  type="button"
+                  style={{
+                    ...styles.managementListItem,
+                    ...(editingOpeningId === opening.id ? styles.managementListItemActive : {}),
+                  }}
+                  onClick={() => selectOpeningForEdit(opening)}
+                >
+                  <strong>{opening.title}</strong>
+                  <span>{opening.department}</span>
+                  <span>{opening.totalApplications || 0} active applicants</span>
+                </button>
+              ))}
+            </div>
             <button type="button" style={styles.primaryButton} onClick={() => selectOpeningForEdit(null)}>
               Create New Opening
             </button>
-          </div>
-          <div style={styles.managementEditor}>
+          </aside>
+
+          <div style={styles.studioEditor}>
+            <div style={styles.studioEditorHeader}>
+              <div>
+                <span style={styles.studioEyebrow}>{editingOpeningId ? "Editing opening" : "New opening"}</span>
+                <h4 style={styles.studioEditorTitle}>{editingOpeningId ? "Update the selected role brief" : "Build a premium opening brief"}</h4>
+              </div>
+              <div style={styles.studioBadgeRow}>
+                <span style={styles.studioMetricBadge}>{openingForm.isPublished ? "Live" : "Draft"}</span>
+                {openingForm.isFeatured ? <span style={styles.studioMetricBadge}>Featured</span> : null}
+              </div>
+            </div>
             <div style={styles.formGrid}>
               <input style={styles.input} placeholder="Role title" value={openingForm.title} onChange={(e) => setOpeningForm((c) => ({ ...c, title: e.target.value }))} />
               <input style={styles.input} placeholder="Department" value={openingForm.department} onChange={(e) => setOpeningForm((c) => ({ ...c, department: e.target.value }))} />
@@ -598,14 +626,16 @@ function Careers({
               <textarea style={styles.textareaWide} rows={4} placeholder="Requirements, one per line" value={openingForm.requirements} onChange={(e) => setOpeningForm((c) => ({ ...c, requirements: e.target.value }))} />
               <textarea style={styles.textareaWide} rows={4} placeholder="Perks, one per line" value={openingForm.perks} onChange={(e) => setOpeningForm((c) => ({ ...c, perks: e.target.value }))} />
               <textarea style={styles.textareaWide} rows={3} placeholder="Skills, one per line" value={openingForm.skills} onChange={(e) => setOpeningForm((c) => ({ ...c, skills: e.target.value }))} />
-              <label style={styles.checkboxField}>
-                <input type="checkbox" checked={openingForm.isPublished} onChange={(e) => setOpeningForm((c) => ({ ...c, isPublished: e.target.checked }))} />
-                <span>Publish this opening</span>
-              </label>
-              <label style={styles.checkboxField}>
-                <input type="checkbox" checked={openingForm.isFeatured} onChange={(e) => setOpeningForm((c) => ({ ...c, isFeatured: e.target.checked }))} />
-                <span>Feature on top</span>
-              </label>
+              <div style={styles.studioToggleRow}>
+                <label style={styles.checkboxField}>
+                  <input type="checkbox" checked={openingForm.isPublished} onChange={(e) => setOpeningForm((c) => ({ ...c, isPublished: e.target.checked }))} />
+                  <span>Publish this opening</span>
+                </label>
+                <label style={styles.checkboxField}>
+                  <input type="checkbox" checked={openingForm.isFeatured} onChange={(e) => setOpeningForm((c) => ({ ...c, isFeatured: e.target.checked }))} />
+                  <span>Feature on top</span>
+                </label>
+              </div>
               <button type="button" style={styles.primaryButton} onClick={handleSaveOpening} disabled={savingOpening}>
                 {savingOpening ? "Saving..." : editingOpeningId ? "Update Opening" : "Create Opening"}
               </button>
@@ -613,12 +643,14 @@ function Careers({
           </div>
         </div>
       </section>
+    );
 
+    const renderPipelineStudio = () => (
       <section style={styles.panel}>
         <div style={styles.panelHeader}>
           <div>
-            <h3 style={styles.panelTitle}>Applicant Pipeline</h3>
-            <p style={styles.panelCopy}>Management can review applicants, assign owners, download resumes, and update the status just like your structured support workflows.</p>
+            <h3 style={styles.panelTitle}>Applications Pipeline</h3>
+            <p style={styles.panelCopy}>Review received applications, assign owners, download resumes, and move candidates through a cleaner hiring workflow.</p>
           </div>
           <div style={styles.filterRow}>
             <input style={styles.inputCompact} placeholder="Search applicant" value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)} />
@@ -636,7 +668,7 @@ function Careers({
             ["Shortlisted", managementOverview.summary.shortlisted || 0],
             ["Interviews", managementOverview.summary.interviewScheduled || 0],
           ].map(([label, value]) => (
-            <div key={label} style={styles.statCard}>
+            <div key={label} style={styles.pipelineStatCard}>
               <strong>{value}</strong>
               <span>{label}</span>
             </div>
@@ -695,8 +727,38 @@ function Careers({
           })}
         </div>
       </section>
-    </div>
-  );
+    );
+
+    return (
+      <div style={styles.stack}>
+        <section style={styles.studioHero}>
+          <div>
+            <span style={styles.studioEyebrow}>Careers Studio</span>
+            <h3 style={styles.studioHeroTitle}>Manage openings and incoming candidates from a sharper hiring control center.</h3>
+            <p style={styles.studioHeroCopy}>Use the studio subcategories below to separate opening creation from application operations, so each workflow feels cleaner and easier to manage.</p>
+          </div>
+          <div style={styles.studioHeroTabs}>
+            {studioNav.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setStudioSection(item.id)}
+                style={{
+                  ...styles.studioTab,
+                  ...(studioSection === item.id ? styles.studioTabActive : {}),
+                }}
+              >
+                <strong>{item.label}</strong>
+                <span>{item.copy}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {studioSection === "openings" ? renderOpeningsStudio() : renderPipelineStudio()}
+      </div>
+    );
+  };
 
   const renderApplications = () => (
     <div style={styles.stack}>
@@ -926,17 +988,36 @@ const styles = {
   ghostButton: { border: "1px solid #cad7eb", borderRadius: "12px", background: "#fff", color: "#17315f", padding: "10px 14px", cursor: "pointer", fontWeight: 600 },
   ghostDangerButton: { border: "1px solid #efc0c0", borderRadius: "12px", background: "#fff6f6", color: "#963939", padding: "10px 14px", cursor: "pointer", fontWeight: 600 },
   applicationCard: { borderRadius: "18px", border: "1px solid #dde6f4", background: "#fbfdff", padding: "18px" },
-  pipelineCard: { borderRadius: "20px", border: "1px solid #dbe5f4", background: "#ffffff", padding: "18px" },
+  pipelineCard: { borderRadius: "24px", border: "1px solid #dbe5f4", background: "linear-gradient(180deg, #ffffff 0%, #fafdff 100%)", padding: "20px", boxShadow: "0 16px 40px rgba(19,36,67,0.06)" },
   applicationCardHead: { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" },
   applicationMeta: { display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "10px", color: "#66748d", fontSize: "13px" },
   applicationNote: { marginTop: "12px", padding: "12px 14px", borderRadius: "14px", background: "#eef4ff", color: "#244e91" },
   statusPill: { display: "inline-flex", alignItems: "center", padding: "8px 12px", borderRadius: "999px", fontSize: "13px", fontWeight: 700 },
+  actionRow: { display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "14px" },
   managementLayout: { display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: "16px" },
   managementList: { display: "flex", flexDirection: "column", gap: "10px" },
   managementListItem: { textAlign: "left", borderRadius: "16px", border: "1px solid #d5dff0", background: "#fbfdff", padding: "14px", cursor: "pointer", display: "flex", flexDirection: "column", gap: "6px", color: "#17315f" },
   managementEditor: { borderRadius: "18px", border: "1px solid #dde6f4", background: "#fbfdff", padding: "16px" },
   filterRow: { display: "flex", gap: "10px", flexWrap: "wrap" },
   pipelineSummary: { display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "12px", marginBottom: "16px" },
+  pipelineStatCard: { borderRadius: "18px", border: "1px solid #dbe5f4", background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)", padding: "16px", display: "flex", flexDirection: "column", gap: "8px", color: "#17315f" },
+  studioHero: { display: "grid", gridTemplateColumns: "minmax(0, 1.05fr) minmax(360px, 0.95fr)", gap: "18px", padding: "24px", borderRadius: "28px", background: "linear-gradient(135deg, #17315f 0%, #234e93 58%, #3f7ad8 100%)", color: "#ffffff", boxShadow: "0 22px 60px rgba(24,51,95,0.22)" },
+  studioEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.82 },
+  studioHeroTitle: { margin: "14px 0 10px", fontSize: "34px", lineHeight: 1.12 },
+  studioHeroCopy: { margin: 0, lineHeight: 1.7, maxWidth: "680px", opacity: 0.92 },
+  studioHeroTabs: { display: "grid", gap: "12px", alignContent: "start" },
+  studioTab: { textAlign: "left", borderRadius: "22px", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.12)", color: "#ffffff", padding: "18px 20px", cursor: "pointer", display: "grid", gap: "6px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)" },
+  studioTabActive: { background: "#ffffff", color: "#17315f", borderColor: "#ffffff", boxShadow: "0 20px 40px rgba(10,27,54,0.18)" },
+  studioGrid: { display: "grid", gridTemplateColumns: "320px minmax(0, 1fr)", gap: "18px" },
+  studioRail: { borderRadius: "24px", border: "1px solid #dbe5f4", background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)", padding: "18px", display: "flex", flexDirection: "column", gap: "14px", boxShadow: "0 16px 40px rgba(19,36,67,0.05)" },
+  studioRailHeader: { display: "grid", gap: "6px", color: "#5d6a80", lineHeight: 1.6 },
+  managementListItemActive: { borderColor: "#285ca8", background: "linear-gradient(180deg, #eef4ff 0%, #ffffff 100%)", boxShadow: "0 14px 32px rgba(40,92,168,0.14)" },
+  studioEditor: { borderRadius: "26px", border: "1px solid #dbe5f4", background: "#ffffff", padding: "20px", boxShadow: "0 18px 48px rgba(19,36,67,0.08)" },
+  studioEditorHeader: { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap" },
+  studioEditorTitle: { margin: "8px 0 0", fontSize: "24px", color: "#17315f" },
+  studioBadgeRow: { display: "flex", flexWrap: "wrap", gap: "8px" },
+  studioMetricBadge: { display: "inline-flex", alignItems: "center", padding: "8px 12px", borderRadius: "999px", background: "#eef4ff", color: "#244e91", fontSize: "12px", fontWeight: 700 },
+  studioToggleRow: { gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: "16px", padding: "4px 0" },
   storyPanel: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" },
   storyCard: { borderRadius: "18px", border: "1px solid #d7e3f7", background: "linear-gradient(180deg, #ffffff 0%, #f9fbff 100%)", padding: "18px", color: "#52627a", lineHeight: 1.7 },
   checkboxField: { display: "flex", alignItems: "center", gap: "10px", color: "#17315f", fontWeight: 600 },
