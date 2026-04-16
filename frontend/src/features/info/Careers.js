@@ -578,17 +578,20 @@ function Careers({
                     ...styles.managementListItem,
                     ...(editingOpeningId === opening.id ? styles.managementListItemActive : {}),
                   }}
-                  onClick={() => selectOpeningForEdit(opening)}
-                >
-                  <strong>{opening.title}</strong>
-                  <span>{opening.department}</span>
-                  <span>{opening.totalApplications || 0} active applicants</span>
-                </button>
-              ))}
-            </div>
-            <button type="button" style={styles.primaryButton} onClick={() => selectOpeningForEdit(null)}>
-              Create New Opening
-            </button>
+                onClick={() => {
+                  if (editingOpeningId === opening.id) {
+                    selectOpeningForEdit(null);
+                    return;
+                  }
+                  selectOpeningForEdit(opening);
+                }}
+              >
+                <strong>{opening.title}</strong>
+                <span>{opening.department}</span>
+                <span>{opening.totalApplications || 0} active applicants</span>
+              </button>
+            ))}
+          </div>
           </aside>
 
           <div style={styles.studioEditor}>
@@ -731,29 +734,21 @@ function Careers({
 
     return (
       <div style={styles.stack}>
-        <section style={styles.studioHero}>
-          <div>
-            <span style={styles.studioEyebrow}>Careers Studio</span>
-            <h3 style={styles.studioHeroTitle}>Manage openings and incoming candidates from a sharper hiring control center.</h3>
-            <p style={styles.studioHeroCopy}>Use the studio subcategories below to separate opening creation from application operations, so each workflow feels cleaner and easier to manage.</p>
-          </div>
-          <div style={styles.studioHeroTabs}>
-            {studioNav.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setStudioSection(item.id)}
-                style={{
-                  ...styles.studioTab,
-                  ...(studioSection === item.id ? styles.studioTabActive : {}),
-                }}
-              >
-                <strong>{item.label}</strong>
-                <span>{item.copy}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+        <div style={styles.studioTabsRow}>
+          {studioNav.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setStudioSection(item.id)}
+              style={{
+                ...styles.studioPill,
+                ...(studioSection === item.id ? styles.studioPillActive : {}),
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
         {studioSection === "openings" ? renderOpeningsStudio() : renderPipelineStudio()}
       </div>
@@ -1001,13 +996,10 @@ const styles = {
   filterRow: { display: "flex", gap: "10px", flexWrap: "wrap" },
   pipelineSummary: { display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "12px", marginBottom: "16px" },
   pipelineStatCard: { borderRadius: "18px", border: "1px solid #dbe5f4", background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)", padding: "16px", display: "flex", flexDirection: "column", gap: "8px", color: "#17315f" },
-  studioHero: { display: "grid", gridTemplateColumns: "minmax(0, 1.05fr) minmax(360px, 0.95fr)", gap: "18px", padding: "24px", borderRadius: "28px", background: "linear-gradient(135deg, #17315f 0%, #234e93 58%, #3f7ad8 100%)", color: "#ffffff", boxShadow: "0 22px 60px rgba(24,51,95,0.22)" },
+  studioTabsRow: { display: "flex", flexWrap: "wrap", gap: "12px", paddingBottom: "2px" },
+  studioPill: { padding: "14px 22px", borderRadius: "999px", border: "1px solid #c6d3eb", background: "#f8fbff", color: "#22406f", cursor: "pointer", fontWeight: 700, boxShadow: "0 8px 22px rgba(20,42,80,0.05)" },
+  studioPillActive: { background: "linear-gradient(135deg, #17315f 0%, #2d63b7 100%)", color: "#ffffff", borderColor: "#17315f", boxShadow: "0 14px 28px rgba(23,49,95,0.18)" },
   studioEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.82 },
-  studioHeroTitle: { margin: "14px 0 10px", fontSize: "34px", lineHeight: 1.12 },
-  studioHeroCopy: { margin: 0, lineHeight: 1.7, maxWidth: "680px", opacity: 0.92 },
-  studioHeroTabs: { display: "grid", gap: "12px", alignContent: "start" },
-  studioTab: { textAlign: "left", borderRadius: "22px", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.12)", color: "#ffffff", padding: "18px 20px", cursor: "pointer", display: "grid", gap: "6px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)" },
-  studioTabActive: { background: "#ffffff", color: "#17315f", borderColor: "#ffffff", boxShadow: "0 20px 40px rgba(10,27,54,0.18)" },
   studioGrid: { display: "grid", gridTemplateColumns: "320px minmax(0, 1fr)", gap: "18px" },
   studioRail: { borderRadius: "24px", border: "1px solid #dbe5f4", background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)", padding: "18px", display: "flex", flexDirection: "column", gap: "14px", boxShadow: "0 16px 40px rgba(19,36,67,0.05)" },
   studioRailHeader: { display: "grid", gap: "6px", color: "#5d6a80", lineHeight: 1.6 },
