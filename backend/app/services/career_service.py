@@ -56,7 +56,6 @@ class CareerService:
     FINAL_STATUSES = {"Offered", "Hired", "Rejected", "Withdrawn"}
     ALLOWED_RESUME_EXTENSIONS = {".pdf", ".doc", ".docx"}
     MAX_RESUME_BYTES = 10 * 1024 * 1024
-
     def __init__(self) -> None:
         self.resume_dir = (BASE_DIR / "documents" / "career_applications").resolve()
         self.resume_dir.mkdir(parents=True, exist_ok=True)
@@ -217,10 +216,14 @@ class CareerService:
         ).scalar_one_or_none()
         if not application:
             raise CareerServiceError("Application was not found.")
+        if application.status == "Withdrawn":
+            return self.serialize_application(application, opening=db.get(CareerOpening, application.opening_id))
         if application.status in {"Hired", "Rejected"}:
             raise CareerServiceError("This application can no longer be withdrawn.")
+        now = datetime.now(timezone.utc)
         application.status = "Withdrawn"
-        application.last_status_updated_at = datetime.now(timezone.utc)
+        application.last_status_updated_at = now
+        application.decision_at = now
         db.commit()
         db.refresh(application)
         return self.serialize_application(application, opening=db.get(CareerOpening, application.opening_id))
@@ -230,6 +233,7 @@ class CareerService:
         rows = db.execute(
             select(CareerApplication, CareerOpening)
             .join(CareerOpening, CareerOpening.id == CareerApplication.opening_id)
+            .where(CareerApplication.status != "Withdrawn")
             .order_by(desc(CareerApplication.created_at))
         ).all()
         users = db.execute(
@@ -277,6 +281,8 @@ class CareerService:
         application = db.get(CareerApplication, application_id)
         if not application:
             raise CareerServiceError("Application was not found.")
+        if application.status == "Withdrawn":
+            raise CareerServiceError("Withdrawn applications are archived and cannot be updated.")
 
         normalized_status = self._normalize_status(status)
         if not normalized_status:
@@ -476,7 +482,12 @@ class CareerService:
 
     def _count_applications(self, db: Session, opening_id: str) -> int:
         return len(
-            db.execute(select(CareerApplication.id).where(CareerApplication.opening_id == opening_id)).scalars().all()
+            db.execute(
+                select(CareerApplication.id).where(
+                    CareerApplication.opening_id == opening_id,
+                    CareerApplication.status != "Withdrawn",
+                )
+            ).scalars().all()
         )
 
     def _require_user(self, db: Session, user_id: str) -> None:

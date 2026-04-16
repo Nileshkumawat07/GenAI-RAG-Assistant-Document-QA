@@ -71,6 +71,8 @@ const APPLICATION_STATUSES = [
   "Withdrawn",
 ];
 
+const MANAGEMENT_APPLICATION_STATUSES = APPLICATION_STATUSES.filter((status) => status !== "Withdrawn");
+
 const CULTURE_POINTS = [
   "High-ownership teams with product, design, and engineering working from one shared operating rhythm.",
   "Clear performance expectations, fast feedback loops, and real room to grow into broader responsibility.",
@@ -232,6 +234,7 @@ function Careers({
   const applicantQueue = useMemo(() => {
     const items = managementOverview.applications || [];
     return items.filter((item) => {
+      if (item.status === "Withdrawn") return false;
       const matchesStatus = queueFilter === "all" || item.status === queueFilter;
       const matchesSearch = !queueSearch.trim() || JSON.stringify(item).toLowerCase().includes(queueSearch.trim().toLowerCase());
       return matchesStatus && matchesSearch;
@@ -621,7 +624,7 @@ function Careers({
             <input style={styles.inputCompact} placeholder="Search applicant" value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)} />
             <select style={styles.inputCompact} value={queueFilter} onChange={(e) => setQueueFilter(e.target.value)}>
               <option value="all">All statuses</option>
-              {APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+              {MANAGEMENT_APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
           </div>
         </div>
@@ -667,7 +670,7 @@ function Careers({
                 </div>
                 <div style={styles.formGrid}>
                   <select style={styles.input} value={draft.status} onChange={(e) => handleApplicationDraftChange(application.id, "status", e.target.value)}>
-                    {APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                    {MANAGEMENT_APPLICATION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                   </select>
                   <select style={styles.input} value={draft.assignedManagerUserId || ""} onChange={(e) => handleApplicationDraftChange(application.id, "assignedManagerUserId", e.target.value)}>
                     <option value="">Unassigned</option>

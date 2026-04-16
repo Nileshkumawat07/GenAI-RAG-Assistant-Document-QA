@@ -2013,6 +2013,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
               careers: nextTab,
             }))
           }
+          hideEmbeddedTabs
         />
       );
     }
@@ -4446,7 +4447,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         </aside>
 
         <div className="workspace-content">
-          {infoConfig ? (
+          {infoConfig && selectedInfoPage !== "careers" && !(selectedInfoPage === "management" && activeInfoTab === "studio") ? (
             <div className="info-card">
               <p>{infoConfig.message}</p>
             </div>
