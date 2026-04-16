@@ -1432,6 +1432,17 @@ button {
   color: var(--success);
 }
 
+.hidden-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hidden-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .workspace-content {
   flex: 1 1 auto;
   display: flex;

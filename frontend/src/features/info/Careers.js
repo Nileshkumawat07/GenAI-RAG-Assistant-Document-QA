@@ -442,7 +442,7 @@ function Careers({
 
       {openings.length > 0 || canAccessManagement ? (
         <section style={styles.openingsGrid}>
-          <div style={styles.roleRail}>
+          <div className="hidden-scrollbar" style={styles.roleRail}>
             {(openings || []).map((opening) => (
               <button
                 key={opening.id}
@@ -477,7 +477,7 @@ function Careers({
             ))}
           </div>
 
-          <div style={styles.roleDetailCard}>
+          <div className="hidden-scrollbar" style={styles.roleDetailCard}>
             {selectedOpening ? (
             <>
               <div style={styles.roleDetailHead}>
@@ -949,14 +949,14 @@ const styles = {
   heroList: { paddingLeft: "18px", lineHeight: 1.8 },
   heroStats: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginTop: "20px" },
   statCard: { background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "18px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "6px" },
-  openingsGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 0.8fr) minmax(0, 1.2fr)", gap: "18px" },
-  roleRail: { display: "flex", flexDirection: "column", gap: "14px" },
+  openingsGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 0.8fr) minmax(0, 1.2fr)", gap: "18px", minHeight: 0 },
+  roleRail: { display: "flex", flexDirection: "column", gap: "14px", maxHeight: "100%", overflowY: "auto", minHeight: 0, paddingRight: "4px", scrollbarWidth: "none", msOverflowStyle: "none" },
   roleCard: { borderRadius: "20px", border: "1px solid #d7e3f7", background: "#fff", padding: "18px", textAlign: "left", cursor: "pointer", boxShadow: "0 10px 30px rgba(22,43,79,0.06)" },
   roleCardActive: { borderColor: "#285ca8", boxShadow: "0 18px 44px rgba(40,92,168,0.18)" },
   roleCardHeader: { display: "flex", justifyContent: "space-between", gap: "12px" },
   featureBadge: { alignSelf: "flex-start", padding: "6px 10px", borderRadius: "999px", background: "#fff1c7", color: "#7d5e06", fontSize: "12px", fontWeight: 700 },
   roleMetaRow: { display: "flex", flexWrap: "wrap", gap: "10px", color: "#627089", fontSize: "13px", marginTop: "10px" },
-  roleDetailCard: { borderRadius: "28px", background: "#ffffff", border: "1px solid #dbe5f4", padding: "26px", boxShadow: "0 14px 42px rgba(21,40,74,0.08)" },
+  roleDetailCard: { borderRadius: "28px", background: "#ffffff", border: "1px solid #dbe5f4", padding: "26px", boxShadow: "0 14px 42px rgba(21,40,74,0.08)", maxHeight: "100%", overflowY: "auto", minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" },
   roleDetailHead: { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" },
   roleDetailCode: { display: "inline-block", color: "#667894", fontSize: "12px", letterSpacing: "0.14em", textTransform: "uppercase" },
   roleDetailTitle: { margin: "10px 0 8px", fontSize: "32px", color: "#17315f" },
