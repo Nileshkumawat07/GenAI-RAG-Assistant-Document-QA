@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import DocumentRetrievalPanel from "../document-retrieval/DocumentRetrievalPanel";
 import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
+import AboutUs from "../info/AboutUs";
 import Careers from "../info/Careers";
 import SettingsPanel from "./SettingsPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
@@ -458,6 +459,7 @@ const INFO_PAGE_CONFIG = {
       { id: "users", label: "Users", heading: "Management Users" },
       { id: "support", label: "Support", heading: "Support Request Table" },
       { id: "studio", label: "Studio", heading: "Careers Studio" },
+      { id: "about-studio", label: "About Studio", heading: "About Content Studio" },
     ],
   },
 };
@@ -2018,6 +2020,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       );
     }
 
+    if (selectedInfoPage === "about") {
+      return (
+        <AboutUs
+          activeCategory={activeInfoTab}
+          onCategoryChange={(nextTab) =>
+            setInfoTabs((current) => ({
+              ...current,
+              about: nextTab,
+            }))
+          }
+        />
+      );
+    }
+
     if (selectedInfoPage === "management" && activeInfoTab === "studio") {
       return (
         <Careers
@@ -2032,6 +2048,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
             }))
           }
           hideEmbeddedTabs
+        />
+      );
+    }
+
+    if (selectedInfoPage === "management" && activeInfoTab === "about-studio") {
+      return (
+        <AboutUs
+          canEdit
         />
       );
     }

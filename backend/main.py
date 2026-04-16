@@ -12,6 +12,7 @@ from app.api.routes.admin_center import build_admin_center_router
 from app.api.routes.contact_requests import build_contact_request_router
 from app.api.routes.chat_management import build_chat_management_router
 from app.api.routes.careers import build_career_router
+from app.api.routes.content import build_content_router
 from app.api.routes.documents import build_document_router
 from app.api.routes.frontend import build_frontend_router, mount_frontend
 from app.api.routes.health import build_health_router
@@ -540,6 +541,7 @@ def create_app() -> FastAPI:
     app.include_router(build_auth_router(otp_service, auth_service))
     app.include_router(build_contact_request_router(contact_request_service, auth_service))
     app.include_router(build_career_router(career_service, auth_service))
+    app.include_router(build_content_router(admin_center_service, auth_service))
     app.include_router(build_management_router(management_service, auth_service))
     app.include_router(build_admin_center_router(admin_center_service, auth_service))
     app.include_router(build_linked_provider_router(linked_provider_service, auth_service, social_oauth_service))

@@ -300,6 +300,12 @@ class AdminCenterService:
         db.refresh(item)
         return item
 
+    def list_content_entries(self, db: Session, *, page_key: str, published_only: bool = False) -> list[ContentEntry]:
+        query = select(ContentEntry).where(ContentEntry.page_key == page_key).order_by(ContentEntry.section_key.asc())
+        if published_only:
+            query = query.where(ContentEntry.is_published.is_(True))
+        return db.execute(query).scalars().all()
+
     def create_communication_template(self, db: Session, *, channel: str, category: str | None, title: str, body: str, requires_approval: bool) -> CommunicationTemplate:
         item = CommunicationTemplate(
             id=str(uuid.uuid4()),
