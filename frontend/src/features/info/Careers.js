@@ -146,6 +146,7 @@ function Careers({
   canAccessManagement = false,
   activeCategory = "",
   onCategoryChange = null,
+  hideEmbeddedTabs = false,
 }) {
   const embedded = Boolean(activeCategory && onCategoryChange);
   const [localCategory, setLocalCategory] = useState("positions");
@@ -838,7 +839,7 @@ function Careers({
     <div style={embedded ? styles.embeddedPage : styles.page}>
       {!embedded ? renderSidebar() : null}
       <div style={styles.main}>
-        {embedded ? (
+        {embedded && !hideEmbeddedTabs ? (
           <div style={styles.inlineTabs}>
             {tabs.map((tab) => (
               <button

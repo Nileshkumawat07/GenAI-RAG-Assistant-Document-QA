@@ -457,6 +457,7 @@ const INFO_PAGE_CONFIG = {
       { id: "requests", label: "Contact Requests", heading: "Contact Request Queue" },
       { id: "users", label: "Users", heading: "Management Users" },
       { id: "support", label: "Support", heading: "Support Request Table" },
+      { id: "studio", label: "Studio", heading: "Careers Studio" },
     ],
   },
 };
@@ -2012,6 +2013,24 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
               careers: nextTab,
             }))
           }
+        />
+      );
+    }
+
+    if (selectedInfoPage === "management" && activeInfoTab === "studio") {
+      return (
+        <Careers
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          canAccessManagement={canAccessManagement}
+          activeCategory="studio"
+          onCategoryChange={(nextTab) =>
+            setInfoTabs((current) => ({
+              ...current,
+              management: nextTab,
+            }))
+          }
+          hideEmbeddedTabs
         />
       );
     }
