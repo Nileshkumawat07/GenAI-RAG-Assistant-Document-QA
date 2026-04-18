@@ -187,6 +187,80 @@ class WorkspaceHubService:
         shared_teams = max(len(teams) - personal_teams, 0)
         active_support = len([item for item in requests if item.status.lower() not in {"completed", "resolved", "closed"}])
         verified_payments = len([item for item in transactions if item.status.lower() == "verified"])
+        onboarding_checklist = [
+            {
+                "id": "complete-profile",
+                "title": "Complete profile",
+                "detail": "Add your full account details so billing, support, and team invites feel production-ready.",
+                "status": "completed" if user.full_name and user.email and user.mobile else "pending",
+                "actionLabel": "Open profile",
+                "actionTarget": "profile",
+            },
+            {
+                "id": "upload-first-document",
+                "title": "Upload first document",
+                "detail": "Turn a real document into a grounded answer workflow inside the workspace.",
+                "status": "pending",
+                "actionLabel": "Open documents",
+                "actionTarget": "document-retrieval",
+            },
+            {
+                "id": "invite-team",
+                "title": "Invite first teammate",
+                "detail": "Create a shared workspace and bring one collaborator into the flow.",
+                "status": "completed" if shared_teams > 0 else "pending",
+                "actionLabel": "Open teams",
+                "actionTarget": "team-management",
+            },
+            {
+                "id": "activate-premium",
+                "title": "Activate premium",
+                "detail": "Unlock paid workflows and production-style billing with a verified subscription.",
+                "status": "completed" if verified_payments > 0 else "pending",
+                "actionLabel": "Open pricing",
+                "actionTarget": "pricing",
+            },
+            {
+                "id": "read-faqs",
+                "title": "Read FAQs",
+                "detail": "Scan billing, security, and account guidance before broader rollout.",
+                "status": "pending",
+                "actionLabel": "Open FAQs",
+                "actionTarget": "faqs",
+            },
+        ]
+        usage_overview = [
+            {
+                "id": "notifications",
+                "label": "Notifications",
+                "value": str(unread_notifications),
+                "detail": "Unread workspace alerts waiting for action",
+            },
+            {
+                "id": "chats",
+                "label": "Saved chats",
+                "value": str(len(threads)),
+                "detail": "Conversation threads preserved in your workspace history",
+            },
+            {
+                "id": "teams",
+                "label": "Team seats",
+                "value": str(len(teams)),
+                "detail": "Personal and shared workspace memberships available",
+            },
+            {
+                "id": "support",
+                "label": "Support tickets",
+                "value": str(len(requests)),
+                "detail": "Tracked support and contact requests tied to your account",
+            },
+            {
+                "id": "billing",
+                "label": "Billing events",
+                "value": str(len(transactions)),
+                "detail": "Subscription and payment records available in your history",
+            },
+        ]
 
         return {
             "metrics": [
@@ -261,6 +335,8 @@ class WorkspaceHubService:
                 }
                 for item in transactions[:4]
             ],
+            "onboardingChecklist": onboarding_checklist,
+            "usageOverview": usage_overview,
             "unreadNotifications": unread_notifications,
             "activeTeams": len(teams),
             "activeChats": len(threads),

@@ -30,6 +30,22 @@ class DashboardCollectionItemResponse(BaseModel):
     createdAt: str | None = None
 
 
+class DashboardChecklistItemResponse(BaseModel):
+    id: str
+    title: str
+    detail: str
+    status: str = "pending"
+    actionLabel: str | None = None
+    actionTarget: str | None = None
+
+
+class DashboardUsageItemResponse(BaseModel):
+    id: str
+    label: str
+    value: str
+    detail: str | None = None
+
+
 class DashboardResponse(BaseModel):
     metrics: list[DashboardMetricResponse] = Field(default_factory=list)
     recentActivity: list[DashboardActivityResponse] = Field(default_factory=list)
@@ -38,6 +54,8 @@ class DashboardResponse(BaseModel):
     activeTeamsList: list[DashboardCollectionItemResponse] = Field(default_factory=list)
     supportRequestsList: list[DashboardCollectionItemResponse] = Field(default_factory=list)
     paymentHistory: list[DashboardCollectionItemResponse] = Field(default_factory=list)
+    onboardingChecklist: list[DashboardChecklistItemResponse] = Field(default_factory=list)
+    usageOverview: list[DashboardUsageItemResponse] = Field(default_factory=list)
     unreadNotifications: int = 0
     activeTeams: int = 0
     activeChats: int = 0

@@ -6,12 +6,15 @@ import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import AboutUs from "../info/AboutUs";
 import Careers from "../info/Careers";
 import FAQs from "../info/FAQs";
+import HelpCenter from "../info/HelpCenter";
 import Pricing from "../info/Pricing";
+import TrustCenter from "../info/TrustCenter";
 import SettingsPanel from "./SettingsPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
 import ChatHistoryPanel from "./ChatHistoryPanel";
 import ChatManagementPanel from "./ChatManagementPanel";
 import DashboardPanel from "./DashboardPanel";
+import NotificationsPanel from "./NotificationsPanel";
 import TeamManagementPanel from "./TeamManagementPanel";
 import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser, updateManagementAccess } from "../auth/authApi";
 import {
@@ -398,6 +401,33 @@ const INFO_PAGE_CONFIG = {
         heading: "Education Plans",
         description: "Affordable plans for student learning, assignments, and classroom work.",
       },
+    ],
+  },
+  help: {
+    title: "Help Center",
+    description: "Help docs, support requests, and issue reporting",
+    message: "Use the integrated help center to read docs, report bugs, request features, and review support history.",
+    statusTitle: "Help Center",
+    statusItems: ["Help docs ready", "Bug reporting available", "Feature requests enabled", "Support history linked"],
+    tabs: [
+      { id: "docs", label: "Help Docs", heading: "Help Docs" },
+      { id: "bug", label: "Report Bug", heading: "Report Bug" },
+      { id: "feature", label: "Request Feature", heading: "Request Feature" },
+      { id: "history", label: "Support History", heading: "Support History" },
+    ],
+  },
+  trust: {
+    title: "Trust Center",
+    description: "Privacy, terms, refunds, security, and system trust details",
+    message: "Review the legal, billing, security, and operational trust guidance tied to the workspace experience.",
+    statusTitle: "Trust Center",
+    statusItems: ["Privacy policy", "Terms of service", "Refund policy", "Security posture", "System status"],
+    tabs: [
+      { id: "privacy", label: "Privacy Policy", heading: "Privacy Policy" },
+      { id: "terms", label: "Terms", heading: "Terms Of Service" },
+      { id: "refunds", label: "Refund Policy", heading: "Refund Policy" },
+      { id: "security", label: "Security", heading: "Security" },
+      { id: "status", label: "Status", heading: "System Status" },
     ],
   },
   profile: {

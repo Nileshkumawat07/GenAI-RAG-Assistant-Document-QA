@@ -3,6 +3,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import HomePage from "./features/auth/HomePage";
 import LoginPage from "./features/auth/LoginPage";
 import SignupPage from "./features/auth/SignupPage";
+import CommandPalette from "./shared/components/CommandPalette";
+import GlobalToastViewport from "./shared/components/GlobalToastViewport";
 import { fetchCurrentSessionUser, loginUser, signupUser } from "./features/auth/authApi";
 import {
   clearAuthNotice,
@@ -29,6 +31,9 @@ function App() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
+  const [toasts, setToasts] = useState([]);
   const [headerNotifications, setHeaderNotifications] = useState([]);
   const [headerRecentActivity, setHeaderRecentActivity] = useState([]);
   const [headerNotificationsLoading, setHeaderNotificationsLoading] = useState(false);
@@ -92,6 +97,11 @@ function App() {
     setAuthNotice("");
     setCurrentUser(user);
     setCurrentUserState(user);
+    window.dispatchEvent(
+      new CustomEvent("genai-toast", {
+        detail: { type: "success", title: "Welcome back", message: "Your workspace is ready." },
+      })
+    );
     navigateTo("workspace", null);
   };
 
@@ -115,6 +125,11 @@ function App() {
     setCurrentUserState(null);
     clearAuthNotice();
     setAuthNotice("");
+    window.dispatchEvent(
+      new CustomEvent("genai-toast", {
+        detail: { type: "info", title: "Signed out", message: "You have been logged out safely." },
+      })
+    );
     navigateTo("home", null);
   };
 
@@ -190,6 +205,8 @@ function App() {
     { id: "contact", label: "Contact Us", copy: "Inquiry forms, support paths, and response details" },
     { id: "faqs", label: "FAQs", copy: "General, billing, technical, and account answers" },
     { id: "pricing", label: "Pricing", copy: "Plans, tiers, notes, and subscription options" },
+    { id: "help", label: "Help Center", copy: "Help docs, bug reporting, feature requests, and support history" },
+    { id: "trust", label: "Trust Center", copy: "Privacy, terms, refunds, security, and status guidance" },
   ];
   const isAdmin = !!currentUser?.isAdmin;
   const isManagement = !!currentUser?.isManagement;
@@ -207,6 +224,49 @@ function App() {
         : "Active";
   const isPremiumMember = currentUser?.subscriptionStatus === "premium";
   const unreadHeaderNotifications = headerNotifications.filter((item) => !item.isRead).length;
+  const commandPaletteItems = [
+    { id: "workspace-dashboard", label: "Dashboard", description: "Open the workspace dashboard and onboarding view.", group: "Workspace", action: () => navigateTo("workspace", null) },
+    { id: "workspace-documents", label: "Document Retrieval", description: "Jump into document upload, file library, and grounded answers.", group: "Workspace", action: () => {
+      navigateTo("workspace", null);
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "document-retrieval" } })), 0);
+    } },
+    { id: "workspace-teams", label: "Team Management", description: "Open shared workspace and team seat management.", group: "Workspace", action: () => {
+      navigateTo("workspace", null);
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "team-management" } })), 0);
+    } },
+    { id: "workspace-chat", label: "Chat", description: "Jump into the realtime chat management surface.", group: "Workspace", action: () => {
+      navigateTo("workspace", null);
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "chat" } })), 0);
+    } },
+    { id: "workspace-history", label: "Chat History", description: "Review saved prompt threads and notes.", group: "Workspace", action: () => {
+      navigateTo("workspace", null);
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "chat-history" } })), 0);
+    } },
+    { id: "workspace-analytics", label: "Analytics", description: "Inspect product usage and workspace health signals.", group: "Workspace", action: () => {
+      navigateTo("workspace", null);
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "analytics" } })), 0);
+    } },
+    { id: "workspace-notifications", label: "Notifications", description: "Open the dedicated notifications center.", group: "Workspace", action: () => {
+      navigateTo("workspace", null);
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "notifications" } })), 0);
+    } },
+    ...infoPages.map((page) => ({
+      id: `page-${page.id}`,
+      label: page.label,
+      description: page.copy,
+      group: "Company",
+      action: () => navigateTo("workspace", page.id),
+    })),
+    { id: "profile", label: "Profile", description: "Review account, plan, security, and activity information.", group: "Account", action: () => navigateTo("workspace", "profile") },
+    { id: "settings", label: "Settings", description: "Adjust notifications, limits, branding, legal, and support settings.", group: "Account", action: () => navigateTo("workspace", "settings") },
+    ...(isAdmin ? [{ id: "administration", label: "Administration", description: "Open admin-only controls and database views.", group: "Admin", action: () => navigateTo("workspace", "administration") }] : []),
+    ...((isAdmin || isManagement) ? [{ id: "management", label: "Management", description: "Open management queues, support, and publishing controls.", group: "Admin", action: () => navigateTo("workspace", "management") }] : []),
+  ];
+  const filteredCommandPaletteItems = commandPaletteItems.filter((item) => {
+    const query = commandPaletteQuery.trim().toLowerCase();
+    if (!query) return true;
+    return `${item.label} ${item.description} ${item.group}`.toLowerCase().includes(query);
+  });
 
   const loadHeaderNotifications = useCallback(async () => {
     if (!currentUser?.id || screen !== "workspace") {
@@ -279,10 +339,57 @@ function App() {
     try {
       await markAllWorkspaceNotificationsRead();
       setHeaderNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      window.dispatchEvent(
+        new CustomEvent("genai-toast", {
+          detail: { type: "success", title: "Notifications cleared", message: "All notifications were marked as read." },
+        })
+      );
     } catch {
       // Ignore header mark-all failure silently here.
     }
   };
+
+  useEffect(() => {
+    const handleToast = (event) => {
+      const detail = event?.detail || {};
+      const nextToast = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: detail.type || "info",
+        title: detail.title || "Workspace update",
+        message: detail.message || detail.text || "An update is available.",
+      };
+      setToasts((current) => [...current, nextToast].slice(-5));
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((item) => item.id !== nextToast.id));
+      }, 3600);
+    };
+
+    window.addEventListener("genai-toast", handleToast);
+    return () => {
+      window.removeEventListener("genai-toast", handleToast);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeydown = (event) => {
+      if (screen !== "workspace") return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen(true);
+        setShowInfoMenu(false);
+        setShowProfileMenu(false);
+        setShowNotificationMenu(false);
+      }
+      if (event.key === "Escape") {
+        setCommandPaletteOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeydown);
+    return () => {
+      window.removeEventListener("keydown", handleKeydown);
+    };
+  }, [screen]);
 
   useEffect(() => {
     document.body.classList.toggle("workspace-body-mode", isWorkspace);
@@ -551,6 +658,13 @@ function App() {
                   >
                     Company
                   </button>
+                  <button
+                    className="header-utility-button"
+                    type="button"
+                    onClick={() => setCommandPaletteOpen(true)}
+                  >
+                    Search
+                  </button>
                   {showInfoMenu ? (
                     <div className="header-dropdown-menu">
                       {infoPages.map((page) => (
@@ -727,6 +841,25 @@ function App() {
       </header>
 
       <div className={`app-body ${isWorkspace ? "workspace-app-body" : ""}`}>{renderScreen()}</div>
+      <CommandPalette
+        open={commandPaletteOpen}
+        query={commandPaletteQuery}
+        items={filteredCommandPaletteItems}
+        onClose={() => {
+          setCommandPaletteOpen(false);
+          setCommandPaletteQuery("");
+        }}
+        onQueryChange={setCommandPaletteQuery}
+        onSelect={(item) => {
+          setCommandPaletteOpen(false);
+          setCommandPaletteQuery("");
+          item.action();
+        }}
+      />
+      <GlobalToastViewport
+        toasts={toasts}
+        onDismiss={(toastId) => setToasts((current) => current.filter((item) => item.id !== toastId))}
+      />
     </main>
   );
 }

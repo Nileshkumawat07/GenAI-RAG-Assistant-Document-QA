@@ -1,7 +1,9 @@
 import io
+import json
 import re
 import shutil
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -49,7 +51,8 @@ class SessionDocument:
 
 class RAGService:
     def __init__(self):
-        self.documents_by_session: Dict[str, SessionDocument] = {}
+        self.documents_by_session: Dict[str, Dict[str, SessionDocument]] = {}
+        self.active_document_by_session: Dict[str, str] = {}
 
         if not GROQ_API_KEY or GROQ_API_KEY == "<SECRET>":
             raise ValueError("Set GROQ_API_KEY")
@@ -72,7 +75,7 @@ class RAGService:
         filename = self._sanitize_filename(upload.filename or "document.txt")
 
         session_dir = self._session_dir(session_id)
-        self._reset_session_storage(session_dir)
+        session_dir.mkdir(parents=True, exist_ok=True)
 
         file_path = session_dir / filename
         file_path.write_bytes(content)
@@ -82,12 +85,14 @@ class RAGService:
             raise ValueError("No readable text found.")
 
         document = self._build_session_document(session_id, filename, text, file_path)
-        self.documents_by_session[session_id] = document
+        self.documents_by_session.setdefault(session_id, {})[filename] = document
+        self.active_document_by_session[session_id] = filename
+        self._write_session_meta(session_id, {"activeFilename": filename})
 
-        return {"chunks": len(document.chunks), "filename": filename}
+        return {"chunks": len(document.chunks), "filename": filename, "activeFilename": filename}
 
     def query(self, question: str, session_id: str):
-        document = self._get_or_load_session_document(session_id)
+        document = self._get_active_session_document(session_id)
         if not document:
             raise ValueError("Upload document first.")
 
@@ -107,7 +112,7 @@ class RAGService:
         }
 
     def indexed_document_count(self) -> int:
-        return len(self.documents_by_session)
+        return sum(len(documents) for documents in self.documents_by_session.values())
 
     def indexed_chunk_count(self) -> int:
         return sum(len(document.chunks) for document in self.documents_by_session.values())
@@ -162,20 +167,103 @@ class RAGService:
         expanded_ids = self._expand_with_neighbors(selected_ids, document.chunks)
         return [document.chunks[idx] for idx in expanded_ids[:TOP_K_RESULTS]]
 
-    def _get_or_load_session_document(self, session_id: str) -> Optional[SessionDocument]:
-        document = self.documents_by_session.get(session_id)
-        if document:
-            return document
+    def list_session_documents(self, session_id: str) -> List[dict]:
+        session_dir = self._session_dir(session_id)
+        session_dir.mkdir(parents=True, exist_ok=True)
+        active_filename = self._resolve_active_filename(session_id)
+        documents = []
+        for file_path in sorted(self._session_files(session_dir), key=lambda item: item.stat().st_mtime, reverse=True):
+            cached = self.documents_by_session.get(session_id, {}).get(file_path.name)
+            stat = file_path.stat()
+            documents.append(
+                {
+                    "filename": file_path.name,
+                    "sizeBytes": stat.st_size,
+                    "updatedAt": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                    "extension": file_path.suffix.lower().lstrip("."),
+                    "chunkCount": len(cached.chunks) if cached else 0,
+                    "isActive": file_path.name == active_filename,
+                    "status": "active" if file_path.name == active_filename else "available",
+                }
+            )
+        return documents
+
+    def set_active_document(self, session_id: str, filename: str) -> dict:
+        session_dir = self._session_dir(session_id)
+        target = session_dir / self._sanitize_filename(filename)
+        if not target.exists() or not target.is_file():
+            raise ValueError("Selected document was not found.")
+        self.active_document_by_session[session_id] = target.name
+        self._write_session_meta(session_id, {"activeFilename": target.name})
+        return {"filename": target.name, "message": "Active document updated."}
+
+    def rename_document(self, session_id: str, filename: str, new_filename: str) -> dict:
+        session_dir = self._session_dir(session_id)
+        current = session_dir / self._sanitize_filename(filename)
+        if not current.exists() or not current.is_file():
+            raise ValueError("Document was not found.")
+        extension = current.suffix.lower()
+        next_name = self._sanitize_filename(new_filename)
+        if not next_name.lower().endswith(extension):
+            next_name = f"{next_name}{extension}"
+        target = session_dir / next_name
+        if target.exists():
+            raise ValueError("Another document already uses that name.")
+        current.rename(target)
+        session_cache = self.documents_by_session.get(session_id, {})
+        cached = session_cache.pop(current.name, None)
+        if cached:
+            cached.filename = target.name
+            cached.file_path = target
+            cached.doc_id = f"{session_id}-{target.name}"
+            for chunk in cached.chunks:
+                chunk.filename = target.name
+                chunk.doc_id = cached.doc_id
+            session_cache[target.name] = cached
+        if self.active_document_by_session.get(session_id) == current.name:
+            self.active_document_by_session[session_id] = target.name
+            self._write_session_meta(session_id, {"activeFilename": target.name})
+        return {"filename": target.name, "message": "Document renamed."}
+
+    def delete_document(self, session_id: str, filename: str) -> dict:
+        session_dir = self._session_dir(session_id)
+        target = session_dir / self._sanitize_filename(filename)
+        if not target.exists() or not target.is_file():
+            raise ValueError("Document was not found.")
+        target.unlink()
+        self.documents_by_session.get(session_id, {}).pop(target.name, None)
+        self._reset_active_after_removal(session_id, removed_filename=target.name)
+        return {"filename": target.name, "message": "Document deleted."}
+
+    def archive_document(self, session_id: str, filename: str) -> dict:
+        session_dir = self._session_dir(session_id)
+        archive_dir = session_dir / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        target = session_dir / self._sanitize_filename(filename)
+        if not target.exists() or not target.is_file():
+            raise ValueError("Document was not found.")
+        archived_target = archive_dir / target.name
+        if archived_target.exists():
+            archived_target.unlink()
+        shutil.move(str(target), str(archived_target))
+        self.documents_by_session.get(session_id, {}).pop(target.name, None)
+        self._reset_active_after_removal(session_id, removed_filename=target.name)
+        return {"filename": target.name, "message": "Document archived."}
+
+    def _get_active_session_document(self, session_id: str) -> Optional[SessionDocument]:
+        active_filename = self._resolve_active_filename(session_id)
+        if not active_filename:
+            return None
+        cached_document = self.documents_by_session.get(session_id, {}).get(active_filename)
+        if cached_document:
+            return cached_document
 
         session_dir = self._session_dir(session_id)
         if not session_dir.exists():
             return None
-
-        candidates = [path for path in session_dir.iterdir() if path.is_file()]
-        if not candidates:
+        file_path = session_dir / active_filename
+        if not file_path.exists() or not file_path.is_file():
             return None
-
-        file_path = candidates[0]
         try:
             content = file_path.read_bytes()
         except OSError:
@@ -186,8 +274,68 @@ class RAGService:
             return None
 
         document = self._build_session_document(session_id, file_path.name, text, file_path)
-        self.documents_by_session[session_id] = document
+        self.documents_by_session.setdefault(session_id, {})[file_path.name] = document
         return document
+
+    def _resolve_active_filename(self, session_id: str) -> Optional[str]:
+        active_filename = self.active_document_by_session.get(session_id)
+        session_dir = self._session_dir(session_id)
+        if active_filename and (session_dir / active_filename).exists():
+            return active_filename
+
+        meta = self._read_session_meta(session_id)
+        meta_active = meta.get("activeFilename")
+        if meta_active and (session_dir / meta_active).exists():
+            self.active_document_by_session[session_id] = meta_active
+            return meta_active
+
+        session_files = self._session_files(session_dir)
+        if not session_files:
+            self.active_document_by_session.pop(session_id, None)
+            self._write_session_meta(session_id, {"activeFilename": None})
+            return None
+
+        latest = max(session_files, key=lambda item: item.stat().st_mtime)
+        self.active_document_by_session[session_id] = latest.name
+        self._write_session_meta(session_id, {"activeFilename": latest.name})
+        return latest.name
+
+    def _reset_active_after_removal(self, session_id: str, removed_filename: str) -> None:
+        if self.active_document_by_session.get(session_id) != removed_filename:
+            return
+        self.active_document_by_session.pop(session_id, None)
+        self._resolve_active_filename(session_id)
+
+    def _session_meta_path(self, session_id: str) -> Path:
+        return self._session_dir(session_id) / ".session-meta.json"
+
+    def _read_session_meta(self, session_id: str) -> dict:
+        meta_path = self._session_meta_path(session_id)
+        if not meta_path.exists():
+            return {}
+        try:
+            return json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _write_session_meta(self, session_id: str, payload: dict) -> None:
+        session_dir = self._session_dir(session_id)
+        session_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = self._session_meta_path(session_id)
+        try:
+            meta_path.write_text(json.dumps(payload), encoding="utf-8")
+        except OSError:
+            # Best effort only.
+            return
+
+    def _session_files(self, session_dir: Path) -> List[Path]:
+        if not session_dir.exists():
+            return []
+        return [
+            path
+            for path in session_dir.iterdir()
+            if path.is_file() and not path.name.startswith(".")
+        ]
 
     def _build_session_document(
         self,
