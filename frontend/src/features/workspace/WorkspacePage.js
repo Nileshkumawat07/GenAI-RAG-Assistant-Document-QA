@@ -6,6 +6,7 @@ import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import AboutUs from "../info/AboutUs";
 import Careers from "../info/Careers";
 import FAQs from "../info/FAQs";
+import Pricing from "../info/Pricing";
 import SettingsPanel from "./SettingsPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
 import ChatHistoryPanel from "./ChatHistoryPanel";
@@ -462,6 +463,7 @@ const INFO_PAGE_CONFIG = {
       { id: "studio", label: "Studio", heading: "Careers Studio" },
       { id: "about-studio", label: "About Studio", heading: "About Content Studio" },
       { id: "faq-studio", label: "FAQ Studio", heading: "FAQ Content Studio" },
+      { id: "pricing-studio", label: "Pricing Studio", heading: "Pricing Content Studio" },
     ],
   },
 };
@@ -638,7 +640,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     : "Not available";
   const hasActiveSubscription = subscriptionStatus === "premium" && !!subscriptionExpiresAt;
   const activeContactStatus = contactStatus[activeInfoTab] || { type: "", text: "" };
-  const activePricingPlans = PRICING_PLAN_DETAILS.filter((plan) => plan.category === activeInfoTab);
   const contactCategoryOrder = ["general", "business", "feedback", "technical", "partnership", "media"];
   const isAdmin = !!currentUser?.isAdmin;
   const isManagement = !!currentUser?.isManagement;
@@ -2050,6 +2051,27 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       );
     }
 
+    if (selectedInfoPage === "pricing") {
+      return (
+        <Pricing
+          activeCategory={activeInfoTab}
+          onCategoryChange={(nextTab) =>
+            setInfoTabs((current) => ({
+              ...current,
+              pricing: nextTab,
+            }))
+          }
+          sectionDefinitions={INFO_PAGE_CONFIG.pricing.tabs}
+          planCatalog={PRICING_PLAN_DETAILS}
+          paymentStatus={paymentStatus}
+          activePlanPurchaseId={activePlanPurchaseId}
+          hasActiveSubscription={hasActiveSubscription}
+          subscriptionPlanName={subscriptionPlanName}
+          onPlanPurchase={handlePlanPurchase}
+        />
+      );
+    }
+
     if (selectedInfoPage === "management" && activeInfoTab === "studio") {
       return (
         <Careers
@@ -2080,6 +2102,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       return (
         <FAQs
           canEdit
+        />
+      );
+    }
+
+    if (selectedInfoPage === "management" && activeInfoTab === "pricing-studio") {
+      return (
+        <Pricing
+          canEdit
+          sectionDefinitions={INFO_PAGE_CONFIG.pricing.tabs}
+          planCatalog={PRICING_PLAN_DETAILS}
+          paymentStatus={paymentStatus}
+          activePlanPurchaseId={activePlanPurchaseId}
+          hasActiveSubscription={hasActiveSubscription}
+          subscriptionPlanName={subscriptionPlanName}
         />
       );
     }
@@ -3927,91 +3963,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           <div className="content-grid single-column">
             <article className="tool-card workspace-copy-card">
               <SettingsPanel activeTab={activeInfoTab} currentUser={currentUser} onUserUpdate={onUserUpdate} onAccountDeleted={onAccountDeleted} />
-            </article>
-          </div>
-        </>
-      );
-    }
-
-    if (selectedInfoPage === "pricing") {
-      return (
-        <>
-          <div className="insight-section">
-            <div className="insight-card">
-              <h3 className="tool-title">{activeInfoContent.heading}</h3>
-              <p className="tool-copy">{infoConfig.message}</p>
-            </div>
-          </div>
-          <div className="content-grid single-column">
-            <article className="tool-card workspace-copy-card">
-              <div className="pricing-page-shell">
-                <div className="pricing-page-hero">
-                  <div>
-                    <span className="pricing-page-kicker">Secure INR Billing</span>
-                    <h4>{activeInfoContent.heading}</h4>
-                    <p>{activeInfoContent.description}</p>
-                  </div>
-                </div>
-
-                <div className="pricing-plan-grid">
-                  {activePricingPlans.map((plan) => {
-                    const planState = paymentStatus[plan.id];
-                    const isProcessing = activePlanPurchaseId === plan.id;
-                    const isCurrentPlan = subscriptionPlanName === plan.title && hasActiveSubscription;
-
-                    return (
-                      <div key={plan.id} className={`workspace-mini-card pricing-plan-card ${plan.accent}`}>
-                        <div className="pricing-plan-card-top">
-                          <div className="pricing-plan-card-copy">
-                            <span className="pricing-plan-badge">
-                              {plan.accent === "popular" ? "Most Popular" : plan.accent === "premium" ? "Premium" : "Active Plan"}
-                            </span>
-                            <h4>{plan.title}</h4>
-                            <p>{plan.tagline}</p>
-                          </div>
-                          <div className="pricing-plan-visual">
-                            <div className="pricing-plan-visual-price">{plan.priceLabel}</div>
-                            <div className="pricing-plan-visual-bottom">
-                              <strong>{plan.title}</strong>
-                              <span>{plan.cadence}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="pricing-plan-feature-list">
-                          {plan.features.map((feature) => (
-                            <div key={feature} className="pricing-plan-feature-item">
-                              {feature}
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="pricing-plan-footer">
-                          <p className="pricing-plan-note">{plan.note}</p>
-                          <div className="pricing-plan-trust-row">
-                            <span>Instant activation</span>
-                            <span>Encrypted checkout</span>
-                          </div>
-                        </div>
-                        {planState?.text ? (
-                          <p className={planState.type === "success" ? "success-text" : "error-text"}>
-                            {planState.type === "success" ? `Verified: ${planState.text}` : planState.text}
-                          </p>
-                        ) : null}
-
-                        <button
-                          className="primary-button pricing-plan-button"
-                          type="button"
-                          onClick={() => handlePlanPurchase(plan)}
-                          disabled={!!activePlanPurchaseId || hasActiveSubscription}
-                        >
-                          {isCurrentPlan ? "Premium Active" : hasActiveSubscription ? "Subscription Active" : isProcessing ? "Opening Razorpay..." : "Buy Plan"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </article>
           </div>
         </>
