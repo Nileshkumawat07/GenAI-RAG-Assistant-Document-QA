@@ -1,127 +1,688 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-function FAQs() {
-  const [selectedTopic, setSelectedTopic] = useState("general");
+import {
+  getManageContentEntries,
+  getPublishedContentEntries,
+  saveManagedContentEntry,
+} from "./aboutContentApi";
 
-  const generateFAQSection = (title, qnaList) => (
-    <div style={styles.cardBody}>
-      <h3 style={styles.sectionTitle}>{title}</h3>
-      {qnaList.map((item, index) => (
-        <div key={index} style={styles.faqCard}>
-          <p><strong>{item.q}</strong></p>
-          <p>{item.a}</p>
-        </div>
-      ))}
-    </div>
+const FAQ_SECTIONS = [
+  { id: "general", label: "General", eyebrow: "Core product guidance" },
+  { id: "billing", label: "Billing", eyebrow: "Plans and payments" },
+  { id: "technical", label: "Technical", eyebrow: "Support and platform help" },
+  { id: "security", label: "Security", eyebrow: "Trust and compliance" },
+  { id: "accounts", label: "Accounts", eyebrow: "Profile and access" },
+];
+
+const DEFAULT_CONTENT = {
+  general: {
+    title: "General Questions",
+    description: "Browse the most common platform questions and the answers users usually need first.",
+    questions: [
+      {
+        question: "What is the purpose of this platform?",
+        answer: "To deliver secure and scalable solutions for users across industries with a focus on efficiency and ease of use.",
+      },
+      {
+        question: "Who can use this platform?",
+        answer: "Our tools are designed for individuals, startups, and enterprise-level organizations seeking digital transformation.",
+      },
+      {
+        question: "Do you offer a trial version?",
+        answer: "Yes, most plans come with a 7-day free trial to help users explore features before committing.",
+      },
+      {
+        question: "How often is the platform updated?",
+        answer: "We ship regular improvements, security updates, and quality-of-life fixes to keep the workspace reliable.",
+      },
+    ],
+  },
+  billing: {
+    title: "Billing & Payments",
+    description: "Clear answers for invoices, renewals, refunds, taxes, and subscription management.",
+    questions: [
+      {
+        question: "What payment methods do you accept?",
+        answer: "We accept major credit and debit cards, supported wallets, and custom invoicing for eligible business accounts.",
+      },
+      {
+        question: "How do I view my invoice?",
+        answer: "Invoices are available from your billing history inside the account workspace.",
+      },
+      {
+        question: "Can I change my billing cycle?",
+        answer: "Yes, you can switch between monthly and yearly billing from your subscription settings when the plan supports it.",
+      },
+      {
+        question: "How do refunds work?",
+        answer: "Refund requests are reviewed according to plan terms, billing status, and the request timeline.",
+      },
+    ],
+  },
+  technical: {
+    title: "Technical Support",
+    description: "Troubleshooting basics, response expectations, compatibility details, and reporting guidance.",
+    questions: [
+      {
+        question: "How do I contact technical support?",
+        answer: "Use the Help Center, contact form, or your assigned support channel if your plan includes managed assistance.",
+      },
+      {
+        question: "Which browsers are supported?",
+        answer: "The latest versions of Chrome, Edge, Firefox, and Safari are supported for the best experience.",
+      },
+      {
+        question: "Where can I report a bug?",
+        answer: "Bug reports can be submitted through the feedback flow in the workspace or through support.",
+      },
+      {
+        question: "Do you provide documentation?",
+        answer: "Yes, product guides and onboarding resources are available for core workflows and support tasks.",
+      },
+    ],
+  },
+  security: {
+    title: "Security & Compliance",
+    description: "Answers about encryption, access controls, backup practices, and compliance expectations.",
+    questions: [
+      {
+        question: "Is my data encrypted?",
+        answer: "Yes, platform data is protected in transit and at rest using standard modern encryption practices.",
+      },
+      {
+        question: "Is multi-factor authentication supported?",
+        answer: "Yes, additional account verification options are supported for stronger access control.",
+      },
+      {
+        question: "How are backups handled?",
+        answer: "Regular backups and retention workflows are used to support resilience and operational recovery.",
+      },
+      {
+        question: "How do I report a security concern?",
+        answer: "Use the designated support or security contact route so the issue can be reviewed quickly and safely.",
+      },
+    ],
+  },
+  accounts: {
+    title: "Account Management",
+    description: "Profile updates, password recovery, access recovery, notifications, and account ownership guidance.",
+    questions: [
+      {
+        question: "How do I update my profile?",
+        answer: "Go to your account settings and edit the fields you want to update.",
+      },
+      {
+        question: "How do I reset my password?",
+        answer: "Use the password recovery flow from the sign-in page and follow the verification steps.",
+      },
+      {
+        question: "Can I delete my account?",
+        answer: "Yes, account deletion can be requested from the privacy or account settings flow where available.",
+      },
+      {
+        question: "What happens if I lose access to my email?",
+        answer: "Contact support for identity verification and account recovery options.",
+      },
+    ],
+  },
+};
+
+function parseEntryPayload(entry) {
+  try {
+    return JSON.parse(entry?.bodyJson || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function normalizeQuestions(items) {
+  return (items || [])
+    .map((item) => ({
+      question: (item?.question || item?.q || "").trim(),
+      answer: (item?.answer || item?.a || "").trim(),
+    }))
+    .filter((item) => item.question && item.answer);
+}
+
+function toDrafts(entriesMap) {
+  return Object.fromEntries(
+    FAQ_SECTIONS.map((section) => [
+      section.id,
+      {
+        title: entriesMap[section.id]?.title || "",
+        description: entriesMap[section.id]?.description || "",
+        questions: normalizeQuestions(entriesMap[section.id]?.questions),
+      },
+    ])
   );
+}
 
-  const faqContent = {
-    general: generateFAQSection("General Questions", [
-      { q: "What is the purpose of this platform?", a: "To deliver secure and scalable solutions for users across industries with a focus on efficiency and ease of use." },
-      { q: "Who can use this platform?", a: "Our tools are designed for individuals, startups, and enterprise-level organizations seeking digital transformation." },
-      { q: "Do you offer a trial version?", a: "Yes, most plans come with a 7-day free trial to help users explore features before committing." },
-      { q: "Is the platform mobile-friendly?", a: "Yes. Our interfaces are fully responsive and optimized for mobile devices." },
-      { q: "Can I invite collaborators?", a: "Yes, multi-user support is available in most paid plans allowing collaborative workspaces." },
-      { q: "Do you support multi-language UI?", a: "Yes, we support English, Spanish, French, and more. Language settings can be changed in preferences." },
-      { q: "How often is the platform updated?", a: "We push updates bi-weekly, including security patches, features, and performance improvements." },
-      { q: "Where can I see what’s new?", a: "Release notes are shared via the dashboard and through email announcements." },
-      { q: "Do you offer webinars or training?", a: "Yes, training resources are available via our Learning Hub and weekly webinars." },
-      { q: "Can I give feedback?", a: "Yes, we welcome feedback through the platform or via our support email." },
-    ]),
-    billing: generateFAQSection("Billing & Payments", [
-      { q: "What payment methods do you accept?", a: "We accept major credit/debit cards, PayPal, Stripe, and bank transfers for enterprise clients." },
-      { q: "How do I view my invoice?", a: "Invoices are available in your account dashboard under Billing History." },
-      { q: "Can I get a refund?", a: "Refunds are handled case-by-case. Contact support within 7 days for eligible cases." },
-      { q: "Is GST or VAT applicable?", a: "Yes, applicable taxes will be calculated at checkout based on your region." },
-      { q: "How do I change my billing cycle?", a: "You can switch between monthly and yearly cycles from your Billing Settings." },
-      { q: "What happens if my payment fails?", a: "You will receive a notification and we will retry payment for up to 7 days." },
-      { q: "Can I pause my subscription?", a: "Yes, paid users can pause billing for up to 30 days once a year." },
-      { q: "How is usage billed?", a: "Billing is based on plan tier and any extra features you subscribe to." },
-      { q: "How do I cancel auto-renewal?", a: "Turn off auto-renew from the Billing section in your settings." },
-      { q: "Are enterprise quotes negotiable?", a: "Yes, custom enterprise deals are tailored after discussion with our sales team." },
-    ]),
-    technical: generateFAQSection("Technical Support", [
-      { q: "How do I contact tech support?", a: "Use the Help Center chat, email us, or call support for urgent matters." },
-      { q: "What is the average response time?", a: "Under 2 hours for Pro/Enterprise users and within 12 hours for Free users." },
-      { q: "Where can I report a bug?", a: "Bug reports can be submitted through the feedback form on your dashboard." },
-      { q: "Do you provide documentation?", a: "Yes, a full API and user documentation is available in our Dev Center." },
-      { q: "What browsers are supported?", a: "Latest versions of Chrome, Firefox, Safari, and Edge are fully supported." },
-      { q: "Can I test features before enabling?", a: "Yes, you can use our sandbox environment for safe testing." },
-      { q: "Do you offer uptime guarantees?", a: "Yes, 99.9% uptime backed by SLAs for enterprise clients." },
-      { q: "How do I submit a feature request?", a: "Feature requests are collected through our Feedback Hub." },
-      { q: "Do you support SSO or OAuth?", a: "Yes, Single Sign-On and OAuth integrations are available for Pro and above." },
-      { q: "Is live support available?", a: "Live chat is available 9am-6pm IST, Monday to Friday." },
-    ]),
-    security: generateFAQSection("Security & Compliance", [
-      { q: "Is my data encrypted?", a: "Yes, data is encrypted at rest and in transit using AES-256 and TLS 1.2+" },
-      { q: "Are you GDPR compliant?", a: "Yes, we fully comply with GDPR and allow data deletion on request." },
-      { q: "How do you handle data breaches?", a: "Incidents are immediately reported to affected users and authorities within 72 hours." },
-      { q: "Is 2FA available?", a: "Yes, Two-Factor Authentication can be enabled via your account settings." },
-      { q: "Where are your servers located?", a: "We operate multi-region servers in the US, Europe, and Asia-Pacific." },
-      { q: "How do I report security issues?", a: "Email security@yourcompany.com for responsible disclosure." },
-      { q: "Are backups available?", a: "Yes, automated daily backups are performed and securely stored." },
-      { q: "How do I review audit logs?", a: "Audit trails are available to admins in the Security tab." },
-      { q: "Do you support IP whitelisting?", a: "Yes, available for enterprise clients with custom firewall rules." },
-      { q: "How often are systems audited?", a: "We conduct quarterly internal and annual third-party audits." },
-    ]),
-    accounts: generateFAQSection("Account Management", [
-      { q: "How do I update my profile?", a: "Go to Account Settings and click on Edit Profile to change your details." },
-      { q: "Can I delete my account?", a: "Yes, under Privacy Settings, click on Delete Account and confirm via OTP." },
-      { q: "How do I reset my password?", a: "Click Forgot Password on the login screen and follow the verification steps." },
-      { q: "What if I lose access to my email?", a: "Contact support with ID verification to recover or change email address." },
-      { q: "How do I enable notifications?", a: "You can enable/disable email, mobile, or browser alerts in Notification Settings." },
-      { q: "Can I link social media accounts?", a: "Yes, you can link Facebook, Google, LinkedIn and GitHub accounts." },
-      { q: "What are account roles?", a: "Roles define user privileges like Admin, Editor, Viewer. Set under Team Settings." },
-      { q: "Can I change my username?", a: "Yes, under Account Info. Changes require OTP verification." },
-      { q: "Do you log user sessions?", a: "Yes, view past login history under Security Logs." },
-      { q: "What if my account is locked?", a: "Wait 30 minutes or contact support to unlock if too many failed attempts." },
-    ]),
+function FAQs({
+  activeCategory = "",
+  onCategoryChange = null,
+  canEdit = false,
+}) {
+  const embedded = Boolean(activeCategory && onCategoryChange);
+  const [localCategory, setLocalCategory] = useState("general");
+  const [contentMap, setContentMap] = useState(DEFAULT_CONTENT);
+  const [drafts, setDrafts] = useState(() => toDrafts(DEFAULT_CONTENT));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [expandedItemId, setExpandedItemId] = useState("general-0");
+
+  const selectedCategory = embedded ? activeCategory : localCategory;
+
+  const setCategory = (nextCategory) => {
+    setExpandedItemId(`${nextCategory}-0`);
+    if (embedded) {
+      onCategoryChange(nextCategory);
+      return;
+    }
+    setLocalCategory(nextCategory);
   };
 
-  return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <div style={styles.sidebar}>
-          <h2 style={styles.title}>FAQs</h2>
-          <p style={styles.description}>Find answers to common questions</p>
-          <div style={styles.tabs}>
-            {Object.keys(faqContent).map((key) => (
-              <button
-                key={key}
-                style={{
-                  ...styles.tab,
-                  backgroundColor: selectedTopic === key ? "#1A237E" : "#fff",
-                  color: selectedTopic === key ? "#fff" : "#212121",
-                  border: selectedTopic === key ? "1px solid #1A237E" : "1px solid #ccc",
-                }}
-                onClick={() => setSelectedTopic(key)}
-              >
-                {key.charAt(0).toUpperCase() + key.slice(1)}
-              </button>
+  useEffect(() => {
+    let active = true;
+
+    async function loadContent() {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+        const response = canEdit
+          ? await getManageContentEntries("faqs")
+          : await getPublishedContentEntries("faqs");
+        const entries = response?.entries || [];
+        const nextMap = { ...DEFAULT_CONTENT };
+
+        entries.forEach((entry) => {
+          if (!nextMap[entry.sectionKey]) return;
+          const payload = parseEntryPayload(entry);
+          nextMap[entry.sectionKey] = {
+            ...nextMap[entry.sectionKey],
+            ...payload,
+            title: payload.title || entry.title || nextMap[entry.sectionKey].title,
+            description: payload.description || nextMap[entry.sectionKey].description,
+            questions: normalizeQuestions(payload.questions || nextMap[entry.sectionKey].questions),
+          };
+        });
+
+        if (!active) return;
+        setContentMap(nextMap);
+        setDrafts(toDrafts(nextMap));
+      } catch (error) {
+        if (!active) return;
+        setErrorMessage(error.message || "Failed to load FAQ content.");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadContent();
+    return () => {
+      active = false;
+    };
+  }, [canEdit]);
+
+  const currentContent = useMemo(
+    () => contentMap[selectedCategory] || DEFAULT_CONTENT.general,
+    [contentMap, selectedCategory]
+  );
+
+  const sectionDraft = drafts[selectedCategory] || drafts.general;
+
+  const updateDraftField = (field, value) => {
+    setDrafts((current) => ({
+      ...current,
+      [selectedCategory]: {
+        ...current[selectedCategory],
+        [field]: value,
+      },
+    }));
+  };
+
+  const updateQuestion = (index, field, value) => {
+    setDrafts((current) => {
+      const nextQuestions = [...(current[selectedCategory]?.questions || [])];
+      nextQuestions[index] = {
+        ...nextQuestions[index],
+        [field]: value,
+      };
+      return {
+        ...current,
+        [selectedCategory]: {
+          ...current[selectedCategory],
+          questions: nextQuestions,
+        },
+      };
+    });
+  };
+
+  const addQuestion = () => {
+    setDrafts((current) => ({
+      ...current,
+      [selectedCategory]: {
+        ...current[selectedCategory],
+        questions: [
+          ...(current[selectedCategory]?.questions || []),
+          { question: "", answer: "" },
+        ],
+      },
+    }));
+  };
+
+  const removeQuestion = (index) => {
+    setDrafts((current) => {
+      const nextQuestions = (current[selectedCategory]?.questions || []).filter((_, itemIndex) => itemIndex !== index);
+      return {
+        ...current,
+        [selectedCategory]: {
+          ...current[selectedCategory],
+          questions: nextQuestions.length > 0 ? nextQuestions : [{ question: "", answer: "" }],
+        },
+      };
+    });
+  };
+
+  const handleSave = async () => {
+    const cleanedQuestions = normalizeQuestions(sectionDraft.questions);
+    const bodyPayload = {
+      title: (sectionDraft.title || "").trim() || FAQ_SECTIONS.find((item) => item.id === selectedCategory)?.label || "FAQs",
+      description: (sectionDraft.description || "").trim(),
+      questions: cleanedQuestions,
+    };
+
+    try {
+      setSaving(true);
+      setErrorMessage("");
+      setStatusMessage("");
+      await saveManagedContentEntry({
+        pageKey: "faqs",
+        sectionKey: selectedCategory,
+        title: bodyPayload.title,
+        bodyJson: JSON.stringify(bodyPayload),
+        isPublished: true,
+      });
+      setContentMap((current) => ({
+        ...current,
+        [selectedCategory]: bodyPayload,
+      }));
+      setDrafts((current) => ({
+        ...current,
+        [selectedCategory]: {
+          title: bodyPayload.title,
+          description: bodyPayload.description,
+          questions: bodyPayload.questions.length > 0 ? bodyPayload.questions : [{ question: "", answer: "" }],
+        },
+      }));
+      setStatusMessage("FAQ content saved.");
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to save FAQ content.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderPublicContent = (content = currentContent) => {
+    const questions = normalizeQuestions(content.questions);
+    return (
+      <section style={styles.surfacePanel}>
+        <div style={styles.topicHeader}>
+          <div>
+            <span style={styles.sectionEyebrow}>
+              {FAQ_SECTIONS.find((item) => item.id === selectedCategory)?.eyebrow || "FAQ Topic"}
+            </span>
+            <h3 style={styles.sectionTitle}>{content.title}</h3>
+            <p style={styles.sectionBody}>{content.description}</p>
+          </div>
+          <div style={styles.topicSummaryCard}>
+            <strong>{questions.length}</strong>
+            <span>Published answers</span>
+          </div>
+        </div>
+
+        <div style={styles.faqList}>
+          {questions.map((item, index) => {
+            const itemId = `${selectedCategory}-${index}`;
+            const expanded = expandedItemId === itemId;
+            return (
+              <article key={itemId} style={styles.faqItem}>
+                <button
+                  type="button"
+                  style={styles.faqQuestionButton}
+                  onClick={() => setExpandedItemId(expanded ? "" : itemId)}
+                >
+                  <span>{item.question}</span>
+                  <span style={styles.faqToggle}>{expanded ? "-" : "+"}</span>
+                </button>
+                {expanded ? <p style={styles.faqAnswer}>{item.answer}</p> : null}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  const renderEditor = () => (
+    <section style={styles.editorShell}>
+      <div style={styles.editorHeader}>
+        <div>
+          <span style={styles.sectionEyebrow}>FAQ Studio</span>
+          <h3 style={styles.sectionTitle}>
+            Edit {FAQ_SECTIONS.find((item) => item.id === selectedCategory)?.label}
+          </h3>
+        </div>
+        <button type="button" style={styles.primaryButton} onClick={handleSave} disabled={saving}>
+          {saving ? "Saving..." : "Publish FAQ"}
+        </button>
+      </div>
+
+      <div style={styles.editorGrid}>
+        <div style={styles.editorPanel}>
+          <input
+            style={styles.input}
+            value={sectionDraft.title}
+            onChange={(event) => updateDraftField("title", event.target.value)}
+            placeholder="Section title"
+          />
+          <textarea
+            style={styles.textarea}
+            rows={4}
+            value={sectionDraft.description}
+            onChange={(event) => updateDraftField("description", event.target.value)}
+            placeholder="Short topic introduction"
+          />
+
+          <div style={styles.editorMetaRow}>
+            <div>
+              <span style={styles.editorMetaLabel}>Questions</span>
+              <p style={styles.editorMetaText}>Add, edit, or remove FAQ pairs for this topic.</p>
+            </div>
+            <button type="button" style={styles.secondaryButton} onClick={addQuestion}>
+              Add Question
+            </button>
+          </div>
+
+          <div style={styles.questionEditorList}>
+            {(sectionDraft.questions || []).map((item, index) => (
+              <article key={`${selectedCategory}-editor-${index}`} style={styles.questionEditorCard}>
+                <div style={styles.questionEditorHeader}>
+                  <strong>Question {index + 1}</strong>
+                  <button type="button" style={styles.removeButton} onClick={() => removeQuestion(index)}>
+                    Remove
+                  </button>
+                </div>
+                <input
+                  style={styles.input}
+                  value={item.question}
+                  onChange={(event) => updateQuestion(index, "question", event.target.value)}
+                  placeholder="Question"
+                />
+                <textarea
+                  style={styles.textarea}
+                  rows={4}
+                  value={item.answer}
+                  onChange={(event) => updateQuestion(index, "answer", event.target.value)}
+                  placeholder="Answer"
+                />
+              </article>
             ))}
           </div>
         </div>
-        <div style={styles.formSection}>
-          <div style={styles.formCard}>{faqContent[selectedTopic]}</div>
+
+        <div style={styles.previewPanel}>
+          <span style={styles.sectionEyebrow}>Live Preview</span>
+          {renderPublicContent({
+            title: sectionDraft.title,
+            description: sectionDraft.description,
+            questions: sectionDraft.questions,
+          })}
         </div>
       </div>
+    </section>
+  );
+
+  return (
+    <div style={styles.page}>
+      <section style={styles.hero}>
+        <div style={styles.heroCopy}>
+          <span style={styles.heroEyebrow}>{canEdit ? "Management FAQ Studio" : "FAQs"}</span>
+          <h2 style={styles.heroTitle}>
+            {canEdit
+              ? "Manage the public FAQ experience with the same polished workflow used for About content."
+              : "Get fast answers through a cleaner, easier-to-scan FAQ experience."}
+          </h2>
+          <p style={styles.heroText}>
+            {canEdit
+              ? "Each FAQ topic can be updated and published directly from management. Users will see the latest published content immediately on the FAQ page."
+              : "Switch between answer groups to find billing, technical, security, and account guidance without leaving the workspace."}
+          </p>
+        </div>
+        <div style={styles.heroStatCard}>
+          <span>Topics</span>
+          <strong>{FAQ_SECTIONS.length}</strong>
+          <p>Managed sections with live publishing support.</p>
+        </div>
+      </section>
+
+      <div style={styles.pillRow}>
+        {FAQ_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => setCategory(section.id)}
+            style={{
+              ...styles.pill,
+              ...(selectedCategory === section.id ? styles.pillActive : {}),
+            }}
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={styles.emptyState}>
+          <h4>Loading FAQ content</h4>
+          <p>Fetching the latest published answers and management updates.</p>
+        </div>
+      ) : null}
+      {statusMessage ? <p style={styles.successText}>{statusMessage}</p> : null}
+      {errorMessage ? <p style={styles.errorText}>{errorMessage}</p> : null}
+      {!loading ? (canEdit ? renderEditor() : renderPublicContent()) : null}
     </div>
   );
 }
 
 const styles = {
-  page: { fontFamily: "Segoe UI, sans-serif", backgroundColor: "#F5F5F5", padding: "24px 20px", minHeight: "100%", boxSizing: "border-box" },
-  container: { maxWidth: "1400px", margin: "0 auto", display: "flex", backgroundColor: "#fff", borderRadius: "12px", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.08)", height: "650px" },
-  sidebar: { flex: "1 1 280px", backgroundColor: "#ECEFF1", padding: "30px", borderRight: "1px solid #CFD8DC" },
-  title: { fontSize: "24px", color: "#1A237E", marginBottom: "12px" },
-  description: { fontSize: "14px", color: "#546E7A", marginBottom: "20px" },
-  tabs: { display: "flex", flexDirection: "column", gap: "10px" },
-  tab: { padding: "8px 12px", fontSize: "13px", cursor: "pointer", borderRadius: "6px", backgroundColor: "#fff", textAlign: "left", transition: "all 0.3s ease" },
-  formSection: { flex: "2 1 1000px", padding: "40px", backgroundColor: "#FAFAFA" },
-  formCard: { backgroundColor: "#fff", padding: "30px", borderRadius: "10px", boxShadow: "0 4px 16px rgba(0,0,0,0.05)", height: "100%", overflowY: "auto" },
-  cardBody: { display: "flex", flexDirection: "column", gap: "16px", fontSize: "14px", color: "#333" },
-  sectionTitle: { fontSize: "18px", color: "#1A237E", marginBottom: "10px" },
-  faqCard: { backgroundColor: "#F0F4FF", padding: "15px 20px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" },
+  page: { display: "flex", flexDirection: "column", gap: "18px" },
+  hero: {
+    padding: "24px",
+    borderRadius: "28px",
+    background: "linear-gradient(135deg, #14345b 0%, #1f5b84 48%, #78a8c8 100%)",
+    color: "#ffffff",
+    boxShadow: "0 20px 60px rgba(18,52,91,0.2)",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.5fr) minmax(220px, 0.65fr)",
+    gap: "18px",
+    alignItems: "end",
+  },
+  heroCopy: { display: "grid", gap: "10px" },
+  heroEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.84 },
+  heroTitle: { margin: 0, fontSize: "34px", lineHeight: 1.12 },
+  heroText: { margin: 0, lineHeight: 1.7, maxWidth: "820px", opacity: 0.92 },
+  heroStatCard: {
+    borderRadius: "22px",
+    background: "rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    padding: "18px",
+    display: "grid",
+    gap: "8px",
+    backdropFilter: "blur(8px)",
+  },
+  pillRow: { display: "flex", flexWrap: "wrap", gap: "12px" },
+  pill: {
+    padding: "14px 22px",
+    borderRadius: "999px",
+    border: "1px solid #cadcec",
+    background: "#f7fbff",
+    color: "#1f476d",
+    cursor: "pointer",
+    fontWeight: 700,
+    boxShadow: "0 8px 20px rgba(15,38,66,0.05)",
+  },
+  pillActive: {
+    background: "linear-gradient(135deg, #14345b 0%, #256391 100%)",
+    color: "#ffffff",
+    borderColor: "#14345b",
+    boxShadow: "0 16px 30px rgba(20,52,91,0.18)",
+  },
+  surfacePanel: {
+    borderRadius: "24px",
+    background: "#ffffff",
+    border: "1px solid #dbe6f0",
+    padding: "24px",
+    boxShadow: "0 12px 36px rgba(16,35,61,0.06)",
+  },
+  topicHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 180px",
+    gap: "16px",
+    alignItems: "start",
+    marginBottom: "20px",
+  },
+  topicSummaryCard: {
+    borderRadius: "20px",
+    border: "1px solid #d9e6f0",
+    background: "linear-gradient(180deg, #fafdff 0%, #eef6fb 100%)",
+    padding: "18px",
+    display: "grid",
+    gap: "6px",
+    color: "#52708b",
+  },
+  sectionEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.14em", textTransform: "uppercase", color: "#5a7990", fontWeight: 700 },
+  sectionTitle: { margin: "10px 0 8px", fontSize: "28px", color: "#14345b" },
+  sectionBody: { margin: 0, color: "#607186", lineHeight: 1.7, maxWidth: "780px" },
+  faqList: { display: "grid", gap: "14px" },
+  faqItem: {
+    borderRadius: "18px",
+    border: "1px solid #dbe5ee",
+    background: "linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%)",
+    overflow: "hidden",
+  },
+  faqQuestionButton: {
+    width: "100%",
+    border: "none",
+    background: "transparent",
+    padding: "18px 20px",
+    textAlign: "left",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "16px",
+    alignItems: "center",
+    cursor: "pointer",
+    color: "#16395d",
+    fontWeight: 700,
+    fontSize: "15px",
+  },
+  faqToggle: {
+    minWidth: "28px",
+    height: "28px",
+    borderRadius: "999px",
+    background: "#e9f2f8",
+    color: "#1f557f",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "18px",
+    lineHeight: 1,
+  },
+  faqAnswer: { margin: 0, padding: "0 20px 18px", color: "#5d6d81", lineHeight: 1.7 },
+  editorShell: {
+    borderRadius: "24px",
+    background: "#ffffff",
+    border: "1px solid #dbe4f0",
+    padding: "24px",
+    boxShadow: "0 12px 36px rgba(16,35,61,0.06)",
+  },
+  editorHeader: { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "18px" },
+  editorGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(340px, 0.95fr)", gap: "18px" },
+  editorPanel: {
+    borderRadius: "20px",
+    border: "1px solid #dce7f0",
+    background: "linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%)",
+    padding: "18px",
+    display: "grid",
+    gap: "14px",
+  },
+  previewPanel: { borderRadius: "20px", border: "1px solid #dce7f0", background: "#fbfdff", padding: "18px" },
+  input: {
+    width: "100%",
+    borderRadius: "14px",
+    border: "1px solid #cad8e7",
+    padding: "12px 14px",
+    background: "#fcfeff",
+    color: "#16395d",
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    borderRadius: "16px",
+    border: "1px solid #cad8e7",
+    padding: "14px",
+    background: "#fcfeff",
+    color: "#16395d",
+    boxSizing: "border-box",
+    resize: "vertical",
+  },
+  editorMetaRow: { display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", flexWrap: "wrap" },
+  editorMetaLabel: { display: "block", color: "#14345b", fontWeight: 700, marginBottom: "4px" },
+  editorMetaText: { margin: 0, color: "#6a7d90", fontSize: "14px" },
+  questionEditorList: { display: "grid", gap: "14px" },
+  questionEditorCard: {
+    borderRadius: "18px",
+    border: "1px solid #d8e4ef",
+    background: "#ffffff",
+    padding: "16px",
+    display: "grid",
+    gap: "12px",
+  },
+  questionEditorHeader: { display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center", flexWrap: "wrap", color: "#14345b" },
+  primaryButton: {
+    border: "none",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg, #14345b 0%, #256391 100%)",
+    color: "#fff",
+    padding: "12px 18px",
+    cursor: "pointer",
+    fontWeight: 700,
+    boxShadow: "0 14px 28px rgba(20,52,91,0.18)",
+  },
+  secondaryButton: {
+    borderRadius: "14px",
+    border: "1px solid #c7d8e8",
+    background: "#f7fbff",
+    color: "#1f476d",
+    padding: "10px 16px",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  removeButton: {
+    border: "1px solid #e5c7c7",
+    borderRadius: "12px",
+    background: "#fff7f7",
+    color: "#a24b4b",
+    padding: "8px 12px",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  emptyState: { borderRadius: "18px", border: "1px dashed #ccd8e5", background: "#f8fbff", padding: "24px", color: "#5d6d81" },
+  successText: { color: "#0f6a3e", margin: 0, fontWeight: 600 },
+  errorText: { color: "#9f3f3f", margin: 0, fontWeight: 600 },
 };
 
 export default FAQs;

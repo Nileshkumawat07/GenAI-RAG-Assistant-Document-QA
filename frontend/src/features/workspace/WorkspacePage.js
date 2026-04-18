@@ -5,6 +5,7 @@ import ImageGenerationPanel from "../image-generation/ImageGenerationPanel";
 import ObjectDetectionPanel from "../object-detection/ObjectDetectionPanel";
 import AboutUs from "../info/AboutUs";
 import Careers from "../info/Careers";
+import FAQs from "../info/FAQs";
 import SettingsPanel from "./SettingsPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
 import ChatHistoryPanel from "./ChatHistoryPanel";
@@ -460,6 +461,7 @@ const INFO_PAGE_CONFIG = {
       { id: "support", label: "Support", heading: "Support Request Table" },
       { id: "studio", label: "Studio", heading: "Careers Studio" },
       { id: "about-studio", label: "About Studio", heading: "About Content Studio" },
+      { id: "faq-studio", label: "FAQ Studio", heading: "FAQ Content Studio" },
     ],
   },
 };
@@ -2034,6 +2036,20 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       );
     }
 
+    if (selectedInfoPage === "faqs") {
+      return (
+        <FAQs
+          activeCategory={activeInfoTab}
+          onCategoryChange={(nextTab) =>
+            setInfoTabs((current) => ({
+              ...current,
+              faqs: nextTab,
+            }))
+          }
+        />
+      );
+    }
+
     if (selectedInfoPage === "management" && activeInfoTab === "studio") {
       return (
         <Careers
@@ -2055,6 +2071,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     if (selectedInfoPage === "management" && activeInfoTab === "about-studio") {
       return (
         <AboutUs
+          canEdit
+        />
+      );
+    }
+
+    if (selectedInfoPage === "management" && activeInfoTab === "faq-studio") {
+      return (
+        <FAQs
           canEdit
         />
       );
