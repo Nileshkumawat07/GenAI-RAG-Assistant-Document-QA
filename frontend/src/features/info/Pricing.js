@@ -21,6 +21,11 @@ const DEFAULT_SUPPORT_ITEMS = [
   "Secure Razorpay checkout",
 ];
 const DEFAULT_TRUST_BADGES = ["Instant activation", "Encrypted checkout"];
+const DEFAULT_SECTION_HIGHLIGHTS = [
+  "Sharper plan framing that feels investor-ready instead of placeholder.",
+  "Cleaner conversion surfaces with more deliberate trust and benefit packaging.",
+  "Premium visual hierarchy inspired by polished product-led pricing pages.",
+];
 
 function parseEntryPayload(entry) {
   try {
@@ -68,6 +73,9 @@ function buildDefaultContent(sectionDefinitions, planCatalog) {
           note: plan.note || "",
           trustBadges: plan.trustBadges || DEFAULT_TRUST_BADGES,
           buttonLabel: plan.buttonLabel || "Buy Plan",
+          audience: plan.audience || `Built for ${section.label.toLowerCase()} buyers who want a cleaner premium experience.`,
+          spotlight: plan.spotlight || "Structured for stronger trust, faster decisions, and a more premium commercial feel.",
+          proofPoints: plan.proofPoints || (plan.features || []).slice(0, 3),
         }));
 
       return [
@@ -78,6 +86,11 @@ function buildDefaultContent(sectionDefinitions, planCatalog) {
           description: definition.description || `Explore premium ${section.label.toLowerCase()} plans designed for this workspace.`,
           supportTitle: DEFAULT_SUPPORT_TITLE,
           supportItems: DEFAULT_SUPPORT_ITEMS,
+          highlights: definition.highlights || DEFAULT_SECTION_HIGHLIGHTS,
+          assuranceTitle: definition.assuranceTitle || `${section.label} packaging with a more premium commercial edge`,
+          assuranceBody:
+            definition.assuranceBody
+            || "Present this plan with clearer differentiation, stronger trust cues, and a visual system that feels more mature and deliberate.",
           plans,
         },
       ];
@@ -95,6 +108,9 @@ function normalizePlans(draftPlans, fallbackPlans) {
       features: Array.isArray(matchingDraft.features) ? matchingDraft.features : basePlan.features || [],
       trustBadges: Array.isArray(matchingDraft.trustBadges) ? matchingDraft.trustBadges : basePlan.trustBadges || DEFAULT_TRUST_BADGES,
       buttonLabel: matchingDraft.buttonLabel || basePlan.buttonLabel || "Buy Plan",
+      audience: matchingDraft.audience || basePlan.audience || "",
+      spotlight: matchingDraft.spotlight || basePlan.spotlight || "",
+      proofPoints: Array.isArray(matchingDraft.proofPoints) ? matchingDraft.proofPoints : basePlan.proofPoints || [],
     };
   });
 }
@@ -111,10 +127,16 @@ function toDrafts(contentMap) {
           description: content.description || "",
           supportTitle: content.supportTitle || DEFAULT_SUPPORT_TITLE,
           supportItems: arrayToText(content.supportItems),
+          highlights: arrayToText(content.highlights),
+          assuranceTitle: content.assuranceTitle || "",
+          assuranceBody: content.assuranceBody || "",
           plans: (content.plans || []).map((plan) => ({
             ...plan,
             features: arrayToText(plan.features),
             trustBadges: arrayToText(plan.trustBadges),
+            proofPoints: arrayToText(plan.proofPoints),
+            audience: plan.audience || "",
+            spotlight: plan.spotlight || "",
           })),
         },
       ];
@@ -250,10 +272,14 @@ function Pricing({
       description: sectionDraft.description,
       supportTitle: sectionDraft.supportTitle,
       supportItems: linesToArray(sectionDraft.supportItems),
+      highlights: linesToArray(sectionDraft.highlights),
+      assuranceTitle: sectionDraft.assuranceTitle,
+      assuranceBody: sectionDraft.assuranceBody,
       plans: (sectionDraft.plans || []).map((plan) => ({
         ...plan,
         features: linesToArray(plan.features),
         trustBadges: linesToArray(plan.trustBadges),
+        proofPoints: linesToArray(plan.proofPoints),
       })),
     };
 
@@ -284,6 +310,15 @@ function Pricing({
 
   const renderPublicContent = (content = currentContent) => (
     <div style={styles.stack}>
+      <section style={styles.valueStrip}>
+        {(content.highlights || []).map((item, index) => (
+          <article key={`${item}-${index}`} style={styles.valueCard}>
+            <span style={styles.valueIndex}>{String(index + 1).padStart(2, "0")}</span>
+            <p style={styles.valueText}>{item}</p>
+          </article>
+        ))}
+      </section>
+
       <section style={styles.planGrid}>
         {(content.plans || []).map((plan) => {
           const planState = paymentStatus[plan.id];
@@ -300,6 +335,7 @@ function Pricing({
                 ...(plan.badge === "Most Popular" ? styles.planCardPopular : {}),
               }}
             >
+              <div style={styles.planAmbientGlow} />
               <div style={styles.planTop}>
                 <div style={styles.planCopy}>
                   <span style={styles.planBadge}>{plan.badge}</span>
@@ -314,6 +350,23 @@ function Pricing({
                     <span>{plan.cadence}</span>
                   </div>
                 </div>
+              </div>
+
+              <div style={styles.planStatementBand}>
+                <div style={styles.statementBlock}>
+                  <span style={styles.statementLabel}>Ideal For</span>
+                  <p style={styles.statementText}>{plan.audience}</p>
+                </div>
+                <div style={styles.statementBlock}>
+                  <span style={styles.statementLabel}>Premium Angle</span>
+                  <p style={styles.statementText}>{plan.spotlight}</p>
+                </div>
+              </div>
+
+              <div style={styles.proofRow}>
+                {(plan.proofPoints || []).map((item) => (
+                  <span key={item} style={styles.proofPill}>{item}</span>
+                ))}
               </div>
 
               <div style={styles.featureList}>
@@ -358,6 +411,22 @@ function Pricing({
           );
         })}
       </section>
+
+      <section style={styles.assurancePanel}>
+        <div>
+          <span style={styles.assuranceEyebrow}>Premium Packaging</span>
+          <h3 style={styles.assuranceTitle}>{content.assuranceTitle}</h3>
+          <p style={styles.assuranceBody}>{content.assuranceBody}</p>
+        </div>
+        <div style={styles.assuranceGrid}>
+          {(content.plans || []).map((plan) => (
+            <article key={plan.id} style={styles.assuranceMiniCard}>
+              <strong>{plan.title}</strong>
+              <span>{plan.priceLabel} {plan.cadence}</span>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 
@@ -368,10 +437,14 @@ function Pricing({
       description: sectionDraft.description,
       supportTitle: sectionDraft.supportTitle,
       supportItems: linesToArray(sectionDraft.supportItems),
+      highlights: linesToArray(sectionDraft.highlights),
+      assuranceTitle: sectionDraft.assuranceTitle,
+      assuranceBody: sectionDraft.assuranceBody,
       plans: (sectionDraft.plans || []).map((plan) => ({
         ...plan,
         features: linesToArray(plan.features),
         trustBadges: linesToArray(plan.trustBadges),
+        proofPoints: linesToArray(plan.proofPoints),
       })),
     };
 
@@ -390,6 +463,35 @@ function Pricing({
 
         <div style={styles.editorGrid}>
           <div style={styles.formStack}>
+            <div style={styles.formCard}>
+              <div style={styles.formCardHeader}>
+                <div>
+                  <span style={styles.sectionEyebrow}>Section Polish</span>
+                  <h4 style={styles.formCardTitle}>Edit premium framing</h4>
+                </div>
+              </div>
+              <span style={styles.formLabel}>Highlight points</span>
+              <textarea
+                rows={5}
+                style={styles.textarea}
+                value={sectionDraft.highlights || ""}
+                onChange={(event) => updateDraftField("highlights", event.target.value)}
+              />
+              <span style={styles.formLabel}>Assurance title</span>
+              <input
+                style={styles.input}
+                value={sectionDraft.assuranceTitle || ""}
+                onChange={(event) => updateDraftField("assuranceTitle", event.target.value)}
+              />
+              <span style={styles.formLabel}>Assurance body</span>
+              <textarea
+                rows={4}
+                style={styles.textarea}
+                value={sectionDraft.assuranceBody || ""}
+                onChange={(event) => updateDraftField("assuranceBody", event.target.value)}
+              />
+            </div>
+
             <div style={styles.formCard}>
               <div style={styles.formCardHeader}>
                 <div>
@@ -455,12 +557,33 @@ function Pricing({
                     value={selectedPlanDraft.description}
                     onChange={(event) => updatePlanDraft(selectedPlanDraft.id, "description", event.target.value)}
                   />
+                  <span style={styles.formLabel}>Audience fit</span>
+                  <textarea
+                    rows={3}
+                    style={styles.textarea}
+                    value={selectedPlanDraft.audience || ""}
+                    onChange={(event) => updatePlanDraft(selectedPlanDraft.id, "audience", event.target.value)}
+                  />
+                  <span style={styles.formLabel}>Premium angle</span>
+                  <textarea
+                    rows={3}
+                    style={styles.textarea}
+                    value={selectedPlanDraft.spotlight || ""}
+                    onChange={(event) => updatePlanDraft(selectedPlanDraft.id, "spotlight", event.target.value)}
+                  />
                   <span style={styles.formLabel}>Features</span>
                   <textarea
                     rows={5}
                     style={styles.textarea}
                     value={selectedPlanDraft.features}
                     onChange={(event) => updatePlanDraft(selectedPlanDraft.id, "features", event.target.value)}
+                  />
+                  <span style={styles.formLabel}>Proof points</span>
+                  <textarea
+                    rows={3}
+                    style={styles.textarea}
+                    value={selectedPlanDraft.proofPoints || ""}
+                    onChange={(event) => updatePlanDraft(selectedPlanDraft.id, "proofPoints", event.target.value)}
                   />
                   <span style={styles.formLabel}>Plan note</span>
                   <textarea
@@ -532,21 +655,47 @@ function Pricing({
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: "18px" },
   stack: { display: "grid", gap: "18px" },
-  planGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: "18px" },
-  planCard: {
-    borderRadius: "28px",
-    border: "1px solid #dbe5f4",
-    background: "linear-gradient(180deg, #ffffff 0%, #f9fbff 100%)",
-    padding: "22px",
-    boxShadow: "0 18px 46px rgba(18,37,67,0.07)",
+  valueStrip: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" },
+  valueCard: {
+    borderRadius: "24px",
+    border: "1px solid #dbe6f5",
+    background: "linear-gradient(145deg, #f7fbff 0%, #ffffff 48%, #edf4ff 100%)",
+    padding: "20px",
+    minHeight: "150px",
+    boxShadow: "0 18px 44px rgba(18,37,67,0.08)",
     display: "grid",
     gap: "18px",
+    alignContent: "space-between",
   },
-  planCardPopular: { borderColor: "#8fb0e3", boxShadow: "0 20px 52px rgba(45,99,183,0.18)" },
-  planCardPremium: { borderColor: "#f0d48a", background: "linear-gradient(180deg, #fffdf8 0%, #fff7e4 100%)" },
+  valueIndex: { fontSize: "12px", letterSpacing: "0.18em", textTransform: "uppercase", color: "#6a81a7", fontWeight: 700 },
+  valueText: { margin: 0, color: "#17315f", fontSize: "18px", lineHeight: 1.7, fontWeight: 600 },
+  planGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" },
+  planCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "28px",
+    border: "1px solid #dbe5f4",
+    background: "linear-gradient(180deg, #ffffff 0%, #f8fbff 46%, #eff5ff 100%)",
+    padding: "26px",
+    boxShadow: "0 28px 62px rgba(18,37,67,0.09)",
+    display: "grid",
+    gap: "20px",
+  },
+  planCardPopular: { borderColor: "#8fb0e3", boxShadow: "0 28px 66px rgba(45,99,183,0.18)" },
+  planCardPremium: { borderColor: "#f0d48a", background: "linear-gradient(180deg, #fffdf9 0%, #fff9ec 45%, #fff3de 100%)" },
+  planAmbientGlow: {
+    position: "absolute",
+    top: "-70px",
+    right: "-40px",
+    width: "220px",
+    height: "220px",
+    borderRadius: "999px",
+    background: "radial-gradient(circle, rgba(84,137,228,0.2) 0%, rgba(84,137,228,0) 72%)",
+    pointerEvents: "none",
+  },
   planTop: { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" },
   planCopy: { display: "grid", gap: "10px" },
-  planBadge: { display: "inline-flex", alignItems: "center", width: "fit-content", padding: "8px 12px", borderRadius: "999px", background: "#eef4ff", color: "#244e91", fontSize: "12px", fontWeight: 700 },
+  planBadge: { display: "inline-flex", alignItems: "center", width: "fit-content", padding: "8px 12px", borderRadius: "999px", background: "#eef4ff", color: "#244e91", fontSize: "12px", fontWeight: 700, border: "1px solid #dae5f8" },
   planTitle: { margin: 0, fontSize: "34px", lineHeight: 1.04, color: "#17315f" },
   planTagline: { margin: 0, color: "#5b6c84", lineHeight: 1.7, fontWeight: 600 },
   planDescription: { margin: 0, color: "#6a7990", lineHeight: 1.65 },
@@ -556,18 +705,40 @@ const styles = {
     borderRadius: "20px",
     background: "linear-gradient(135deg, #18407d 0%, #2e63b4 100%)",
     color: "#ffffff",
-    boxShadow: "0 16px 32px rgba(24,64,125,0.22)",
+    boxShadow: "0 20px 40px rgba(24,64,125,0.22)",
   },
   priceValue: { display: "block", fontSize: "22px", lineHeight: 1.1 },
   priceMeta: { marginTop: "10px", display: "grid", gap: "2px", fontSize: "13px", opacity: 0.92 },
-  featureList: { display: "grid", gap: "12px" },
-  featureItem: { display: "flex", alignItems: "center", gap: "12px", borderRadius: "16px", border: "1px solid #dde6f3", background: "#ffffff", padding: "14px 16px", color: "#3f4f67" },
+  planStatementBand: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" },
+  statementBlock: { borderRadius: "20px", border: "1px solid #dde7f5", background: "rgba(255,255,255,0.88)", padding: "16px", display: "grid", gap: "8px" },
+  statementLabel: { fontSize: "12px", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b81a5", fontWeight: 700 },
+  statementText: { margin: 0, color: "#28456f", lineHeight: 1.7, fontWeight: 600 },
+  proofRow: { display: "flex", flexWrap: "wrap", gap: "10px" },
+  proofPill: { padding: "10px 14px", borderRadius: "999px", background: "#f3f7ff", border: "1px solid #dce6f5", color: "#284d81", fontSize: "12px", fontWeight: 700 },
+  featureList: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" },
+  featureItem: { display: "flex", alignItems: "center", gap: "12px", borderRadius: "18px", border: "1px solid #dde6f3", background: "#ffffff", padding: "16px", color: "#3f4f67", boxShadow: "0 12px 22px rgba(21,40,74,0.04)" },
   featureDot: { width: "10px", height: "10px", borderRadius: "999px", background: "#4178d5", flexShrink: 0 },
   planFooter: { display: "grid", gap: "12px" },
   planNote: { margin: 0, color: "#627089", lineHeight: 1.7 },
   trustRow: { display: "flex", flexWrap: "wrap", gap: "10px" },
-  trustPill: { padding: "8px 12px", borderRadius: "999px", background: "#edf3ff", color: "#224b90", fontSize: "12px", fontWeight: 700 },
-  primaryButton: { border: "none", borderRadius: "14px", background: "linear-gradient(135deg, #17315f 0%, #2d63b7 100%)", color: "#ffffff", padding: "14px 18px", cursor: "pointer", fontWeight: 700, boxShadow: "0 14px 28px rgba(23,49,95,0.18)" },
+  trustPill: { padding: "8px 12px", borderRadius: "999px", background: "#edf3ff", color: "#224b90", fontSize: "12px", fontWeight: 700, border: "1px solid #d7e4f6" },
+  primaryButton: { border: "none", borderRadius: "16px", background: "linear-gradient(135deg, #142f5d 0%, #2c63b6 58%, #4a86df 100%)", color: "#ffffff", padding: "16px 18px", cursor: "pointer", fontWeight: 800, boxShadow: "0 18px 34px rgba(23,49,95,0.18)" },
+  assurancePanel: {
+    borderRadius: "28px",
+    border: "1px solid #dbe5f4",
+    background: "linear-gradient(135deg, #17315f 0%, #21477f 42%, #f7fbff 42%, #ffffff 100%)",
+    boxShadow: "0 24px 60px rgba(19,36,67,0.09)",
+    padding: "26px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: "22px",
+    alignItems: "start",
+  },
+  assuranceEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", color: "#9cb8eb", fontWeight: 700 },
+  assuranceTitle: { margin: "12px 0 10px", fontSize: "30px", lineHeight: 1.15, color: "#ffffff", maxWidth: "560px" },
+  assuranceBody: { margin: 0, color: "#dbe7ff", lineHeight: 1.8, maxWidth: "560px" },
+  assuranceGrid: { display: "grid", gap: "12px" },
+  assuranceMiniCard: { borderRadius: "20px", border: "1px solid #dbe5f4", background: "rgba(255,255,255,0.95)", padding: "18px", display: "grid", gap: "6px", color: "#17315f", boxShadow: "0 14px 30px rgba(16,34,61,0.08)" },
   editorPanel: { borderRadius: "26px", border: "1px solid #dbe5f4", background: "#ffffff", padding: "22px", boxShadow: "0 16px 44px rgba(19,36,67,0.08)" },
   editorHeader: { display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", alignItems: "flex-start", marginBottom: "18px" },
   editorGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(360px, 0.95fr)", gap: "18px" },
