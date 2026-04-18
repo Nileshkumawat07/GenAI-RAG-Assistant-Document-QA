@@ -28,7 +28,6 @@ function App() {
   const [showInfoMenu, setShowInfoMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
   const [headerNotifications, setHeaderNotifications] = useState([]);
   const [headerRecentActivity, setHeaderRecentActivity] = useState([]);
@@ -75,7 +74,6 @@ function App() {
     setShowInfoMenu(false);
     setShowProfileMenu(false);
     setShowNotificationMenu(false);
-    setMobileSidebarOpen(false);
   };
 
   const navigateTo = (nextScreen, nextInfoPage = null, mode = "push") => {
@@ -209,49 +207,6 @@ function App() {
         : "Active";
   const isPremiumMember = currentUser?.subscriptionStatus === "premium";
   const unreadHeaderNotifications = headerNotifications.filter((item) => !item.isRead).length;
-  const workspaceSections = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "document-retrieval", label: "Documents" },
-    { id: "object-detection", label: "Detection" },
-    { id: "image-generation", label: "Images" },
-    { id: "analytics", label: "Analytics" },
-    { id: "chat-history", label: "History" },
-    { id: "team-management", label: "Teams" },
-    { id: "chat", label: "Chat" },
-  ];
-  const mobileHeaderTitle = isWorkspace
-    ? (selectedInfoPage
-      ? infoPages.find((page) => page.id === selectedInfoPage)?.label
-        || (selectedInfoPage ? `${selectedInfoPage.charAt(0).toUpperCase()}${selectedInfoPage.slice(1)}` : "Workspace")
-      : "Workspace")
-    : screen === "login"
-      ? "Login"
-      : screen === "signup"
-        ? "Create Account"
-        : "AI Workspace";
-
-  const closeMobileSidebar = useCallback(() => {
-    setMobileSidebarOpen(false);
-  }, []);
-
-  const toggleMobileSidebar = useCallback(() => {
-    setMobileSidebarOpen((current) => !current);
-    setShowInfoMenu(false);
-    setShowProfileMenu(false);
-    setShowNotificationMenu(false);
-  }, []);
-
-  const openWorkspaceSection = useCallback((sectionId) => {
-    navigateTo("workspace", null);
-    closeMobileSidebar();
-    window.setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent("genai-mobile-workspace-section", {
-          detail: { section: sectionId },
-        })
-      );
-    }, 0);
-  }, [closeMobileSidebar]);
 
   const loadHeaderNotifications = useCallback(async () => {
     if (!currentUser?.id || screen !== "workspace") {
@@ -415,7 +370,8 @@ function App() {
         return;
       }
 
-      socket = new WebSocket(getChatWebSocketUrl());
+      window.socket = new WebSocket(getChatWebSocketUrl());
+      socket = window.socket;
       headerSocketRef.current = socket;
 
       socket.onopen = () => {
@@ -464,8 +420,9 @@ function App() {
           ].includes(payload.type)) {
             scheduleHeaderNotificationsRefresh();
           }
-        } catch (err) {
+        } catch {
           console.error("SOCKET ERROR:", err);
+           
         }
       };
     };
@@ -549,265 +506,12 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth > 768) {
-        setMobileSidebarOpen(false);
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   return (
     <main
-      className={`app-root mobile-app app-shell ${
+      className={`app-shell ${
         isWorkspace ? "workspace-app-shell workspace-shell-mode" : "marketing-shell-mode"
       }`}
     >
-      <div className={`overlay sidebar-overlay ${mobileSidebarOpen ? "active" : ""}`} onClick={closeMobileSidebar} />
-      <aside className={`mobile-sidebar ${mobileSidebarOpen ? "open" : ""}`}>
-        <div className="mobile-sidebar-head">
-          <div className="mobile-sidebar-brand">
-            <div className="app-brand-mark" aria-hidden="true">
-              <span className="app-brand-mark-core" />
-              <span className="app-brand-mark-orbit app-brand-mark-orbit-one" />
-              <span className="app-brand-mark-orbit app-brand-mark-orbit-two" />
-            </div>
-            <div className="mobile-sidebar-brand-copy">
-              <strong>Unified AI</strong>
-              <span>{currentUser?.email || "Mobile workspace"}</span>
-            </div>
-          </div>
-          <button type="button" className="mobile-sidebar-close" onClick={closeMobileSidebar} aria-label="Close menu">
-            &times;
-          </button>
-        </div>
-
-        <div className="mobile-sidebar-scroll">
-          <div className="mobile-sidebar-group">
-            <span className="mobile-sidebar-label">Navigate</span>
-            <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("home")}>Home</button>
-            {currentUser ? (
-              <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("workspace", null)}>
-                Workspace
-              </button>
-            ) : (
-              <>
-                <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("login")}>Login</button>
-                <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("signup")}>Sign Up</button>
-              </>
-            )}
-          </div>
-
-          {currentUser && isWorkspace ? (
-            <div className="mobile-sidebar-group">
-              <span className="mobile-sidebar-label">Workspace</span>
-              {workspaceSections.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="mobile-sidebar-link"
-                  onClick={() => openWorkspaceSection(item.id)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="mobile-sidebar-group">
-            <span className="mobile-sidebar-label">Pages</span>
-            {infoPages.map((page) => (
-              <button
-                key={page.id}
-                type="button"
-                className="mobile-sidebar-link"
-                onClick={() => navigateTo("workspace", page.id)}
-              >
-                {page.label}
-              </button>
-            ))}
-            {currentUser ? (
-              <>
-                <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("workspace", "profile")}>
-                  Profile
-                </button>
-                <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("workspace", "settings")}>
-                  Settings
-                </button>
-                {isAdmin ? (
-                  <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("workspace", "administration")}>
-                    Administration
-                  </button>
-                ) : null}
-                {(isAdmin || isManagement) ? (
-                  <button type="button" className="mobile-sidebar-link" onClick={() => navigateTo("workspace", "management")}>
-                    Management
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-
-          {currentUser ? (
-            <div className="mobile-sidebar-group">
-              <span className="mobile-sidebar-label">Account</span>
-              <button type="button" className="mobile-sidebar-link mobile-sidebar-link-danger" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </aside>
-
-      <header className="mobile-header">
-        <button type="button" className="mobile-header-action" onClick={toggleMobileSidebar} aria-label="Open menu">
-          <span className="mobile-header-hamburger" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </span>
-        </button>
-        <div className="mobile-header-title">
-          <strong>{mobileHeaderTitle}</strong>
-          <span>{isWorkspace ? "Mobile app view" : "Fast mobile access"}</span>
-        </div>
-        <div className="mobile-header-tray">
-          {currentUser && isWorkspace ? (
-            <div className="header-menu-shell">
-              <button
-                className="header-notification-button mobile-header-icon"
-                type="button"
-                aria-label="Notifications"
-                onClick={() => {
-                  setShowInfoMenu(false);
-                  setShowProfileMenu(false);
-                  setShowNotificationMenu((current) => !current);
-                  if (!showNotificationMenu) {
-                    loadHeaderNotifications();
-                  }
-                }}
-              >
-                <span className="header-notification-bell" aria-hidden="true">
-                  <span className="header-notification-bell-body" />
-                  <span className="header-notification-bell-clapper" />
-                </span>
-                {unreadHeaderNotifications > 0 ? (
-                  <span className="header-notification-badge">
-                    {unreadHeaderNotifications > 9 ? "9+" : unreadHeaderNotifications}
-                  </span>
-                ) : null}
-              </button>
-              {showNotificationMenu ? (
-                <div className="header-dropdown-menu header-notification-menu">
-                  <div className="header-notification-menu-head">
-                    <div>
-                      <strong>Notifications</strong>
-                      <span>{unreadHeaderNotifications} unread</span>
-                    </div>
-                    <button
-                      className="header-notification-link"
-                      type="button"
-                      onClick={handleHeaderNotificationsReadAll}
-                      disabled={headerNotificationsLoading || headerNotifications.length === 0}
-                    >
-                      Mark all read
-                    </button>
-                  </div>
-                  <div className="header-notification-list">
-                    {headerNotificationsLoading ? (
-                      <p className="header-dropdown-copy">Loading notifications...</p>
-                    ) : headerNotifications.length > 0 ? (
-                      headerNotifications.slice(0, 6).map((item) => (
-                        <button
-                          key={item.id}
-                          className={`header-dropdown-item header-notification-item ${item.isRead ? "is-read" : ""}`}
-                          type="button"
-                          onClick={() => handleHeaderNotificationOpen(item)}
-                        >
-                          <span className="header-dropdown-title">{item.title}</span>
-                          <span className="header-dropdown-copy">{item.message}</span>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="header-dropdown-copy">No notifications yet.</p>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {currentUser ? (
-            <div className="header-menu-shell">
-              <button
-                className="profile-button mobile-profile-button"
-                type="button"
-                onClick={() => {
-                  setShowInfoMenu(false);
-                  setShowNotificationMenu(false);
-                  setShowProfileMenu((current) => !current);
-                }}
-              >
-                <span className="profile-button-avatar">{profileInitial}</span>
-              </button>
-              {showProfileMenu ? (
-                <div className="profile-dropdown-menu">
-                  <div className="profile-dropdown-head">
-                    <div className="profile-dropdown-avatar">{profileInitial}</div>
-                    <div className="profile-dropdown-meta">
-                      <strong>{profileDisplayName}</strong>
-                      <span>{currentUser.email}</span>
-                      {isPremiumMember ? <span className="profile-dropdown-badge">Premium Member</span> : null}
-                    </div>
-                  </div>
-                  <button
-                    className="header-dropdown-item"
-                    type="button"
-                    onClick={() => navigateTo("workspace", "profile")}
-                  >
-                    Profile
-                  </button>
-                  <button
-                    className="header-dropdown-item"
-                    type="button"
-                    onClick={() => navigateTo("workspace", "settings")}
-                  >
-                    Settings
-                  </button>
-                  {isAdmin ? (
-                    <button
-                      className="header-dropdown-item"
-                      type="button"
-                      onClick={() => navigateTo("workspace", "administration")}
-                    >
-                      Administration
-                    </button>
-                  ) : null}
-                  {(isAdmin || isManagement) ? (
-                    <button
-                      className="header-dropdown-item"
-                      type="button"
-                      onClick={() => navigateTo("workspace", "management")}
-                    >
-                      Management
-                    </button>
-                  ) : null}
-                  <div className="profile-dropdown-summary">
-                    <span>Plan: {userPlanName}</span>
-                    <span>Status: {userPlanStatus}</span>
-                  </div>
-                  <button className="header-dropdown-item" type="button" onClick={handleLogout}>
-                    Logout
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </header>
-
       <header className={`app-header ${isWorkspace ? "workspace-app-header" : ""}`}>
         <div className="app-header-inner">
           <div className="app-header-brand">
@@ -845,7 +549,7 @@ function App() {
                       setShowInfoMenu((current) => !current);
                     }}
                   >
-                    Pages
+                    Company
                   </button>
                   {showInfoMenu ? (
                     <div className="header-dropdown-menu">
@@ -1022,7 +726,7 @@ function App() {
         </div>
       </header>
 
-      <div className={`app-body mobile-content ${isWorkspace ? "workspace-app-body" : ""}`}>{renderScreen()}</div>
+      <div className={`app-body ${isWorkspace ? "workspace-app-body" : ""}`}>{renderScreen()}</div>
     </main>
   );
 }
