@@ -1,11 +1,15 @@
 import hmac
+import json
+import re
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 
 import razorpay
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import RAZORPAY_COMPANY_NAME, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+from app.models.content_entry import ContentEntry
 from app.models.user import User
 from app.services.subscription_transaction_service import SubscriptionTransactionService
 
@@ -74,14 +78,68 @@ class PaymentService:
             raise PaymentServiceError("Razorpay is not configured on the server.")
         return self.client
 
-    def get_plan(self, plan_id: str) -> dict:
+    @staticmethod
+    def _parse_amount_from_price_label(value: str | None) -> int | None:
+        if not value:
+            return None
+        normalized = str(value).strip().replace(",", "")
+        matched = re.search(r"(\d+(?:\.\d{1,2})?)", normalized)
+        if not matched:
+            return None
+        try:
+            return int(round(float(matched.group(1)) * 100))
+        except ValueError:
+            return None
+
+    def _get_pricing_content_override(self, db: Session, plan_id: str) -> dict | None:
+        entries = db.execute(
+            select(ContentEntry)
+            .where(ContentEntry.page_key == "pricing", ContentEntry.is_published.is_(True))
+            .order_by(ContentEntry.section_key.asc())
+        ).scalars().all()
+
+        for entry in entries:
+            try:
+                payload = json.loads(entry.body_json or "{}")
+            except json.JSONDecodeError:
+                continue
+
+            for item in payload.get("plans", []) or []:
+                if item.get("id") != plan_id:
+                    continue
+
+                amount = self._parse_amount_from_price_label(item.get("priceLabel"))
+                override = {
+                    "plan_id": plan_id,
+                    "plan_name": item.get("title") or None,
+                    "category": entry.section_key,
+                    "amount": amount,
+                    "currency": "INR",
+                    "description": item.get("description") or item.get("tagline") or payload.get("description") or None,
+                }
+                if override["plan_name"] and override["amount"]:
+                    return override
+                return None
+        return None
+
+    def get_plan(self, db: Session, plan_id: str) -> dict:
         plan = self.PLAN_CATALOG.get(plan_id)
         if not plan:
             raise PaymentServiceError("Invalid pricing plan selected.")
-        return plan
+        override = self._get_pricing_content_override(db, plan_id)
+        if not override:
+            return plan
+        return {
+            **plan,
+            "plan_name": override["plan_name"] or plan["plan_name"],
+            "category": override["category"] or plan["category"],
+            "amount": override["amount"] or plan["amount"],
+            "currency": override["currency"] or plan["currency"],
+            "description": override["description"] or plan["description"],
+        }
 
     def create_razorpay_order(self, db: Session, plan_id: str, user_id: str) -> dict:
-        plan = self.get_plan(plan_id)
+        plan = self.get_plan(db, plan_id)
         user = db.get(User, user_id)
         if not user:
             raise PaymentServiceError("User account was not found.")
@@ -141,7 +199,7 @@ class PaymentService:
         razorpay_order_id: str,
         razorpay_payment_id: str,
     ) -> User:
-        plan = self.get_plan(plan_id)
+        plan = self.get_plan(db, plan_id)
         user = db.get(User, user_id)
         if not user:
             raise PaymentServiceError("User account was not found.")
@@ -207,13 +265,14 @@ class PaymentService:
 
     def verify_payment(
         self,
+        db: Session,
         *,
         plan_id: str,
         razorpay_order_id: str,
         razorpay_payment_id: str,
         razorpay_signature: str,
     ) -> dict:
-        self.get_plan(plan_id)
+        self.get_plan(db, plan_id)
         if not self.key_secret:
             raise PaymentServiceError("Razorpay is not configured on the server.")
 

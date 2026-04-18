@@ -284,22 +284,6 @@ function Pricing({
 
   const renderPublicContent = (content = currentContent) => (
     <div style={styles.stack}>
-      <section style={styles.heroSection}>
-        <div style={styles.heroCopy}>
-          <span style={styles.heroEyebrow}>{content.eyebrow}</span>
-          <h2 style={styles.heroTitle}>{content.heading}</h2>
-          <p style={styles.heroText}>{content.description}</p>
-        </div>
-        <div style={styles.heroSupportCard}>
-          <span style={styles.heroSupportLabel}>{content.supportTitle}</span>
-          <div style={styles.heroSupportList}>
-            {(content.supportItems || []).map((item) => (
-              <span key={item} style={styles.supportPill}>{item}</span>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section style={styles.planGrid}>
         {(content.plans || []).map((plan) => {
           const planState = paymentStatus[plan.id];
@@ -406,29 +390,6 @@ function Pricing({
 
         <div style={styles.editorGrid}>
           <div style={styles.formStack}>
-            <div style={styles.formCard}>
-              <span style={styles.formLabel}>Hero eyebrow</span>
-              <input style={styles.input} value={sectionDraft.eyebrow} onChange={(event) => updateDraftField("eyebrow", event.target.value)} />
-              <span style={styles.formLabel}>Section heading</span>
-              <input style={styles.input} value={sectionDraft.heading} onChange={(event) => updateDraftField("heading", event.target.value)} />
-              <span style={styles.formLabel}>Section description</span>
-              <textarea
-                rows={4}
-                style={styles.textarea}
-                value={sectionDraft.description}
-                onChange={(event) => updateDraftField("description", event.target.value)}
-              />
-              <span style={styles.formLabel}>Support card title</span>
-              <input style={styles.input} value={sectionDraft.supportTitle} onChange={(event) => updateDraftField("supportTitle", event.target.value)} />
-              <span style={styles.formLabel}>Support items</span>
-              <textarea
-                rows={4}
-                style={styles.textarea}
-                value={sectionDraft.supportItems}
-                onChange={(event) => updateDraftField("supportItems", event.target.value)}
-              />
-            </div>
-
             <div style={styles.formCard}>
               <div style={styles.formCardHeader}>
                 <div>
@@ -571,30 +532,6 @@ function Pricing({
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: "18px" },
   stack: { display: "grid", gap: "18px" },
-  heroSection: { display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(280px, 0.8fr)", gap: "18px" },
-  heroCopy: {
-    padding: "26px",
-    borderRadius: "28px",
-    background: "linear-gradient(135deg, #15315f 0%, #21518f 54%, #8cb4dc 100%)",
-    color: "#ffffff",
-    boxShadow: "0 20px 60px rgba(21,49,95,0.22)",
-  },
-  heroEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.82 },
-  heroTitle: { margin: "14px 0 10px", fontSize: "34px", lineHeight: 1.08 },
-  heroText: { margin: 0, lineHeight: 1.75, opacity: 0.92, maxWidth: "760px" },
-  heroSupportCard: {
-    borderRadius: "26px",
-    border: "1px solid #d7e4f3",
-    background: "linear-gradient(180deg, #ffffff 0%, #f7fbff 100%)",
-    padding: "22px",
-    boxShadow: "0 14px 38px rgba(19,36,67,0.08)",
-    display: "grid",
-    gap: "14px",
-    alignContent: "start",
-  },
-  heroSupportLabel: { fontSize: "13px", letterSpacing: "0.14em", textTransform: "uppercase", color: "#5f789d", fontWeight: 700 },
-  heroSupportList: { display: "flex", flexDirection: "column", gap: "10px" },
-  supportPill: { borderRadius: "14px", border: "1px solid #d9e3f2", background: "#ffffff", padding: "12px 14px", color: "#28456f", fontWeight: 600 },
   planGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: "18px" },
   planCard: {
     borderRadius: "28px",

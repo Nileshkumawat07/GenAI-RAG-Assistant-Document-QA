@@ -119,6 +119,7 @@ def build_payment_router(payment_service: PaymentService, auth_service: AuthServ
     ):
         try:
             verification = payment_service.verify_payment(
+                db,
                 plan_id=payload.planId,
                 razorpay_order_id=payload.razorpayOrderId,
                 razorpay_payment_id=payload.razorpayPaymentId,
