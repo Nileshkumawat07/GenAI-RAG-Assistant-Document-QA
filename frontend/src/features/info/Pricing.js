@@ -386,16 +386,23 @@ function Pricing({
           <h3 style={styles.assuranceTitle}>{content.assuranceTitle}</h3>
           <p style={styles.assuranceBody}>{content.assuranceBody}</p>
         </div>
-        <div style={styles.assuranceGrid}>
-          {(content.plans || []).map((plan) => {
-            const isProcessing = activePlanPurchaseId === plan.id;
-            const isCurrentPlan = subscriptionPlanName === plan.title && hasActiveSubscription;
-            const isPurchaseDisabled = !onPlanPurchase || !!activePlanPurchaseId || hasActiveSubscription;
-
-            return (
+        <div style={styles.assuranceColumn}>
+          <div style={styles.assuranceGrid}>
+            {(content.plans || []).map((plan) => (
               <article key={plan.id} style={styles.assuranceMiniCard}>
                 <strong>{plan.title}</strong>
+              </article>
+            ))}
+          </div>
+          <div style={styles.assuranceActionArea}>
+            {(content.plans || []).map((plan) => {
+              const isProcessing = activePlanPurchaseId === plan.id;
+              const isCurrentPlan = subscriptionPlanName === plan.title && hasActiveSubscription;
+              const isPurchaseDisabled = !onPlanPurchase || !!activePlanPurchaseId || hasActiveSubscription;
+
+              return (
                 <button
+                  key={plan.id}
                   type="button"
                   style={styles.primaryButton}
                   onClick={() => onPlanPurchase?.(plan)}
@@ -409,9 +416,9 @@ function Pricing({
                         ? "Opening Razorpay..."
                         : plan.buttonLabel || "Buy Plan"}
                 </button>
-              </article>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </section>
     </div>
@@ -702,8 +709,10 @@ const styles = {
   assuranceEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", color: "#9cb8eb", fontWeight: 700 },
   assuranceTitle: { margin: "12px 0 10px", fontSize: "30px", lineHeight: 1.15, color: "#ffffff", maxWidth: "560px" },
   assuranceBody: { margin: 0, color: "#dbe7ff", lineHeight: 1.8, maxWidth: "560px" },
+  assuranceColumn: { display: "grid", gap: "18px", alignSelf: "stretch" },
   assuranceGrid: { display: "grid", gap: "12px" },
   assuranceMiniCard: { borderRadius: "20px", border: "1px solid #dbe5f4", background: "rgba(255,255,255,0.95)", padding: "18px", display: "grid", gap: "6px", color: "#17315f", boxShadow: "0 14px 30px rgba(16,34,61,0.08)" },
+  assuranceActionArea: { minHeight: "96px", display: "grid", alignContent: "end", gap: "12px" },
   editorPanel: { borderRadius: "26px", border: "1px solid #dbe5f4", background: "#ffffff", padding: "22px", boxShadow: "0 16px 44px rgba(19,36,67,0.08)" },
   editorHeader: { display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", alignItems: "flex-start", marginBottom: "18px" },
   editorGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(360px, 0.95fr)", gap: "18px" },
