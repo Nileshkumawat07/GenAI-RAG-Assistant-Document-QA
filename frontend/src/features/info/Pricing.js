@@ -21,11 +21,6 @@ const DEFAULT_SUPPORT_ITEMS = [
   "Secure Razorpay checkout",
 ];
 const DEFAULT_TRUST_BADGES = ["Instant activation", "Encrypted checkout"];
-const DEFAULT_SECTION_HIGHLIGHTS = [
-  "Sharper plan framing that feels investor-ready instead of placeholder.",
-  "Cleaner conversion surfaces with more deliberate trust and benefit packaging.",
-  "Premium visual hierarchy inspired by polished product-led pricing pages.",
-];
 
 function parseEntryPayload(entry) {
   try {
@@ -86,7 +81,6 @@ function buildDefaultContent(sectionDefinitions, planCatalog) {
           description: definition.description || `Explore premium ${section.label.toLowerCase()} plans designed for this workspace.`,
           supportTitle: DEFAULT_SUPPORT_TITLE,
           supportItems: DEFAULT_SUPPORT_ITEMS,
-          highlights: definition.highlights || DEFAULT_SECTION_HIGHLIGHTS,
           assuranceTitle: definition.assuranceTitle || `${section.label} packaging with a more premium commercial edge`,
           assuranceBody:
             definition.assuranceBody
@@ -127,7 +121,6 @@ function toDrafts(contentMap) {
           description: content.description || "",
           supportTitle: content.supportTitle || DEFAULT_SUPPORT_TITLE,
           supportItems: arrayToText(content.supportItems),
-          highlights: arrayToText(content.highlights),
           assuranceTitle: content.assuranceTitle || "",
           assuranceBody: content.assuranceBody || "",
           plans: (content.plans || []).map((plan) => ({
@@ -272,7 +265,6 @@ function Pricing({
       description: sectionDraft.description,
       supportTitle: sectionDraft.supportTitle,
       supportItems: linesToArray(sectionDraft.supportItems),
-      highlights: linesToArray(sectionDraft.highlights),
       assuranceTitle: sectionDraft.assuranceTitle,
       assuranceBody: sectionDraft.assuranceBody,
       plans: (sectionDraft.plans || []).map((plan) => ({
@@ -310,15 +302,6 @@ function Pricing({
 
   const renderPublicContent = (content = currentContent) => (
     <div style={styles.stack}>
-      <section style={styles.valueStrip}>
-        {(content.highlights || []).map((item, index) => (
-          <article key={`${item}-${index}`} style={styles.valueCard}>
-            <span style={styles.valueIndex}>{String(index + 1).padStart(2, "0")}</span>
-            <p style={styles.valueText}>{item}</p>
-          </article>
-        ))}
-      </section>
-
       <section style={styles.planGrid}>
         {(content.plans || []).map((plan) => {
           const planState = paymentStatus[plan.id];
@@ -392,21 +375,6 @@ function Pricing({
                   {planState.type === "success" ? `Verified: ${planState.text}` : planState.text}
                 </p>
               ) : null}
-
-              <button
-                type="button"
-                style={styles.primaryButton}
-                onClick={() => onPlanPurchase?.(plan)}
-                disabled={isPurchaseDisabled}
-              >
-                {isCurrentPlan
-                  ? "Premium Active"
-                  : hasActiveSubscription
-                    ? "Subscription Active"
-                    : isProcessing
-                      ? "Opening Razorpay..."
-                      : plan.buttonLabel || "Buy Plan"}
-              </button>
             </article>
           );
         })}
@@ -419,12 +387,31 @@ function Pricing({
           <p style={styles.assuranceBody}>{content.assuranceBody}</p>
         </div>
         <div style={styles.assuranceGrid}>
-          {(content.plans || []).map((plan) => (
-            <article key={plan.id} style={styles.assuranceMiniCard}>
-              <strong>{plan.title}</strong>
-              <span>{plan.priceLabel} {plan.cadence}</span>
-            </article>
-          ))}
+          {(content.plans || []).map((plan) => {
+            const isProcessing = activePlanPurchaseId === plan.id;
+            const isCurrentPlan = subscriptionPlanName === plan.title && hasActiveSubscription;
+            const isPurchaseDisabled = !onPlanPurchase || !!activePlanPurchaseId || hasActiveSubscription;
+
+            return (
+              <article key={plan.id} style={styles.assuranceMiniCard}>
+                <strong>{plan.title}</strong>
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  onClick={() => onPlanPurchase?.(plan)}
+                  disabled={isPurchaseDisabled}
+                >
+                  {isCurrentPlan
+                    ? "Premium Active"
+                    : hasActiveSubscription
+                      ? "Subscription Active"
+                      : isProcessing
+                        ? "Opening Razorpay..."
+                        : plan.buttonLabel || "Buy Plan"}
+                </button>
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>
@@ -437,7 +424,6 @@ function Pricing({
       description: sectionDraft.description,
       supportTitle: sectionDraft.supportTitle,
       supportItems: linesToArray(sectionDraft.supportItems),
-      highlights: linesToArray(sectionDraft.highlights),
       assuranceTitle: sectionDraft.assuranceTitle,
       assuranceBody: sectionDraft.assuranceBody,
       plans: (sectionDraft.plans || []).map((plan) => ({
@@ -470,13 +456,6 @@ function Pricing({
                   <h4 style={styles.formCardTitle}>Edit premium framing</h4>
                 </div>
               </div>
-              <span style={styles.formLabel}>Highlight points</span>
-              <textarea
-                rows={5}
-                style={styles.textarea}
-                value={sectionDraft.highlights || ""}
-                onChange={(event) => updateDraftField("highlights", event.target.value)}
-              />
               <span style={styles.formLabel}>Assurance title</span>
               <input
                 style={styles.input}
@@ -655,20 +634,6 @@ function Pricing({
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: "18px" },
   stack: { display: "grid", gap: "18px" },
-  valueStrip: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" },
-  valueCard: {
-    borderRadius: "24px",
-    border: "1px solid #dbe6f5",
-    background: "linear-gradient(145deg, #f7fbff 0%, #ffffff 48%, #edf4ff 100%)",
-    padding: "20px",
-    minHeight: "150px",
-    boxShadow: "0 18px 44px rgba(18,37,67,0.08)",
-    display: "grid",
-    gap: "18px",
-    alignContent: "space-between",
-  },
-  valueIndex: { fontSize: "12px", letterSpacing: "0.18em", textTransform: "uppercase", color: "#6a81a7", fontWeight: 700 },
-  valueText: { margin: 0, color: "#17315f", fontSize: "18px", lineHeight: 1.7, fontWeight: 600 },
   planGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" },
   planCard: {
     position: "relative",
