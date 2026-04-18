@@ -242,16 +242,8 @@ function App() {
         getWorkspaceNotifications(),
         getWorkspaceDashboard(),
       ]);
-      const nextNotifications = items || [];
-      const nextActivity = dashboard?.recentActivity || [];
-      setHeaderNotifications(nextNotifications);
-      setHeaderRecentActivity(nextActivity);
-      window.dispatchEvent(new CustomEvent("genai-workspace-notifications-sync", {
-        detail: {
-          notifications: nextNotifications,
-          recentActivity: nextActivity,
-        },
-      }));
+      setHeaderNotifications(items || []);
+      setHeaderRecentActivity(dashboard?.recentActivity || []);
     } catch {
       setHeaderNotifications([]);
       setHeaderRecentActivity([]);
@@ -276,7 +268,6 @@ function App() {
       },
       ...current.filter((item) => item.id !== notification.id),
     ].slice(0, 6));
-    window.dispatchEvent(new CustomEvent("genai-workspace-notification-created", { detail: { notification } }));
   }, []);
 
   const handleHeaderNotificationRead = async (notificationId) => {
@@ -289,7 +280,6 @@ function App() {
             : item
         ))
       );
-      window.dispatchEvent(new CustomEvent("genai-workspace-notification-read", { detail: { notificationId } }));
     } catch {
       // Keep the existing list if marking fails.
     }
@@ -323,14 +313,7 @@ function App() {
   const handleHeaderNotificationsReadAll = async () => {
     try {
       await markAllWorkspaceNotificationsRead();
-      const nextNotifications = headerNotifications.map((item) => ({ ...item, isRead: true }));
-      setHeaderNotifications(nextNotifications);
-      window.dispatchEvent(new CustomEvent("genai-workspace-notifications-sync", {
-        detail: {
-          notifications: nextNotifications,
-          recentActivity: headerRecentActivity,
-        },
-      }));
+      setHeaderNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
       pushToast({ type: "success", title: "Notifications cleared", message: "All notifications were marked as read." });
     } catch {
       // Ignore header mark-all failure silently here.
