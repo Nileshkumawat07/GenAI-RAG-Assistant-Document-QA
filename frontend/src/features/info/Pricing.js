@@ -404,7 +404,7 @@ function Pricing({
                 <button
                   key={plan.id}
                   type="button"
-                  style={styles.primaryButton}
+                  style={{ ...styles.primaryButton, ...styles.assuranceActionAreaButton }}
                   onClick={() => onPlanPurchase?.(plan)}
                   disabled={isPurchaseDisabled}
                 >
@@ -712,7 +712,8 @@ const styles = {
   assuranceColumn: { display: "grid", gap: "18px", alignSelf: "stretch" },
   assuranceGrid: { display: "grid", gap: "12px" },
   assuranceMiniCard: { borderRadius: "20px", border: "1px solid #dbe5f4", background: "rgba(255,255,255,0.95)", padding: "18px", display: "grid", gap: "6px", color: "#17315f", boxShadow: "0 14px 30px rgba(16,34,61,0.08)" },
-  assuranceActionArea: { minHeight: "96px", display: "grid", alignContent: "end", gap: "12px" },
+  assuranceActionArea: { minHeight: "96px", display: "grid", alignContent: "end", justifyItems: "end", gap: "12px" },
+  assuranceActionAreaButton: { minWidth: "290px", maxWidth: "360px", width: "100%" },
   editorPanel: { borderRadius: "26px", border: "1px solid #dbe5f4", background: "#ffffff", padding: "22px", boxShadow: "0 16px 44px rgba(19,36,67,0.08)" },
   editorHeader: { display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", alignItems: "flex-start", marginBottom: "18px" },
   editorGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(360px, 0.95fr)", gap: "18px" },
