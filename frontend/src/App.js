@@ -260,12 +260,24 @@ function App() {
     }
   }, [currentUser?.id, screen]);
 
-  const scheduleHeaderNotificationsRefresh = useCallback((delay = 120) => {
-    window.clearTimeout(headerRefreshTimeoutRef.current);
-    headerRefreshTimeoutRef.current = window.setTimeout(() => {
-      loadHeaderNotifications();
-    }, delay);
-  }, [loadHeaderNotifications]);
+  const applySocketNotification = useCallback((notification) => {
+    if (!notification?.id) {
+      return;
+    }
+    setHeaderNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
+    setHeaderRecentActivity((current) => [
+      {
+        id: notification.id,
+        title: notification.title,
+        detail: notification.message,
+        category: notification.category,
+        createdAt: notification.createdAt,
+        tone: notification.isRead ? "success" : "info",
+      },
+      ...current.filter((item) => item.id !== notification.id),
+    ].slice(0, 6));
+    window.dispatchEvent(new CustomEvent("genai-workspace-notification-created", { detail: { notification } }));
+  }, []);
 
   const handleHeaderNotificationRead = async (notificationId) => {
     try {
@@ -515,19 +527,8 @@ function App() {
           const payload = JSON.parse(event.data);
           console.log("SOCKET PARSED:", payload);
           window.dispatchEvent(new CustomEvent("genai-chat-socket-message", { detail: payload }));
-          if ([
-            "message:new",
-            "message:status",
-            "message:deleted",
-            "notification:new",
-            "overview:refresh",
-            "group:refresh",
-            "community:refresh",
-            "friends:refresh",
-            "friend_request:new",
-            "presence",
-          ].includes(payload.type)) {
-            scheduleHeaderNotificationsRefresh();
+          if (payload.type === "notification:new" && payload.notification) {
+            applySocketNotification(payload.notification);
           }
         } catch (error) {
           console.error("SOCKET ERROR:", error);
@@ -549,7 +550,7 @@ function App() {
         headerSocketRef.current = null;
       }
     };
-  }, [currentUser?.id, screen, scheduleHeaderNotificationsRefresh]);
+  }, [applySocketNotification, currentUser?.id, screen]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {

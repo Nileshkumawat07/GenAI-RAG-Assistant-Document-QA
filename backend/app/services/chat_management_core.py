@@ -1942,14 +1942,17 @@ class ChatManagementService:
                     and bool(self._chat_settings_form(db, user_id=participant_id, category="chat-notifications").get("inAppToasts", True))
                     and self.manager.get_active_conversation(participant_id) != room_key
                 ):
+                    notification = self._latest_message_notification(
+                        db,
+                        user_id=participant_id,
+                        conversation_id=conversation_id,
+                        message_id=message.id,
+                    )
                     await self.manager.send_event(
                         participant_id,
                         {
                             "type": "notification:new",
-                            "conversationType": message.conversation_type or "direct",
-                            "conversationId": conversation_id,
-                            "messageId": message.id,
-                            "roomKey": room_key,
+                            "notification": self._serialize_workspace_notification(notification) if notification else None,
                         },
                     )
 
@@ -2438,25 +2441,76 @@ class ChatManagementService:
                 action_type="open_chat",
                 action_entity_id=conversation["apiConversationId"],
                 action_entity_kind=conversation["apiConversationType"],
-                action_context={"conversationType": conversation["apiConversationType"], "conversationId": conversation["apiConversationId"], "focus": "conversation"},
+                action_context={
+                    "conversationType": conversation["apiConversationType"],
+                    "conversationId": conversation["apiConversationId"],
+                    "focus": "conversation",
+                    "messageId": message.id,
+                },
             )
 
-    def _create_workspace_notification(self, db: Session, *, user_id: str, category: str, title: str, message: str | None, action_type: str | None, action_entity_id: str | None = None, action_entity_kind: str | None = None, action_context: dict | None = None) -> None:
-        db.add(
-            WorkspaceNotification(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                category=category,
-                title=title,
-                message=message or "",
-                action_url="#/workspace",
-                action_type=action_type,
-                action_entity_id=action_entity_id,
-                action_entity_kind=action_entity_kind,
-                action_context=json.dumps(action_context or {}),
-                created_at=datetime.now(timezone.utc),
-            )
+    def _create_workspace_notification(self, db: Session, *, user_id: str, category: str, title: str, message: str | None, action_type: str | None, action_entity_id: str | None = None, action_entity_kind: str | None = None, action_context: dict | None = None) -> WorkspaceNotification:
+        item = WorkspaceNotification(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            category=category,
+            title=title,
+            message=message or "",
+            action_url="#/workspace",
+            action_type=action_type,
+            action_entity_id=action_entity_id,
+            action_entity_kind=action_entity_kind,
+            action_context=json.dumps(action_context or {}),
+            created_at=datetime.now(timezone.utc),
         )
+        db.add(item)
+        db.flush()
+        return item
+
+    def _latest_message_notification(self, db: Session, *, user_id: str, conversation_id: str, message_id: str) -> WorkspaceNotification | None:
+        candidate_notifications = db.execute(
+            select(WorkspaceNotification)
+            .where(
+                WorkspaceNotification.user_id == user_id,
+                WorkspaceNotification.category == "chat",
+                WorkspaceNotification.action_type == "open_chat",
+                WorkspaceNotification.action_entity_id == conversation_id,
+            )
+            .order_by(WorkspaceNotification.created_at.desc())
+            .limit(8)
+        ).scalars().all()
+        for item in candidate_notifications:
+            try:
+                payload = json.loads(item.action_context or "{}")
+            except Exception:
+                payload = {}
+            if str(payload.get("messageId") or "") == str(message_id):
+                return item
+        return candidate_notifications[0] if candidate_notifications else None
+
+    def _serialize_workspace_notification(self, item: WorkspaceNotification) -> dict:
+        action_context = {}
+        if item.action_context:
+            try:
+                parsed = json.loads(item.action_context)
+                if isinstance(parsed, dict):
+                    action_context = parsed
+            except Exception:
+                action_context = {}
+        return {
+            "id": item.id,
+            "category": item.category,
+            "title": item.title,
+            "message": item.message,
+            "actionUrl": item.action_url,
+            "actionType": item.action_type,
+            "actionEntityId": item.action_entity_id,
+            "actionEntityKind": item.action_entity_kind,
+            "actionContext": action_context,
+            "isRead": bool(item.is_read),
+            "createdAt": self._serialize_datetime(item.created_at),
+            "readAt": self._serialize_datetime(item.read_at),
+        }
 
     def _relationship_state_map(self, db: Session, *, current_user_id: str, other_user_ids: list[str]) -> dict[str, str]:
         relationship_map = {user_id: "none" for user_id in other_user_ids}

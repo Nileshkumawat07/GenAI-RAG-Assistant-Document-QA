@@ -1452,6 +1452,48 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       });
     };
 
+    const handleNotificationCreated = (event) => {
+      const notification = event?.detail?.notification;
+      if (!notification?.id) {
+        return;
+      }
+      setWorkspaceNotifications((current) => {
+        const nextNotifications = [notification, ...current.filter((item) => item.id !== notification.id)];
+        const unreadCount = nextNotifications.filter((item) => !item.isRead).length;
+        setWorkspaceDashboard((currentDashboard) => {
+          if (!currentDashboard) {
+            return currentDashboard;
+          }
+          return {
+            ...currentDashboard,
+            unreadNotifications: unreadCount,
+            recentActivity: [
+              {
+                id: notification.id,
+                title: notification.title,
+                detail: notification.message,
+                category: notification.category,
+                createdAt: notification.createdAt,
+                tone: notification.isRead ? "success" : "info",
+              },
+              ...(currentDashboard.recentActivity || []).filter((item) => item.id !== notification.id),
+            ].slice(0, 5),
+            metrics: (currentDashboard.metrics || []).map((item) =>
+              item.label === "Unread Notifications"
+                ? { ...item, value: String(unreadCount) }
+                : item
+            ),
+            usageOverview: (currentDashboard.usageOverview || []).map((item) =>
+              item.id === "notifications"
+                ? { ...item, value: String(unreadCount) }
+                : item
+            ),
+          };
+        });
+        return nextNotifications;
+      });
+    };
+
     const handleNotificationRead = (event) => {
       const notificationId = event?.detail?.notificationId;
       if (!notificationId) {
@@ -1487,9 +1529,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       });
     };
 
+    window.addEventListener("genai-workspace-notification-created", handleNotificationCreated);
     window.addEventListener("genai-workspace-notifications-sync", handleNotificationSync);
     window.addEventListener("genai-workspace-notification-read", handleNotificationRead);
     return () => {
+      window.removeEventListener("genai-workspace-notification-created", handleNotificationCreated);
       window.removeEventListener("genai-workspace-notifications-sync", handleNotificationSync);
       window.removeEventListener("genai-workspace-notification-read", handleNotificationRead);
     };
@@ -1502,7 +1546,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         "message:new",
         "message:status",
         "message:deleted",
-        "notification:new",
         "overview:refresh",
         "group:refresh",
         "community:refresh",
