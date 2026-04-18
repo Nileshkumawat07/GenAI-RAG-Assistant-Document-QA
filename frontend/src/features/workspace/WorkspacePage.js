@@ -16,6 +16,7 @@ import ChatManagementPanel from "./ChatManagementPanel";
 import DashboardPanel from "./DashboardPanel";
 import NotificationsPanel from "./NotificationsPanel";
 import TeamManagementPanel from "./TeamManagementPanel";
+import UsageLimitsCenter from "./UsageLimitsCenter";
 import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser, updateManagementAccess } from "../auth/authApi";
 import {
   adminDeleteContactRequest,
@@ -58,9 +59,12 @@ import {
   getWorkspaceNotifications,
   getWorkspaceTeams,
   getWorkspaceUsers,
+  markAllWorkspaceNotificationsRead,
+  markWorkspaceNotificationRead,
   removeWorkspaceTeamMember,
   updateWorkspaceTeamMember,
 } from "./workspaceHubApi";
+import { pushToast } from "../../shared/toast/toastBus";
 
 const PRICING_PLAN_DETAILS = [
   {
@@ -586,6 +590,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     requiresApproval: false,
   });
   const [workspaceDashboard, setWorkspaceDashboard] = useState(null);
+  const [workspaceNotifications, setWorkspaceNotifications] = useState([]);
   const [workspaceAnalytics, setWorkspaceAnalytics] = useState(null);
   const [workspaceThreads, setWorkspaceThreads] = useState([]);
   const [workspaceMessages, setWorkspaceMessages] = useState([]);
@@ -1274,6 +1279,26 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   }, [selectedInfoPage, currentUser?.id]);
 
   useEffect(() => {
+    const handleForceInfoTab = (event) => {
+      const page = event?.detail?.page;
+      const tab = event?.detail?.tab;
+      if (!page || !tab) {
+        return;
+      }
+
+      setInfoTabs((current) => ({
+        ...current,
+        [page]: tab,
+      }));
+    };
+
+    window.addEventListener("genai-force-info-tab", handleForceInfoTab);
+    return () => {
+      window.removeEventListener("genai-force-info-tab", handleForceInfoTab);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleOpenChatManagement = () => {
       setActiveSection("chat");
     };
@@ -1548,6 +1573,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       } else {
         setWorkspaceDashboardError(dashboardResult.reason?.message || "Failed to load dashboard.");
       }
+      if (notificationsResult.status === "fulfilled") {
+        setWorkspaceNotifications(notificationsResult.value || []);
+      }
       if (analyticsResult.status === "fulfilled") {
         setWorkspaceAnalytics(analyticsResult.value);
         setWorkspaceAnalyticsError("");
@@ -1604,6 +1632,62 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     } finally {
       setWorkspaceHubLoading(false);
     }
+  };
+
+  const handleWorkspaceNotificationRead = async (notificationId) => {
+    try {
+      await markWorkspaceNotificationRead(notificationId);
+      setWorkspaceNotifications((current) =>
+        current.map((item) => (
+          item.id === notificationId
+            ? { ...item, isRead: true, readAt: new Date().toISOString() }
+            : item
+        ))
+      );
+    } catch (notificationError) {
+      pushToast({ type: "error", title: "Notification update failed", message: notificationError.message || "Failed to update the notification." });
+    }
+  };
+
+  const handleWorkspaceNotificationsReadAll = async () => {
+    try {
+      await markAllWorkspaceNotificationsRead();
+      setWorkspaceNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      pushToast({ type: "success", title: "Notifications updated", message: "All notifications were marked as read." });
+    } catch (notificationError) {
+      pushToast({ type: "error", title: "Notification update failed", message: notificationError.message || "Failed to update notifications." });
+    }
+  };
+
+  const handleWorkspaceNotificationOpen = async (notification) => {
+    if (!notification) {
+      return;
+    }
+
+    await handleWorkspaceNotificationRead(notification.id);
+
+    if (!notification.actionType) {
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(
+        "genai_chat_navigation_target",
+        JSON.stringify({
+          actionType: notification.actionType,
+          actionEntityId: notification.actionEntityId || "",
+          actionEntityKind: notification.actionEntityKind || "",
+          actionContext: notification.actionContext || {},
+        })
+      );
+    } catch {
+      // Ignore storage failures here.
+    }
+
+    setActiveSection("chat");
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("genai-open-chat-management"));
+    }, 0);
   };
 
   const handleManagementAccessToggle = async (userId, nextIsManagement) => {
@@ -1818,9 +1902,13 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
 
       setUploadStatus(`Document indexed successfully with ${data.chunks} chunks.`);
       pushStatus(`Document indexed successfully with ${data.chunks} chunks.`, "success");
+      pushToast({ type: "success", title: "Document uploaded", message: `${selectedFile.name} was indexed successfully.` });
+      return data;
     } catch (err) {
       setError(err.message);
       pushStatus(`Upload failed: ${err.message}`, "error");
+      pushToast({ type: "error", title: "Upload failed", message: err.message || "Document upload failed." });
+      throw err;
     } finally {
       setIsUploading(false);
     }
@@ -1849,8 +1937,11 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
 
       setAnswer(data.answer);
       pushStatus("Answer generated successfully.", "success");
+      return data;
     } catch (err) {
       setAnswer(err.message);
+      pushToast({ type: "error", title: "Answer failed", message: err.message || "Question answering failed." });
+      throw err;
     } finally {
       setIsAsking(false);
     }
@@ -2100,6 +2191,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           onPlanPurchase={handlePlanPurchase}
         />
       );
+    }
+
+    if (selectedInfoPage === "help") {
+      return <HelpCenter currentUser={currentUser} />;
+    }
+
+    if (selectedInfoPage === "trust") {
+      return <TrustCenter />;
     }
 
     if (selectedInfoPage === "management" && activeInfoTab === "studio") {
@@ -3906,6 +4005,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }
 
     if (selectedInfoPage === "profile") {
+      if (activeInfoTab === "usage") {
+        return (
+          <UsageLimitsCenter
+            currentUser={currentUser}
+            dashboard={workspaceDashboard}
+            analytics={workspaceAnalytics}
+            teams={workspaceTeams}
+          />
+        );
+      }
+
       const profileCards =
         activeInfoTab === "overview"
           ? [
@@ -4425,6 +4535,9 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <button className={`sidebar-tab ${activeSection === "analytics" ? "active" : ""}`} onClick={() => setActiveSection("analytics")} type="button">
                     Analytics
                   </button>
+                  <button className={`sidebar-tab ${activeSection === "notifications" ? "active" : ""}`} onClick={() => setActiveSection("notifications")} type="button">
+                    Notifications
+                  </button>
                   <button className={`sidebar-tab ${activeSection === "chat-history" ? "active" : ""}`} onClick={() => setActiveSection("chat-history")} type="button">
                     Chat History
                   </button>
@@ -4441,7 +4554,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           {selectedInfoPage !== "settings" ? (
             <div className="sidebar-boost-card">
               <div className="sidebar-status">
-                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "chat" ? "Chat Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
+                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "notifications" ? "Notifications Status" : activeSection === "chat" ? "Chat Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
                 {selectedInfoPage === "contact" ? (
                   <div className="workspace-form-stack">
                     <div className="status-feed">
@@ -4510,6 +4623,16 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 error={workspaceAnalyticsError}
                 onRefresh={loadWorkspaceHubData}
               />
+            ) : activeSection === "notifications" ? (
+              <NotificationsPanel
+                notifications={workspaceNotifications}
+                loading={workspaceHubLoading}
+                error={workspaceHubError}
+                onMarkRead={handleWorkspaceNotificationRead}
+                onMarkAllRead={handleWorkspaceNotificationsReadAll}
+                onRefresh={loadWorkspaceHubData}
+                onOpenAction={handleWorkspaceNotificationOpen}
+              />
             ) : activeSection === "chat" ? (
               <ChatManagementPanel currentUser={currentUser} onUserUpdate={onUserUpdate} />
             ) : activeSection === "chat-history" ? (
@@ -4555,12 +4678,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
               <ImageGenerationPanel />
             )}
 
-            {(error || uploadStatus) && activeSection === "document-retrieval" && !infoConfig ? (
-              <div>
-                {error ? <p className="error-text">{error}</p> : null}
-                {uploadStatus ? <p className="success-text">{uploadStatus}</p> : null}
-              </div>
-            ) : null}
+            {error && activeSection === "document-retrieval" && !infoConfig ? <p className="error-text">{error}</p> : null}
           </div>
         </div>
       </div>

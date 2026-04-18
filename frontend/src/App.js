@@ -21,6 +21,7 @@ import {
   markAllWorkspaceNotificationsRead,
   markWorkspaceNotificationRead,
 } from "./features/workspace/workspaceHubApi";
+import { pushToast } from "./shared/toast/toastBus";
 
 let socket = null;
 function App() {
@@ -97,11 +98,7 @@ function App() {
     setAuthNotice("");
     setCurrentUser(user);
     setCurrentUserState(user);
-    window.dispatchEvent(
-      new CustomEvent("genai-toast", {
-        detail: { type: "success", title: "Welcome back", message: "Your workspace is ready." },
-      })
-    );
+    pushToast({ type: "success", title: "Welcome back", message: "Your workspace is ready." });
     navigateTo("workspace", null);
   };
 
@@ -125,11 +122,7 @@ function App() {
     setCurrentUserState(null);
     clearAuthNotice();
     setAuthNotice("");
-    window.dispatchEvent(
-      new CustomEvent("genai-toast", {
-        detail: { type: "info", title: "Signed out", message: "You have been logged out safely." },
-      })
-    );
+    pushToast({ type: "info", title: "Signed out", message: "You have been logged out safely." });
     navigateTo("home", null);
   };
 
@@ -258,6 +251,10 @@ function App() {
       action: () => navigateTo("workspace", page.id),
     })),
     { id: "profile", label: "Profile", description: "Review account, plan, security, and activity information.", group: "Account", action: () => navigateTo("workspace", "profile") },
+    { id: "usage-limits", label: "Usage & Limits", description: "Open storage, seats, and subscription limit tracking.", group: "Account", action: () => {
+      navigateTo("workspace", "profile");
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-force-info-tab", { detail: { page: "profile", tab: "usage" } })), 0);
+    } },
     { id: "settings", label: "Settings", description: "Adjust notifications, limits, branding, legal, and support settings.", group: "Account", action: () => navigateTo("workspace", "settings") },
     ...(isAdmin ? [{ id: "administration", label: "Administration", description: "Open admin-only controls and database views.", group: "Admin", action: () => navigateTo("workspace", "administration") }] : []),
     ...((isAdmin || isManagement) ? [{ id: "management", label: "Management", description: "Open management queues, support, and publishing controls.", group: "Admin", action: () => navigateTo("workspace", "management") }] : []),
@@ -339,11 +336,7 @@ function App() {
     try {
       await markAllWorkspaceNotificationsRead();
       setHeaderNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
-      window.dispatchEvent(
-        new CustomEvent("genai-toast", {
-          detail: { type: "success", title: "Notifications cleared", message: "All notifications were marked as read." },
-        })
-      );
+      pushToast({ type: "success", title: "Notifications cleared", message: "All notifications were marked as read." });
     } catch {
       // Ignore header mark-all failure silently here.
     }
