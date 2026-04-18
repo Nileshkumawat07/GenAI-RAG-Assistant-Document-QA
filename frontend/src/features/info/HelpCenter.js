@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import { createContactRequest, listContactRequests } from "./contactApi";
+import {
+  getManageContentEntries,
+  getPublishedContentEntries,
+  saveManagedContentEntry,
+} from "./aboutContentApi";
 import { pushToast } from "../../shared/toast/toastBus";
 
 const HELP_SECTIONS = [
@@ -19,35 +24,93 @@ const SUPPORT_CATEGORIES = [
   "Team And Seats",
 ];
 
-const HELP_DOCS = [
+const HELP_SECTIONS_CONTENT = [
   {
-    title: "Getting started",
-    detail: "Complete your profile, upload a first document, open pricing, and invite a teammate from the workspace.",
-    category: "Getting Started",
+    id: "docs",
+    title: "Help Docs",
+    description: "Published guides that mirror the product workflows users actually see.",
+    cards: [
+      {
+        title: "Getting started",
+        detail: "Complete your profile, upload a first document, open pricing, and invite a teammate from the workspace.",
+        category: "Getting Started",
+      },
+      {
+        title: "Document workflow",
+        detail: "Upload a supported file, tag it by source, ask a focused question, and review the grounded answer history.",
+        category: "Document Retrieval",
+      },
+      {
+        title: "Billing and subscriptions",
+        detail: "Choose a plan in Pricing, complete checkout, and monitor seats, storage, and usage from the profile usage center.",
+        category: "Billing",
+      },
+      {
+        title: "Creative and vision tools",
+        detail: "Generate images or run detections, then watch limits and recent activity from the dashboard and profile panels.",
+        category: "Image Generation",
+      },
+    ],
   },
   {
-    title: "Document workflow",
-    detail: "Upload a supported file, tag it by source, ask a focused question, and review the grounded answer history.",
-    category: "Document Retrieval",
+    id: "bug",
+    title: "Bug Reporting",
+    description: "Report issues with enough detail to reproduce them quickly.",
+    cards: [
+      {
+        title: "Bug intake",
+        detail: "Capture product area, steps to reproduce, expected behavior, and what happened instead.",
+        category: "Technical",
+      },
+    ],
   },
   {
-    title: "Billing and subscriptions",
-    detail: "Choose a plan in Pricing, complete checkout, and monitor seats, storage, and usage from the profile usage center.",
-    category: "Billing",
+    id: "feature",
+    title: "Feature Requests",
+    description: "Collect workflow improvements, user pain, and high-value ideas from the field.",
+    cards: [
+      {
+        title: "Feature intake",
+        detail: "Describe the feature, who it helps, what workflow improves, and why it matters now.",
+        category: "Product",
+      },
+    ],
   },
   {
-    title: "Creative and vision tools",
-    detail: "Generate images or run detections, then watch limits and recent activity from the dashboard and profile panels.",
-    category: "Image Generation",
+    id: "history",
+    title: "Support History",
+    description: "Track previous support conversations, categories, and status movement.",
+    cards: [
+      {
+        title: "History view",
+        detail: "Previous requests appear here with category tags, timestamps, and current status.",
+        category: "Support",
+      },
+    ],
   },
 ];
 
-function HelpCenter({ currentUser = null }) {
+const DEFAULT_CONTENT_MAP = Object.fromEntries(
+  HELP_SECTIONS_CONTENT.map((section) => [section.id, section])
+);
+
+function parseEntryPayload(entry) {
+  try {
+    return JSON.parse(entry?.bodyJson || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function HelpCenter({ currentUser = null, canEdit = false }) {
   const [section, setSection] = useState("docs");
   const [selectedCategory, setSelectedCategory] = useState("Getting Started");
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyFilter, setHistoryFilter] = useState("all");
+  const [loadingContent, setLoadingContent] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [contentMap, setContentMap] = useState(DEFAULT_CONTENT_MAP);
   const [formState, setFormState] = useState({
     fullName: currentUser?.fullName || currentUser?.name || "",
     email: currentUser?.email || "",
@@ -55,6 +118,50 @@ function HelpCenter({ currentUser = null }) {
     message: "",
     category: "Document Retrieval",
   });
+  const [drafts, setDrafts] = useState(() => DEFAULT_CONTENT_MAP);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadContent() {
+      try {
+        setLoadingContent(true);
+        const response = canEdit
+          ? await getManageContentEntries("help")
+          : await getPublishedContentEntries("help");
+        const entries = response?.entries || [];
+        const nextMap = { ...DEFAULT_CONTENT_MAP };
+
+        entries.forEach((entry) => {
+          if (!nextMap[entry.sectionKey]) return;
+          const payload = parseEntryPayload(entry);
+          nextMap[entry.sectionKey] = {
+            ...nextMap[entry.sectionKey],
+            ...payload,
+            title: payload.title || entry.title || nextMap[entry.sectionKey].title,
+            description: payload.description || nextMap[entry.sectionKey].description,
+            cards: Array.isArray(payload.cards) && payload.cards.length > 0 ? payload.cards : nextMap[entry.sectionKey].cards,
+          };
+        });
+
+        if (!active) return;
+        setContentMap(nextMap);
+        setDrafts(nextMap);
+      } catch (error) {
+        if (!active) return;
+        pushToast({ type: "error", title: "Help content unavailable", message: error.message || "Failed to load help center content." });
+      } finally {
+        if (active) {
+          setLoadingContent(false);
+        }
+      }
+    }
+
+    loadContent();
+    return () => {
+      active = false;
+    };
+  }, [canEdit]);
 
   useEffect(() => {
     if (section !== "history" || !currentUser?.id) {
@@ -87,10 +194,11 @@ function HelpCenter({ currentUser = null }) {
     };
   }, [section, currentUser?.id]);
 
-  const selectedDocs = useMemo(
-    () => HELP_DOCS.filter((item) => selectedCategory === "Getting Started" || item.category === selectedCategory),
-    [selectedCategory]
-  );
+  const currentContent = contentMap[section] || DEFAULT_CONTENT_MAP.docs;
+  const selectedDocs = useMemo(() => {
+    const cards = currentContent.cards || [];
+    return cards.filter((item) => selectedCategory === "Getting Started" || item.category === selectedCategory);
+  }, [currentContent.cards, selectedCategory]);
   const filteredHistory = useMemo(() => {
     if (historyFilter === "all") {
       return history;
@@ -120,6 +228,41 @@ function HelpCenter({ currentUser = null }) {
       });
     } catch (error) {
       pushToast({ type: "error", title: "Submission failed", message: error.message || "Failed to submit the request." });
+    }
+  };
+
+  const updateDraftCard = (index, field, value) => {
+    setDrafts((current) => {
+      const currentSection = current[section] || DEFAULT_CONTENT_MAP[section];
+      const nextCards = [...(currentSection.cards || [])];
+      nextCards[index] = { ...nextCards[index], [field]: value };
+      return {
+        ...current,
+        [section]: {
+          ...currentSection,
+          cards: nextCards,
+        },
+      };
+    });
+  };
+
+  const handleSave = async () => {
+    const payload = drafts[section];
+    try {
+      setSaving(true);
+      await saveManagedContentEntry({
+        pageKey: "help",
+        sectionKey: section,
+        title: payload.title,
+        bodyJson: JSON.stringify(payload),
+        isPublished: true,
+      });
+      setContentMap((current) => ({ ...current, [section]: payload }));
+      pushToast({ type: "success", title: "Help content saved", message: `${payload.title} was published successfully.` });
+    } catch (error) {
+      pushToast({ type: "error", title: "Help content failed", message: error.message || "Failed to save help center content." });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -159,7 +302,9 @@ function HelpCenter({ currentUser = null }) {
         ))}
       </div>
 
-      {section === "docs" ? (
+      {loadingContent ? <p style={styles.body}>Loading help content...</p> : null}
+
+      {section === "docs" && !loadingContent ? (
         <>
           <div style={styles.categoryRow}>
             {SUPPORT_CATEGORIES.map((item) => (
@@ -189,12 +334,13 @@ function HelpCenter({ currentUser = null }) {
         </>
       ) : null}
 
-      {["bug", "feature"].includes(section) ? (
+      {["bug", "feature"].includes(section) && !loadingContent ? (
         <section style={styles.panel}>
           <div style={styles.panelHead}>
             <div>
               <span style={styles.eyebrowAlt}>{section === "bug" ? "Report Bug" : "Request Feature"}</span>
-              <h3 style={styles.panelTitle}>{section === "bug" ? "Capture the issue with enough context to reproduce it" : "Request a feature with user value and product context"}</h3>
+              <h3 style={styles.panelTitle}>{currentContent.title}</h3>
+              <p style={styles.body}>{currentContent.description}</p>
             </div>
           </div>
 
@@ -215,12 +361,13 @@ function HelpCenter({ currentUser = null }) {
         </section>
       ) : null}
 
-      {section === "history" ? (
+      {section === "history" && !loadingContent ? (
         <section style={styles.panel}>
           <div style={styles.panelHead}>
             <div>
               <span style={styles.eyebrowAlt}>Support History</span>
-              <h3 style={styles.panelTitle}>Review past conversations, statuses, and categories from one place.</h3>
+              <h3 style={styles.panelTitle}>{currentContent.title}</h3>
+              <p style={styles.body}>{currentContent.description}</p>
             </div>
             <div style={styles.pillRow}>
               {[
@@ -260,6 +407,31 @@ function HelpCenter({ currentUser = null }) {
           ) : (
             <p style={styles.body}>No support requests match the current filter yet.</p>
           )}
+        </section>
+      ) : null}
+
+      {canEdit && !loadingContent ? (
+        <section style={styles.panel}>
+          <div style={styles.panelHead}>
+            <div>
+              <span style={styles.eyebrowAlt}>Help Studio</span>
+              <h3 style={styles.panelTitle}>Edit {HELP_SECTIONS.find((item) => item.id === section)?.label}</h3>
+            </div>
+            <button type="button" style={styles.primaryButton} onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Publish Help Content"}
+            </button>
+          </div>
+          <div style={styles.formGrid}>
+            <input style={styles.input} value={drafts[section]?.title || ""} onChange={(e) => setDrafts((current) => ({ ...current, [section]: { ...current[section], title: e.target.value } }))} placeholder="Section title" />
+            <input style={styles.input} value={drafts[section]?.description || ""} onChange={(e) => setDrafts((current) => ({ ...current, [section]: { ...current[section], description: e.target.value } }))} placeholder="Section description" />
+            {(drafts[section]?.cards || []).map((card, index) => (
+              <React.Fragment key={`${section}-card-${index}`}>
+                <input style={styles.input} value={card.title || ""} onChange={(e) => updateDraftCard(index, "title", e.target.value)} placeholder="Card title" />
+                <input style={styles.input} value={card.category || ""} onChange={(e) => updateDraftCard(index, "category", e.target.value)} placeholder="Category" />
+                <textarea style={styles.textarea} rows={4} value={card.detail || ""} onChange={(e) => updateDraftCard(index, "detail", e.target.value)} placeholder="Card detail" />
+              </React.Fragment>
+            ))}
+          </div>
         </section>
       ) : null}
     </div>

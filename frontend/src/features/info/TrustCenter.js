@@ -1,4 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
+import {
+  getManageContentEntries,
+  getPublishedContentEntries,
+  saveManagedContentEntry,
+} from "./aboutContentApi";
 
 const TRUST_SECTIONS = [
   {
@@ -63,12 +69,142 @@ const TRUST_SECTIONS = [
   },
 ];
 
-function TrustCenter() {
-  const [selectedSection, setSelectedSection] = useState("privacy");
-  const currentSection = useMemo(
-    () => TRUST_SECTIONS.find((section) => section.id === selectedSection) || TRUST_SECTIONS[0],
-    [selectedSection]
+const DEFAULT_CONTENT_MAP = Object.fromEntries(TRUST_SECTIONS.map((section) => [section.id, section]));
+
+function parseEntryPayload(entry) {
+  try {
+    return JSON.parse(entry?.bodyJson || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function linesToArray(value) {
+  return (value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function toDrafts(contentMap) {
+  return Object.fromEntries(
+    TRUST_SECTIONS.map((section) => [
+      section.id,
+      {
+        title: contentMap[section.id]?.title || "",
+        body: contentMap[section.id]?.body || "",
+        points: (contentMap[section.id]?.points || []).join("\n"),
+      },
+    ])
   );
+}
+
+function TrustCenter({ canEdit = false }) {
+  const [selectedSection, setSelectedSection] = useState("privacy");
+  const [contentMap, setContentMap] = useState(DEFAULT_CONTENT_MAP);
+  const [drafts, setDrafts] = useState(() => toDrafts(DEFAULT_CONTENT_MAP));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const currentSection = useMemo(
+    () => contentMap[selectedSection] || DEFAULT_CONTENT_MAP[selectedSection] || TRUST_SECTIONS[0],
+    [contentMap, selectedSection]
+  );
+  const previewSection = useMemo(() => ({
+    ...currentSection,
+    title: drafts[selectedSection]?.title || currentSection.title,
+    body: drafts[selectedSection]?.body || currentSection.body,
+    points: linesToArray(drafts[selectedSection]?.points || "").length > 0
+      ? linesToArray(drafts[selectedSection]?.points || "")
+      : currentSection.points || [],
+  }), [currentSection, drafts, selectedSection]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadContent() {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+        const response = canEdit
+          ? await getManageContentEntries("trust")
+          : await getPublishedContentEntries("trust");
+        const entries = response?.entries || [];
+        const nextMap = { ...DEFAULT_CONTENT_MAP };
+
+        entries.forEach((entry) => {
+          if (!nextMap[entry.sectionKey]) {
+            return;
+          }
+          const payload = parseEntryPayload(entry);
+          nextMap[entry.sectionKey] = {
+            ...nextMap[entry.sectionKey],
+            ...payload,
+            title: payload.title || entry.title || nextMap[entry.sectionKey].title,
+            body: payload.body || nextMap[entry.sectionKey].body,
+            points: Array.isArray(payload.points) && payload.points.length > 0 ? payload.points : nextMap[entry.sectionKey].points,
+          };
+        });
+
+        if (!active) {
+          return;
+        }
+        setContentMap(nextMap);
+        setDrafts(toDrafts(nextMap));
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        setErrorMessage(error.message || "Failed to load trust content.");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadContent();
+    return () => {
+      active = false;
+    };
+  }, [canEdit]);
+
+  const handleSave = async () => {
+    const sectionDraft = drafts[selectedSection] || {};
+    const payload = {
+      title: sectionDraft.title,
+      body: sectionDraft.body,
+      points: linesToArray(sectionDraft.points),
+    };
+
+    try {
+      setSaving(true);
+      setErrorMessage("");
+      setStatusMessage("");
+      await saveManagedContentEntry({
+        pageKey: "trust",
+        sectionKey: selectedSection,
+        title: sectionDraft.title || TRUST_SECTIONS.find((section) => section.id === selectedSection)?.label || "Trust",
+        bodyJson: JSON.stringify(payload),
+        isPublished: true,
+      });
+      const nextMap = {
+        ...contentMap,
+        [selectedSection]: {
+          ...contentMap[selectedSection],
+          ...payload,
+        },
+      };
+      setContentMap(nextMap);
+      setDrafts(toDrafts(nextMap));
+      setStatusMessage("Trust content published.");
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to save trust content.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div style={styles.page}>
@@ -95,19 +231,105 @@ function TrustCenter() {
         </div>
       </section>
 
-      <section style={styles.panel}>
-        <span style={styles.eyebrowAlt}>{currentSection.label}</span>
-        <h3 style={styles.panelTitle}>{currentSection.title}</h3>
-        <p style={styles.bodyAlt}>{currentSection.body}</p>
+      {loading ? <p style={styles.bodyAlt}>Loading trust content...</p> : null}
+      {statusMessage ? <p style={styles.successText}>{statusMessage}</p> : null}
+      {errorMessage ? <p style={styles.errorText}>{errorMessage}</p> : null}
 
-        <div style={styles.grid}>
-          {currentSection.points.map((item) => (
-            <article key={item} style={styles.card}>
-              <p>{item}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      {!loading ? (
+        <section style={styles.panel}>
+          {canEdit ? (
+            <div style={styles.editorHeader}>
+              <div>
+                <span style={styles.eyebrowAlt}>Trust Studio</span>
+                <h3 style={styles.panelTitle}>Edit {currentSection.label}</h3>
+              </div>
+              <button type="button" onClick={handleSave} style={styles.primaryButton} disabled={saving}>
+                {saving ? "Saving..." : "Publish Trust Content"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <span style={styles.eyebrowAlt}>{currentSection.label}</span>
+              <h3 style={styles.panelTitle}>{currentSection.title}</h3>
+            </>
+          )}
+
+          {canEdit ? (
+            <div style={styles.editorGrid}>
+              <div style={styles.editorPanel}>
+                <input
+                  style={styles.input}
+                  value={drafts[selectedSection]?.title || ""}
+                  onChange={(event) =>
+                    setDrafts((current) => ({
+                      ...current,
+                      [selectedSection]: {
+                        ...current[selectedSection],
+                        title: event.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="Section title"
+                />
+                <textarea
+                  rows={5}
+                  style={styles.textarea}
+                  value={drafts[selectedSection]?.body || ""}
+                  onChange={(event) =>
+                    setDrafts((current) => ({
+                      ...current,
+                      [selectedSection]: {
+                        ...current[selectedSection],
+                        body: event.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="Section summary"
+                />
+                <textarea
+                  rows={8}
+                  style={styles.textarea}
+                  value={drafts[selectedSection]?.points || ""}
+                  onChange={(event) =>
+                    setDrafts((current) => ({
+                      ...current,
+                      [selectedSection]: {
+                        ...current[selectedSection],
+                        points: event.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="One trust point per line"
+                />
+              </div>
+
+              <div style={styles.previewPanel}>
+                <span style={styles.eyebrowAlt}>Live Preview</span>
+                <h3 style={styles.panelTitle}>{previewSection.title}</h3>
+                <p style={styles.bodyAlt}>{previewSection.body}</p>
+                <div style={styles.grid}>
+                  {(previewSection.points || []).map((item) => (
+                    <article key={item} style={styles.card}>
+                      <p>{item}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p style={styles.bodyAlt}>{currentSection.body}</p>
+              <div style={styles.grid}>
+                {(currentSection.points || []).map((item) => (
+                  <article key={item} style={styles.card}>
+                    <p>{item}</p>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -125,8 +347,17 @@ const styles = {
   panel: { borderRadius: "26px", border: "1px solid #dbe5f4", background: "#ffffff", padding: "24px", boxShadow: "0 16px 40px rgba(19,36,67,0.07)" },
   panelTitle: { margin: "12px 0 10px", fontSize: "32px", lineHeight: 1.1, color: "#17315f" },
   bodyAlt: { margin: 0, color: "#5d6a80", lineHeight: 1.8, maxWidth: "840px" },
+  editorHeader: { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", flexWrap: "wrap" },
+  editorGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(320px, 0.9fr)", gap: "18px", marginTop: "18px" },
+  editorPanel: { display: "grid", gap: "14px" },
+  previewPanel: { borderRadius: "22px", border: "1px solid #dbe5f4", background: "#fbfdff", padding: "18px" },
+  input: { width: "100%", borderRadius: "14px", border: "1px solid #cfdaec", padding: "12px 14px", background: "#fcfdff", color: "#17315f", boxSizing: "border-box" },
+  textarea: { width: "100%", borderRadius: "16px", border: "1px solid #cfdaec", padding: "14px", background: "#fcfdff", color: "#17315f", boxSizing: "border-box", resize: "vertical" },
+  primaryButton: { border: "none", borderRadius: "14px", background: "linear-gradient(135deg, #17315f 0%, #2d63b7 100%)", color: "#ffffff", padding: "14px 18px", cursor: "pointer", fontWeight: 700, width: "fit-content" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", marginTop: "22px" },
   card: { borderRadius: "20px", border: "1px solid #dbe5f4", background: "linear-gradient(180deg, #fbfdff 0%, #ffffff 100%)", padding: "18px", color: "#4e5f79", lineHeight: 1.7 },
+  successText: { color: "#0f6a3e", margin: 0, fontWeight: 600 },
+  errorText: { color: "#9f3f3f", margin: 0, fontWeight: 600 },
 };
 
 export default TrustCenter;

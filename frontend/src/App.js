@@ -14,6 +14,7 @@ import {
   setCurrentUser,
 } from "./features/auth/authStorage";
 import WorkspacePage from "./features/workspace/WorkspacePage";
+import { getPublishedContentEntries } from "./features/info/aboutContentApi";
 import { getChatWebSocketUrl } from "./features/workspace/chatManagementApi";
 import {
   getWorkspaceDashboard,
@@ -21,6 +22,7 @@ import {
   markAllWorkspaceNotificationsRead,
   markWorkspaceNotificationRead,
 } from "./features/workspace/workspaceHubApi";
+import { buildAppSearchItems } from "./shared/search/appSearchIndex";
 import { pushToast } from "./shared/toast/toastBus";
 
 let socket = null;
@@ -34,6 +36,7 @@ function App() {
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
+  const [searchContentEntries, setSearchContentEntries] = useState({});
   const [toasts, setToasts] = useState([]);
   const [headerNotifications, setHeaderNotifications] = useState([]);
   const [headerRecentActivity, setHeaderRecentActivity] = useState([]);
@@ -217,52 +220,16 @@ function App() {
         : "Active";
   const isPremiumMember = currentUser?.subscriptionStatus === "premium";
   const unreadHeaderNotifications = headerNotifications.filter((item) => !item.isRead).length;
-  const commandPaletteItems = [
-    { id: "workspace-dashboard", label: "Dashboard", description: "Open the workspace dashboard and onboarding view.", group: "Workspace", action: () => navigateTo("workspace", null) },
-    { id: "workspace-documents", label: "Document Retrieval", description: "Jump into document upload, file library, and grounded answers.", group: "Workspace", action: () => {
-      navigateTo("workspace", null);
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "document-retrieval" } })), 0);
-    } },
-    { id: "workspace-teams", label: "Team Management", description: "Open shared workspace and team seat management.", group: "Workspace", action: () => {
-      navigateTo("workspace", null);
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "team-management" } })), 0);
-    } },
-    { id: "workspace-chat", label: "Chat", description: "Jump into the realtime chat management surface.", group: "Workspace", action: () => {
-      navigateTo("workspace", null);
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "chat" } })), 0);
-    } },
-    { id: "workspace-history", label: "Chat History", description: "Review saved prompt threads and notes.", group: "Workspace", action: () => {
-      navigateTo("workspace", null);
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "chat-history" } })), 0);
-    } },
-    { id: "workspace-analytics", label: "Analytics", description: "Inspect product usage and workspace health signals.", group: "Workspace", action: () => {
-      navigateTo("workspace", null);
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "analytics" } })), 0);
-    } },
-    { id: "workspace-notifications", label: "Notifications", description: "Open the dedicated notifications center.", group: "Workspace", action: () => {
-      navigateTo("workspace", null);
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-mobile-workspace-section", { detail: { section: "notifications" } })), 0);
-    } },
-    ...infoPages.map((page) => ({
-      id: `page-${page.id}`,
-      label: page.label,
-      description: page.copy,
-      group: "Company",
-      action: () => navigateTo("workspace", page.id),
-    })),
-    { id: "profile", label: "Profile", description: "Review account, plan, security, and activity information.", group: "Account", action: () => navigateTo("workspace", "profile") },
-    { id: "usage-limits", label: "Usage & Limits", description: "Open storage, seats, and subscription limit tracking.", group: "Account", action: () => {
-      navigateTo("workspace", "profile");
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent("genai-force-info-tab", { detail: { page: "profile", tab: "usage" } })), 0);
-    } },
-    { id: "settings", label: "Settings", description: "Adjust notifications, limits, branding, legal, and support settings.", group: "Account", action: () => navigateTo("workspace", "settings") },
-    ...(isAdmin ? [{ id: "administration", label: "Administration", description: "Open admin-only controls and database views.", group: "Admin", action: () => navigateTo("workspace", "administration") }] : []),
-    ...((isAdmin || isManagement) ? [{ id: "management", label: "Management", description: "Open management queues, support, and publishing controls.", group: "Admin", action: () => navigateTo("workspace", "management") }] : []),
-  ];
+  const commandPaletteItems = buildAppSearchItems({
+    navigateTo,
+    isAdmin,
+    isManagement,
+    contentEntriesByPage: searchContentEntries,
+  });
   const filteredCommandPaletteItems = commandPaletteItems.filter((item) => {
     const query = commandPaletteQuery.trim().toLowerCase();
     if (!query) return true;
-    return `${item.label} ${item.description} ${item.group}`.toLowerCase().includes(query);
+    return `${item.label} ${item.description} ${item.group} ${item.searchText || ""}`.toLowerCase().includes(query);
   });
 
   const loadHeaderNotifications = useCallback(async () => {
@@ -275,8 +242,16 @@ function App() {
         getWorkspaceNotifications(),
         getWorkspaceDashboard(),
       ]);
-      setHeaderNotifications(items || []);
-      setHeaderRecentActivity(dashboard?.recentActivity || []);
+      const nextNotifications = items || [];
+      const nextActivity = dashboard?.recentActivity || [];
+      setHeaderNotifications(nextNotifications);
+      setHeaderRecentActivity(nextActivity);
+      window.dispatchEvent(new CustomEvent("genai-workspace-notifications-sync", {
+        detail: {
+          notifications: nextNotifications,
+          recentActivity: nextActivity,
+        },
+      }));
     } catch {
       setHeaderNotifications([]);
       setHeaderRecentActivity([]);
@@ -302,6 +277,7 @@ function App() {
             : item
         ))
       );
+      window.dispatchEvent(new CustomEvent("genai-workspace-notification-read", { detail: { notificationId } }));
     } catch {
       // Keep the existing list if marking fails.
     }
@@ -335,7 +311,14 @@ function App() {
   const handleHeaderNotificationsReadAll = async () => {
     try {
       await markAllWorkspaceNotificationsRead();
-      setHeaderNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      const nextNotifications = headerNotifications.map((item) => ({ ...item, isRead: true }));
+      setHeaderNotifications(nextNotifications);
+      window.dispatchEvent(new CustomEvent("genai-workspace-notifications-sync", {
+        detail: {
+          notifications: nextNotifications,
+          recentActivity: headerRecentActivity,
+        },
+      }));
       pushToast({ type: "success", title: "Notifications cleared", message: "All notifications were marked as read." });
     } catch {
       // Ignore header mark-all failure silently here.
@@ -362,6 +345,32 @@ function App() {
       window.removeEventListener("genai-toast", handleToast);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadSearchContent() {
+      const pageKeys = ["about", "faqs", "pricing", "help", "trust"];
+      const results = await Promise.allSettled(pageKeys.map((pageKey) => getPublishedContentEntries(pageKey)));
+      if (!active) {
+        return;
+      }
+      const nextEntries = {};
+      pageKeys.forEach((pageKey, index) => {
+        const result = results[index];
+        nextEntries[pageKey] = result.status === "fulfilled" ? result.value?.entries || [] : [];
+      });
+      setSearchContentEntries(nextEntries);
+    }
+
+    if (screen === "workspace") {
+      loadSearchContent();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [screen]);
 
   useEffect(() => {
     const handleKeydown = (event) => {
@@ -520,9 +529,8 @@ function App() {
           ].includes(payload.type)) {
             scheduleHeaderNotificationsRefresh();
           }
-        } catch {
-          console.error("SOCKET ERROR:", err);
-           
+        } catch (error) {
+          console.error("SOCKET ERROR:", error);
         }
       };
     };

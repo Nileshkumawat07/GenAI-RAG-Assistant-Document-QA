@@ -498,6 +498,8 @@ const INFO_PAGE_CONFIG = {
       { id: "about-studio", label: "About Studio", heading: "About Content Studio" },
       { id: "faq-studio", label: "FAQ Studio", heading: "FAQ Content Studio" },
       { id: "pricing-studio", label: "Pricing Studio", heading: "Pricing Content Studio" },
+      { id: "help-studio", label: "Help Studio", heading: "Help Center Studio" },
+      { id: "trust-studio", label: "Trust Studio", heading: "Trust Center Studio" },
     ],
   },
 };
@@ -1419,6 +1421,107 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   }, []);
 
   useEffect(() => {
+    const handleNotificationSync = (event) => {
+      const nextNotifications = event?.detail?.notifications;
+      const nextActivity = event?.detail?.recentActivity;
+      if (!Array.isArray(nextNotifications)) {
+        return;
+      }
+      setWorkspaceNotifications(nextNotifications);
+      setWorkspaceNotificationsError("");
+      setWorkspaceDashboard((current) => {
+        if (!current) {
+          return current;
+        }
+        const unreadCount = nextNotifications.filter((item) => !item.isRead).length;
+        return {
+          ...current,
+          unreadNotifications: unreadCount,
+          recentActivity: Array.isArray(nextActivity) ? nextActivity : current.recentActivity,
+          metrics: (current.metrics || []).map((item) =>
+            item.label === "Unread Notifications"
+              ? { ...item, value: String(unreadCount) }
+              : item
+          ),
+          usageOverview: (current.usageOverview || []).map((item) =>
+            item.id === "notifications"
+              ? { ...item, value: String(unreadCount) }
+              : item
+          ),
+        };
+      });
+    };
+
+    const handleNotificationRead = (event) => {
+      const notificationId = event?.detail?.notificationId;
+      if (!notificationId) {
+        return;
+      }
+      setWorkspaceNotifications((current) => {
+        const nextNotifications = current.map((item) => (
+          item.id === notificationId
+            ? { ...item, isRead: true, readAt: new Date().toISOString() }
+            : item
+        ));
+        const unreadCount = nextNotifications.filter((item) => !item.isRead).length;
+        setWorkspaceDashboard((currentDashboard) => {
+          if (!currentDashboard) {
+            return currentDashboard;
+          }
+          return {
+            ...currentDashboard,
+            unreadNotifications: unreadCount,
+            metrics: (currentDashboard.metrics || []).map((item) =>
+              item.label === "Unread Notifications"
+                ? { ...item, value: String(unreadCount) }
+                : item
+            ),
+            usageOverview: (currentDashboard.usageOverview || []).map((item) =>
+              item.id === "notifications"
+                ? { ...item, value: String(unreadCount) }
+                : item
+            ),
+          };
+        });
+        return nextNotifications;
+      });
+    };
+
+    window.addEventListener("genai-workspace-notifications-sync", handleNotificationSync);
+    window.addEventListener("genai-workspace-notification-read", handleNotificationRead);
+    return () => {
+      window.removeEventListener("genai-workspace-notifications-sync", handleNotificationSync);
+      window.removeEventListener("genai-workspace-notification-read", handleNotificationRead);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSocketWorkspaceRefresh = (event) => {
+      const payload = event?.detail || {};
+      if (![
+        "message:new",
+        "message:status",
+        "message:deleted",
+        "notification:new",
+        "overview:refresh",
+        "group:refresh",
+        "community:refresh",
+        "friends:refresh",
+        "friend_request:new",
+      ].includes(payload.type)) {
+        return;
+      }
+
+      loadWorkspaceHubData();
+    };
+
+    window.addEventListener("genai-chat-socket-message", handleSocketWorkspaceRefresh);
+    return () => {
+      window.removeEventListener("genai-chat-socket-message", handleSocketWorkspaceRefresh);
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     if (!selectedInfoPage && activeSection === "chat-history") {
       loadWorkspaceThreadMessages(activeWorkspaceThreadId);
     }
@@ -1733,13 +1836,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const handleWorkspaceNotificationRead = async (notificationId) => {
     try {
       await markWorkspaceNotificationRead(notificationId);
-      setWorkspaceNotifications((current) =>
-        current.map((item) => (
-          item.id === notificationId
-            ? { ...item, isRead: true, readAt: new Date().toISOString() }
-            : item
-        ))
-      );
+      window.dispatchEvent(new CustomEvent("genai-workspace-notification-read", { detail: { notificationId } }));
     } catch (notificationError) {
       pushToast({ type: "error", title: "Notification update failed", message: notificationError.message || "Failed to update the notification." });
     }
@@ -1748,7 +1845,14 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   const handleWorkspaceNotificationsReadAll = async () => {
     try {
       await markAllWorkspaceNotificationsRead();
-      setWorkspaceNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      const nextNotifications = workspaceNotifications.map((item) => ({ ...item, isRead: true }));
+      setWorkspaceNotifications(nextNotifications);
+      window.dispatchEvent(new CustomEvent("genai-workspace-notifications-sync", {
+        detail: {
+          notifications: nextNotifications,
+          recentActivity: workspaceDashboard?.recentActivity || [],
+        },
+      }));
       pushToast({ type: "success", title: "Notifications updated", message: "All notifications were marked as read." });
     } catch (notificationError) {
       pushToast({ type: "error", title: "Notification update failed", message: notificationError.message || "Failed to update notifications." });
@@ -2343,6 +2447,19 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           subscriptionPlanName={subscriptionPlanName}
         />
       );
+    }
+
+    if (selectedInfoPage === "management" && activeInfoTab === "help-studio") {
+      return (
+        <HelpCenter
+          currentUser={currentUser}
+          canEdit
+        />
+      );
+    }
+
+    if (selectedInfoPage === "management" && activeInfoTab === "trust-studio") {
+      return <TrustCenter canEdit />;
     }
 
     if (selectedInfoPage === "administration" || selectedInfoPage === "management") {
