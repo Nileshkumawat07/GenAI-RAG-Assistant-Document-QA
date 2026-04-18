@@ -448,42 +448,23 @@ function FAQs({
 
   return (
     <div style={styles.page}>
-      <section style={styles.hero}>
-        <div style={styles.heroCopy}>
-          <span style={styles.heroEyebrow}>{canEdit ? "Management FAQ Studio" : "FAQs"}</span>
-          <h2 style={styles.heroTitle}>
-            {canEdit
-              ? "Manage the public FAQ experience with the same polished workflow used for About content."
-              : "Get fast answers through a cleaner, easier-to-scan FAQ experience."}
-          </h2>
-          <p style={styles.heroText}>
-            {canEdit
-              ? "Each FAQ topic can be updated and published directly from management. Users will see the latest published content immediately on the FAQ page."
-              : "Switch between answer groups to find billing, technical, security, and account guidance without leaving the workspace."}
-          </p>
+      {canEdit ? (
+        <div style={styles.pillRow}>
+          {FAQ_SECTIONS.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setCategory(section.id)}
+              style={{
+                ...styles.pill,
+                ...(selectedCategory === section.id ? styles.pillActive : {}),
+              }}
+            >
+              {section.label}
+            </button>
+          ))}
         </div>
-        <div style={styles.heroStatCard}>
-          <span>Topics</span>
-          <strong>{FAQ_SECTIONS.length}</strong>
-          <p>Managed sections with live publishing support.</p>
-        </div>
-      </section>
-
-      <div style={styles.pillRow}>
-        {FAQ_SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            onClick={() => setCategory(section.id)}
-            style={{
-              ...styles.pill,
-              ...(selectedCategory === section.id ? styles.pillActive : {}),
-            }}
-          >
-            {section.label}
-          </button>
-        ))}
-      </div>
+      ) : null}
 
       {loading ? (
         <div style={styles.emptyState}>
@@ -500,30 +481,6 @@ function FAQs({
 
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: "18px" },
-  hero: {
-    padding: "24px",
-    borderRadius: "28px",
-    background: "linear-gradient(135deg, #14345b 0%, #1f5b84 48%, #78a8c8 100%)",
-    color: "#ffffff",
-    boxShadow: "0 20px 60px rgba(18,52,91,0.2)",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.5fr) minmax(220px, 0.65fr)",
-    gap: "18px",
-    alignItems: "end",
-  },
-  heroCopy: { display: "grid", gap: "10px" },
-  heroEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.84 },
-  heroTitle: { margin: 0, fontSize: "34px", lineHeight: 1.12 },
-  heroText: { margin: 0, lineHeight: 1.7, maxWidth: "820px", opacity: 0.92 },
-  heroStatCard: {
-    borderRadius: "22px",
-    background: "rgba(255,255,255,0.14)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    padding: "18px",
-    display: "grid",
-    gap: "8px",
-    backdropFilter: "blur(8px)",
-  },
   pillRow: { display: "flex", flexWrap: "wrap", gap: "12px" },
   pill: {
     padding: "14px 22px",

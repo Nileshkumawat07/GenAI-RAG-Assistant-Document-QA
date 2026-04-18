@@ -423,37 +423,23 @@ function AboutUs({
 
   return (
     <div style={styles.page}>
-      <section style={styles.hero}>
-        <div>
-          <span style={styles.heroEyebrow}>{canEdit ? "Management Content Studio" : "About Us"}</span>
-          <h2 style={styles.heroTitle}>
-            {canEdit
-              ? "Edit the public About experience and publish updates section by section."
-              : "Learn how the company operates, grows, and leads with a sharper brand story."}
-          </h2>
-          <p style={styles.heroText}>
-            {canEdit
-              ? "Use the same About subcategories below to update live content that reflects directly on the public About page."
-              : "Browse the key company sections through a cleaner premium layout designed to feel more deliberate and easier to scan."}
-          </p>
+      {canEdit ? (
+        <div style={styles.pillRow}>
+          {ABOUT_SECTIONS.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setCategory(section.id)}
+              style={{
+                ...styles.pill,
+                ...(selectedCategory === section.id ? styles.pillActive : {}),
+              }}
+            >
+              {section.label}
+            </button>
+          ))}
         </div>
-      </section>
-
-      <div style={styles.pillRow}>
-        {ABOUT_SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            onClick={() => setCategory(section.id)}
-            style={{
-              ...styles.pill,
-              ...(selectedCategory === section.id ? styles.pillActive : {}),
-            }}
-          >
-            {section.label}
-          </button>
-        ))}
-      </div>
+      ) : null}
 
       {loading ? <div style={styles.emptyState}><h4>Loading about content</h4><p>Fetching the latest published sections.</p></div> : null}
       {statusMessage ? <p style={styles.successText}>{statusMessage}</p> : null}
@@ -465,10 +451,6 @@ function AboutUs({
 
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: "18px" },
-  hero: { padding: "24px", borderRadius: "28px", background: "linear-gradient(135deg, #17315f 0%, #234e93 58%, #3f7ad8 100%)", color: "#ffffff", boxShadow: "0 20px 60px rgba(24,51,95,0.22)" },
-  heroEyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.82 },
-  heroTitle: { margin: "14px 0 10px", fontSize: "34px", lineHeight: 1.12 },
-  heroText: { margin: 0, lineHeight: 1.7, maxWidth: "760px", opacity: 0.92 },
   pillRow: { display: "flex", flexWrap: "wrap", gap: "12px" },
   pill: { padding: "14px 22px", borderRadius: "999px", border: "1px solid #c6d3eb", background: "#f8fbff", color: "#22406f", cursor: "pointer", fontWeight: 700, boxShadow: "0 8px 22px rgba(20,42,80,0.05)" },
   pillActive: { background: "linear-gradient(135deg, #17315f 0%, #2d63b7 100%)", color: "#ffffff", borderColor: "#17315f", boxShadow: "0 14px 28px rgba(23,49,95,0.18)" },
