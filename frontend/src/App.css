@@ -607,9 +607,11 @@ button {
   max-height: min(78vh, 900px);
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  isolation: isolate;
+  overflow: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  background: #f7fbff;
 }
 
 .header-notification-menu::-webkit-scrollbar {
@@ -622,7 +624,7 @@ button {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-  height: auto;
+  height: min(72vh, 760px);
 }
 
 .header-notification-menu .workspace-notifications-header h3 {
@@ -7520,6 +7522,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   overflow-x: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  background: #f7fbff;
 }
 
 .workspace-notification-list::-webkit-scrollbar {
@@ -7634,7 +7637,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-group-heading {
   position: relative;
   z-index: 2;
-  background: linear-gradient(180deg, rgba(247, 250, 255, 0.98), rgba(247, 250, 255, 0.9));
+  background: #f7fbff;
   padding: 0 6px;
 }
 
@@ -7655,8 +7658,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   padding: 0;
   border: 1px solid rgba(29, 79, 151, 0.1);
   border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.96));
+  background: #ffffff;
   box-shadow: 0 18px 36px rgba(18, 43, 85, 0.08);
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
 }
@@ -7665,8 +7667,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-card:focus-visible {
   transform: translateY(-2px);
   border-color: rgba(33, 88, 170, 0.2);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(238, 246, 255, 0.98));
+  background: #ffffff;
   box-shadow: 0 26px 48px rgba(18, 43, 85, 0.14);
   outline: none;
 }
@@ -7788,8 +7789,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-notification-card.is-read {
-  opacity: 0.92;
-  background: linear-gradient(180deg, rgba(250, 252, 255, 0.96), rgba(241, 246, 253, 0.9));
+  opacity: 1;
+  background: #f8fbff;
 }
 
 .workspace-notification-card::after {
@@ -7799,7 +7800,7 @@ body.workspace-body-mode .contact-request-empty-card p {
   width: 220px;
   height: 220px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(90, 151, 255, 0.12), transparent 68%);
+  background: radial-gradient(circle, rgba(90, 151, 255, 0.08), transparent 68%);
   pointer-events: none;
 }
 
