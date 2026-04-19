@@ -365,8 +365,19 @@ function App() {
         setShowProfileMenu(false);
         setShowNotificationMenu(false);
       }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        setCommandPaletteOpen(false);
+        setShowInfoMenu(false);
+        setShowProfileMenu(false);
+        setShowNotificationMenu(true);
+        loadHeaderNotifications();
+      }
       if (event.key === "Escape") {
         setCommandPaletteOpen(false);
+        setShowNotificationMenu(false);
+        setShowInfoMenu(false);
+        setShowProfileMenu(false);
       }
     };
 
@@ -374,7 +385,7 @@ function App() {
     return () => {
       window.removeEventListener("keydown", handleKeydown);
     };
-  }, [screen]);
+  }, [screen, loadHeaderNotifications]);
 
   useEffect(() => {
     document.body.classList.toggle("workspace-body-mode", isWorkspace);
