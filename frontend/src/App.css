@@ -606,6 +606,13 @@ button {
   width: min(860px, calc(100vw - 48px));
   max-height: min(78vh, 900px);
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.header-notification-menu::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .header-notification-menu .workspace-notifications-shell {
@@ -7493,6 +7500,16 @@ body.workspace-body-mode .contact-request-empty-card p {
   gap: 20px;
 }
 
+.workspace-notification-list {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.workspace-notification-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .workspace-notifications-header {
   align-items: flex-start;
   padding: 22px 24px;
@@ -7510,6 +7527,27 @@ body.workspace-body-mode .contact-request-empty-card p {
   font-size: 32px;
   letter-spacing: -0.03em;
   color: #13386d;
+}
+
+.workspace-notifications-kicker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.workspace-notification-shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 77, 145, 0.12);
+  background: rgba(255, 255, 255, 0.76);
+  color: #5e779c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .workspace-notifications-title-block p {
@@ -7599,16 +7637,11 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-notification-card-main {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
   width: 100%;
-  padding: 18px 0 18px 18px;
-}
-
-.workspace-notification-checkbox {
-  margin-top: 14px;
-  accent-color: #2458ad;
+  padding: 20px 22px 20px 18px;
 }
 
 .workspace-notification-avatar {
@@ -7631,7 +7664,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-copy {
   min-width: 0;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .workspace-notification-topline {
@@ -7676,7 +7709,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-notification-card strong {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   color: #173d72;
   line-height: 1.35;
 }
@@ -7694,44 +7727,25 @@ body.workspace-body-mode .contact-request-empty-card p {
   font-weight: 700;
 }
 
-.workspace-notification-side {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 112px;
-  padding: 18px 18px 18px 0;
-}
-
-.workspace-notification-open-hint {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 84px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(31, 84, 163, 0.12);
-  background: rgba(236, 244, 255, 0.94);
-  color: #214f99;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .workspace-notification-card.is-unread {
   border-color: rgba(42, 98, 187, 0.18);
   box-shadow: 0 22px 42px rgba(31, 84, 163, 0.12);
 }
 
-.workspace-notification-card.is-unread .workspace-notification-open-hint {
-  background: linear-gradient(180deg, rgba(18, 61, 122, 0.98), rgba(44, 95, 177, 0.94));
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: 0 14px 24px rgba(31, 84, 163, 0.18);
+.workspace-notification-card.is-read {
+  opacity: 0.92;
+  background: linear-gradient(180deg, rgba(250, 252, 255, 0.96), rgba(241, 246, 253, 0.9));
 }
 
-.workspace-notification-card.is-read {
-  opacity: 0.88;
+.workspace-notification-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -30% -55% auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(90, 151, 255, 0.12), transparent 68%);
+  pointer-events: none;
 }
 
 @media (max-width: 920px) {
@@ -7750,27 +7764,11 @@ body.workspace-body-mode .contact-request-empty-card p {
 
   .workspace-notification-card-main {
     grid-template-columns: auto minmax(0, 1fr);
-    padding: 16px 0 16px 16px;
-  }
-
-  .workspace-notification-checkbox {
-    grid-column: 1;
-    grid-row: 1;
-    margin-top: 6px;
-  }
-
-  .workspace-notification-avatar {
-    grid-column: 1;
-    grid-row: 2;
+    padding: 16px 18px 16px 16px;
   }
 
   .workspace-notification-copy {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-
-  .workspace-notification-side {
-    display: none;
+    min-width: 0;
   }
 }
 

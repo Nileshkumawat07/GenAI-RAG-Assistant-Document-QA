@@ -1,7 +1,5 @@
 import React, { useMemo, useState } from "react";
 
-import { pushToast } from "../../shared/toast/toastBus";
-
 function formatTimestamp(value) {
   return value ? new Date(value).toLocaleString("en-GB") : "Just now";
 }
@@ -22,9 +20,9 @@ function getNotificationInitials(item) {
 
 function getNotificationActionLabel(item) {
   if (item.actionType) {
-    return "Open workflow";
+    return "Tap to open workflow";
   }
-  return item.isRead ? "Viewed update" : "Mark as seen";
+  return item.isRead ? "Viewed update" : "Tap to mark as seen";
 }
 
 function groupNotifications(notifications) {
@@ -47,22 +45,18 @@ function NotificationsPanel({
   loading,
   error,
   onMarkRead,
-  onMarkAllRead,
   onRefresh,
   onOpenAction,
 }) {
   const [filter, setFilter] = useState("all");
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [hiddenIds, setHiddenIds] = useState([]);
   const [query, setQuery] = useState("");
 
   const visibleNotifications = useMemo(() => {
-    const baseItems = notifications.filter((item) => !hiddenIds.includes(item.id));
     const filteredItems = filter === "unread"
-      ? baseItems.filter((item) => !item.isRead)
+      ? notifications.filter((item) => !item.isRead)
       : filter === "actionable"
-        ? baseItems.filter((item) => !!item.actionType)
-        : baseItems;
+        ? notifications.filter((item) => !!item.actionType)
+        : notifications;
     const normalizedQuery = query.trim().toLowerCase();
 
     if (!normalizedQuery) {
@@ -72,37 +66,9 @@ function NotificationsPanel({
     return filteredItems.filter((item) => (
       `${item.title || ""} ${item.message || ""} ${item.category || ""}`.toLowerCase().includes(normalizedQuery)
     ));
-  }, [filter, hiddenIds, notifications, query]);
+  }, [filter, notifications, query]);
 
   const groupedNotifications = useMemo(() => groupNotifications(visibleNotifications), [visibleNotifications]);
-
-  const toggleSelected = (notificationId) => {
-    setSelectedIds((current) =>
-      current.includes(notificationId)
-        ? current.filter((item) => item !== notificationId)
-        : [...current, notificationId]
-    );
-  };
-
-  const handleBulkRead = async () => {
-    if (selectedIds.length === 0) {
-      return;
-    }
-
-    await Promise.all(selectedIds.map((notificationId) => onMarkRead(notificationId)));
-    setSelectedIds([]);
-    pushToast({ type: "success", title: "Selection updated", message: "Selected notifications were marked as read." });
-  };
-
-  const handleBulkClear = () => {
-    if (selectedIds.length === 0) {
-      return;
-    }
-
-    setHiddenIds((current) => [...new Set([...current, ...selectedIds])]);
-    setSelectedIds([]);
-    pushToast({ type: "info", title: "Selection cleared", message: "Selected notifications were removed from this view." });
-  };
 
   const handleNotificationActivate = async (item) => {
     if (!item) {
@@ -123,21 +89,16 @@ function NotificationsPanel({
     <div className="workspace-form-stack workspace-hub-stack workspace-notifications-shell">
       <section className="workspace-hub-header workspace-notifications-header">
         <div className="workspace-notifications-title-block">
+          <div className="workspace-notifications-kicker-row">
+            <span className="workspace-hub-eyebrow">Live Alerts</span>
+            <span className="workspace-notification-shortcut-hint">Alt+N to open • Esc to close</span>
+          </div>
           <h3>Notifications Center</h3>
-          <p>Filter alerts, group them by day, take action, and clear noise without losing the important stuff.</p>
+          <p>Realtime updates with a cleaner premium flow. Tap a card to open its action or mark it seen.</p>
         </div>
         <div className="workspace-hub-actions workspace-notifications-toolbar">
           <button type="button" className="hero-button hero-button-secondary" onClick={onRefresh} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh"}
-          </button>
-          <button type="button" className="hero-button hero-button-secondary" onClick={handleBulkRead} disabled={loading || selectedIds.length === 0}>
-            Mark Selected Read
-          </button>
-          <button type="button" className="hero-button hero-button-secondary" onClick={handleBulkClear} disabled={selectedIds.length === 0}>
-            Clear Selected
-          </button>
-          <button type="button" className="hero-button hero-button-primary" onClick={onMarkAllRead} disabled={loading || notifications.length === 0}>
-            Mark All Read
           </button>
         </div>
       </section>
@@ -175,7 +136,7 @@ function NotificationsPanel({
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      <div className="workspace-hub-list">
+      <div className="workspace-hub-list workspace-notification-list">
         {Object.keys(groupedNotifications).length > 0 ? (
           Object.entries(groupedNotifications).map(([dateKey, items]) => (
             <div key={dateKey} className="workspace-form-stack workspace-notification-group">
@@ -203,13 +164,6 @@ function NotificationsPanel({
                 >
                   <div className="workspace-notification-card-rail" aria-hidden="true" />
                   <div className="workspace-notification-card-main">
-                    <input
-                      className="workspace-notification-checkbox"
-                      type="checkbox"
-                      checked={selectedIds.includes(item.id)}
-                      onChange={() => toggleSelected(item.id)}
-                      onClick={(event) => event.stopPropagation()}
-                    />
                     <div className="workspace-notification-avatar" aria-hidden="true">
                       {getNotificationInitials(item)}
                     </div>
@@ -228,11 +182,6 @@ function NotificationsPanel({
                         {getNotificationActionLabel(item)}
                       </span>
                     </div>
-                  </div>
-                  <div className="workspace-notification-side">
-                    <span className="workspace-notification-open-hint">
-                      {item.actionType ? "Open" : item.isRead ? "Viewed" : "Review"}
-                    </span>
                   </div>
                 </article>
               ))}

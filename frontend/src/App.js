@@ -365,7 +365,7 @@ function App() {
         setShowProfileMenu(false);
         setShowNotificationMenu(false);
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
         setCommandPaletteOpen(false);
         setShowInfoMenu(false);
