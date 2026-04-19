@@ -16,8 +16,8 @@ import {
 import WorkspacePage from "./features/workspace/WorkspacePage";
 import { getPublishedContentEntries } from "./features/info/aboutContentApi";
 import { getChatWebSocketUrl } from "./features/workspace/chatManagementApi";
+import NotificationsPanel from "./features/workspace/NotificationsPanel";
 import {
-  getWorkspaceDashboard,
   getWorkspaceNotifications,
   markAllWorkspaceNotificationsRead,
   markWorkspaceNotificationRead,
@@ -39,8 +39,8 @@ function App() {
   const [searchContentEntries, setSearchContentEntries] = useState({});
   const [toasts, setToasts] = useState([]);
   const [headerNotifications, setHeaderNotifications] = useState([]);
-  const [headerRecentActivity, setHeaderRecentActivity] = useState([]);
   const [headerNotificationsLoading, setHeaderNotificationsLoading] = useState(false);
+  const [headerNotificationsError, setHeaderNotificationsError] = useState("");
   const headerSocketRef = useRef(null);
   const headerSocketReconnectTimeoutRef = useRef(null);
   const headerSocketReconnectAttemptRef = useRef(0);
@@ -235,20 +235,20 @@ function App() {
     if (!currentUser?.id || screen !== "workspace") {
       return;
     }
-    try {
-      setHeaderNotificationsLoading(true);
-      const [items, dashboard] = await Promise.all([
-        getWorkspaceNotifications(),
-        getWorkspaceDashboard(),
-      ]);
-      setHeaderNotifications(items || []);
-      setHeaderRecentActivity(dashboard?.recentActivity || []);
-    } catch {
+    setHeaderNotificationsLoading(true);
+    setHeaderNotificationsError("");
+    const [notificationsResult] = await Promise.allSettled([
+      getWorkspaceNotifications(),
+    ]);
+
+    if (notificationsResult.status === "fulfilled") {
+      setHeaderNotifications(notificationsResult.value || []);
+    } else {
       setHeaderNotifications([]);
-      setHeaderRecentActivity([]);
-    } finally {
-      setHeaderNotificationsLoading(false);
+      setHeaderNotificationsError(notificationsResult.reason?.message || "Failed to load notifications.");
     }
+
+    setHeaderNotificationsLoading(false);
   }, [currentUser?.id, screen]);
 
   const applySocketNotification = useCallback((notification) => {
@@ -256,17 +256,6 @@ function App() {
       return;
     }
     setHeaderNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
-    setHeaderRecentActivity((current) => [
-      {
-        id: notification.id,
-        title: notification.title,
-        detail: notification.message,
-        category: notification.category,
-        createdAt: notification.createdAt,
-        tone: notification.isRead ? "success" : "info",
-      },
-      ...current.filter((item) => item.id !== notification.id),
-    ].slice(0, 6));
   }, []);
 
   const handleHeaderNotificationRead = async (notificationId) => {
@@ -423,7 +412,7 @@ function App() {
   useEffect(() => {
     if (!currentUser || screen !== "workspace") {
       setHeaderNotifications([]);
-      setHeaderRecentActivity([]);
+      setHeaderNotificationsError("");
       return;
     }
 
@@ -691,68 +680,15 @@ function App() {
                       </button>
                       {showNotificationMenu ? (
                         <div className="header-dropdown-menu header-notification-menu">
-                          <div className="header-notification-menu-head">
-                            <div>
-                              <strong>Notifications</strong>
-                              <span>{unreadHeaderNotifications} unread</span>
-                            </div>
-                            <button
-                              className="header-notification-link"
-                              type="button"
-                              onClick={handleHeaderNotificationsReadAll}
-                              disabled={headerNotificationsLoading || headerNotifications.length === 0}
-                            >
-                              Mark all read
-                            </button>
-                          </div>
-                          <div className="header-notification-list">
-                            {headerNotificationsLoading ? (
-                              <p className="header-dropdown-copy">Loading notifications...</p>
-                            ) : headerNotifications.length > 0 ? (
-                              headerNotifications.slice(0, 6).map((item) => (
-                                <button
-                                  key={item.id}
-                                  className={`header-dropdown-item header-notification-item ${item.isRead ? "is-read" : ""}`}
-                                  type="button"
-                                  onClick={() => handleHeaderNotificationOpen(item)}
-                                >
-                                  <span className="header-dropdown-title">{item.title}</span>
-                                  <span className="header-dropdown-copy">
-                                    {(item.category || "notification").replace(/[-_]/g, " ")}
-                                  </span>
-                                  <span className="header-dropdown-copy">{item.message}</span>
-                                  <span className="header-dropdown-copy">
-                                    {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Just now"}
-                                  </span>
-                                </button>
-                              ))
-                            ) : (
-                              <p className="header-dropdown-copy">No notifications yet.</p>
-                            )}
-                          </div>
-                          <div className="header-notification-menu-head">
-                            <div>
-                              <strong>Recent Activity</strong>
-                              <span>{headerRecentActivity.length} items</span>
-                            </div>
-                          </div>
-                          <div className="header-notification-list">
-                            {headerNotificationsLoading ? (
-                              <p className="header-dropdown-copy">Loading recent activity...</p>
-                            ) : headerRecentActivity.length > 0 ? (
-                              headerRecentActivity.slice(0, 6).map((item) => (
-                                <div key={item.id} className="header-dropdown-item header-notification-item is-read">
-                                  <span className="header-dropdown-title">{item.title}</span>
-                                  <span className="header-dropdown-copy">{item.detail}</span>
-                                  <span className="header-dropdown-copy">
-                                    {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Just now"}
-                                  </span>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="header-dropdown-copy">No recent activity yet.</p>
-                            )}
-                          </div>
+                          <NotificationsPanel
+                            notifications={headerNotifications}
+                            loading={headerNotificationsLoading}
+                            error={headerNotificationsError}
+                            onMarkRead={handleHeaderNotificationRead}
+                            onMarkAllRead={handleHeaderNotificationsReadAll}
+                            onRefresh={loadHeaderNotifications}
+                            onOpenAction={handleHeaderNotificationOpen}
+                          />
                         </div>
                       ) : null}
                     </div>

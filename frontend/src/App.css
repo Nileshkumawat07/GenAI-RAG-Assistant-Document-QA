@@ -603,7 +603,9 @@ button {
 }
 
 .header-notification-menu {
-  width: 340px;
+  width: min(860px, calc(100vw - 48px));
+  max-height: min(78vh, 900px);
+  overflow: auto;
 }
 
 .header-notification-menu-head {

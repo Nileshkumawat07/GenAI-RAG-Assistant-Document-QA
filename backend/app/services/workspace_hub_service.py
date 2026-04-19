@@ -117,6 +117,7 @@ class WorkspaceHubService:
 
     def get_dashboard(self, db: Session, *, user_id: str) -> dict:
         self.ensure_user_bootstrap(db, user_id=user_id)
+        user = self._require_user(db, user_id)
         notifications = self._user_notifications(db, user_id)
         threads = self._user_threads(db, user_id)
         teams = self._user_teams(db, user_id)
