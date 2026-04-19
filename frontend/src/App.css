@@ -617,6 +617,7 @@ button {
 
 .header-notification-menu .workspace-notifications-shell {
   gap: 16px;
+  height: min(72vh, 760px);
 }
 
 .header-notification-menu .workspace-notifications-header h3 {
@@ -7497,10 +7498,16 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-notifications-shell {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 20px;
+  min-height: 0;
 }
 
 .workspace-notification-list {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -7584,6 +7591,18 @@ body.workspace-body-mode .contact-request-empty-card p {
   box-shadow: 0 14px 28px rgba(18, 43, 85, 0.06);
 }
 
+.workspace-notification-filter-strip .workspace-filter-pill.is-active {
+  border-color: rgba(57, 109, 191, 0.2);
+  background: linear-gradient(180deg, rgba(229, 240, 255, 0.98), rgba(244, 249, 255, 0.98));
+  color: var(--primary-deep);
+  box-shadow: 0 18px 32px rgba(31, 84, 163, 0.1);
+}
+
+.workspace-notification-filter-strip .workspace-filter-pill.is-active span,
+.workspace-notification-filter-strip .workspace-filter-pill.is-active strong {
+  color: var(--primary-deep);
+}
+
 .workspace-notification-search {
   border-radius: 22px;
   background:
@@ -7593,7 +7612,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-notification-group {
-  gap: 14px;
+  gap: 10px;
 }
 
 .workspace-notification-group-heading {
@@ -7604,10 +7623,10 @@ body.workspace-body-mode .contact-request-empty-card p {
   position: relative;
   overflow: hidden;
   align-items: stretch;
-  gap: 18px;
+  gap: 12px;
   padding: 0;
   border: 1px solid rgba(29, 79, 151, 0.1);
-  border-radius: 24px;
+  border-radius: 20px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.96));
   box-shadow: 0 18px 36px rgba(18, 43, 85, 0.08);
@@ -7638,24 +7657,24 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-card-main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
+  gap: 12px;
+  align-items: center;
   width: 100%;
-  padding: 20px 22px 20px 18px;
+  padding: 14px 16px 14px 12px;
 }
 
 .workspace-notification-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.82), transparent 28%),
     linear-gradient(145deg, #14386d, #4f86d9);
   color: #ffffff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.06em;
   box-shadow: 0 16px 28px rgba(20, 56, 109, 0.26);
@@ -7664,7 +7683,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-copy {
   min-width: 0;
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .workspace-notification-topline {
@@ -7683,7 +7702,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-status-chip {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid rgba(54, 120, 216, 0.16);
   background: rgba(230, 240, 255, 0.92);
@@ -7694,22 +7713,17 @@ body.workspace-body-mode .contact-request-empty-card p {
   text-transform: uppercase;
 }
 
-.workspace-notification-status-chip.is-action {
-  background: rgba(14, 48, 101, 0.92);
-  border-color: rgba(14, 48, 101, 0.92);
-  color: #ffffff;
-}
-
 .workspace-notification-timestamp {
   color: #6a82a5;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .workspace-notification-card strong {
   margin: 0;
-  font-size: 20px;
+  font-size: 15px;
+  font-weight: 700;
   color: #173d72;
   line-height: 1.35;
 }
@@ -7717,14 +7731,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-card p {
   margin: 0;
   color: #607897;
-  line-height: 1.6;
-  font-size: 14px;
-}
-
-.workspace-notification-meta {
-  color: #305a93;
-  font-size: 12px;
-  font-weight: 700;
+  line-height: 1.45;
+  font-size: 13px;
 }
 
 .workspace-notification-card.is-unread {
@@ -7759,12 +7767,12 @@ body.workspace-body-mode .contact-request-empty-card p {
   }
 
   .workspace-notification-card {
-    border-radius: 20px;
+    border-radius: 18px;
   }
 
   .workspace-notification-card-main {
     grid-template-columns: auto minmax(0, 1fr);
-    padding: 16px 18px 16px 16px;
+    padding: 12px 14px 12px 10px;
   }
 
   .workspace-notification-copy {

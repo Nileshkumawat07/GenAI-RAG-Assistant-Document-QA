@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import anyio
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -22,8 +23,12 @@ class WorkspaceHubServiceError(RuntimeError):
 
 
 class WorkspaceHubService:
+    def __init__(self, realtime_notifier=None) -> None:
+        self.realtime_notifier = realtime_notifier
+
     def ensure_user_bootstrap(self, db: Session, *, user_id: str) -> None:
         user = self._require_user(db, user_id)
+        notifications: list[WorkspaceNotification] = []
         personal_team = db.execute(
             select(TeamWorkspace)
             .where(
@@ -58,28 +63,24 @@ class WorkspaceHubService:
         ).first()
         if not existing_notifications:
             now = datetime.now(timezone.utc)
-            db.add_all(
-                [
-                    WorkspaceNotification(
-                        id=str(uuid.uuid4()),
-                        user_id=user_id,
-                        category="welcome",
-                        title="Workspace ready",
-                        message="Your dashboard, notifications, analytics, team tools, and chat history are now enabled.",
-                        action_url="#/workspace",
-                        created_at=now,
-                    ),
-                    WorkspaceNotification(
-                        id=str(uuid.uuid4()),
-                        user_id=user_id,
-                        category="product",
-                        title="Build your first team",
-                        message="Create a shared workspace and invite collaborators from the new Team Management tab.",
-                        action_url="#/workspace",
-                        created_at=now,
-                    ),
-                ]
-            )
+            notifications = [
+                self._create_notification(
+                    db,
+                    user_id=user_id,
+                    category="welcome",
+                    title="Workspace ready",
+                    message="Your dashboard, notifications, analytics, team tools, and chat history are now enabled.",
+                    created_at=now,
+                ),
+                self._create_notification(
+                    db,
+                    user_id=user_id,
+                    category="product",
+                    title="Build your first team",
+                    message="Create a shared workspace and invite collaborators from the new Team Management tab.",
+                    created_at=now,
+                ),
+            ]
 
         existing_thread = db.execute(
             select(WorkspaceChatThread.id).where(WorkspaceChatThread.user_id == user_id).limit(1)
@@ -114,6 +115,8 @@ class WorkspaceHubService:
             )
 
         db.commit()
+        for item in notifications:
+            self._emit_notification(item)
 
     def get_dashboard(self, db: Session, *, user_id: str) -> dict:
         self.ensure_user_bootstrap(db, user_id=user_id)
@@ -487,19 +490,17 @@ class WorkspaceHubService:
                     created_at=now,
                 )
             )
-        db.add(
-            WorkspaceNotification(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                category="chat",
-                title="Chat thread saved",
-                message=f"Your thread '{cleaned_title}' was added to workspace history.",
-                action_url="#/workspace",
-                created_at=now,
-            )
+        notification = self._create_notification(
+            db,
+            user_id=user_id,
+            category="chat",
+            title="Chat thread saved",
+            message=f"Your thread '{cleaned_title}' was added to workspace history.",
+            created_at=now,
         )
         db.commit()
         db.refresh(thread)
+        self._emit_notification(notification)
         return self.serialize_thread(db, thread)
 
     def list_thread_messages(self, db: Session, *, user_id: str, thread_id: str) -> list[dict]:
@@ -544,18 +545,16 @@ class WorkspaceHubService:
             WorkspaceChatMessage.__table__.delete().where(WorkspaceChatMessage.thread_id == thread.id)
         )
         db.delete(thread)
-        db.add(
-            WorkspaceNotification(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                category="chat",
-                title="Chat thread removed",
-                message=f"'{deleted_title}' was removed from workspace history.",
-                action_url="#/workspace",
-                created_at=datetime.now(timezone.utc),
-            )
+        notification = self._create_notification(
+            db,
+            user_id=user_id,
+            category="chat",
+            title="Chat thread removed",
+            message=f"'{deleted_title}' was removed from workspace history.",
+            created_at=datetime.now(timezone.utc),
         )
         db.commit()
+        self._emit_notification(notification)
         return {"deletedId": thread_id}
 
     def list_teams(self, db: Session, *, user_id: str) -> list[dict]:
@@ -606,19 +605,17 @@ class WorkspaceHubService:
                 created_at=now,
             )
         )
-        db.add(
-            WorkspaceNotification(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                category="team",
-                title="Team created",
-                message=f"Your shared workspace '{cleaned_name}' is ready.",
-                action_url="#/workspace",
-                created_at=now,
-            )
+        notification = self._create_notification(
+            db,
+            user_id=user_id,
+            category="team",
+            title="Team created",
+            message=f"Your shared workspace '{cleaned_name}' is ready.",
+            created_at=now,
         )
         db.commit()
         db.refresh(team)
+        self._emit_notification(notification)
         return self.serialize_team(db, team)
 
     def add_team_member(self, db: Session, *, actor_user_id: str, team_id: str, target_user_id: str, role: str) -> dict:
@@ -641,20 +638,18 @@ class WorkspaceHubService:
             joined_at=now,
         )
         db.add(member)
-        db.add(
-            WorkspaceNotification(
-                id=str(uuid.uuid4()),
-                user_id=target_user_id,
-                category="team",
-                title=f"Added to {team.name}",
-                message="A shared workspace is now available in your Team Management panel.",
-                action_url="#/workspace",
-                created_at=now,
-            )
+        notification = self._create_notification(
+            db,
+            user_id=target_user_id,
+            category="team",
+            title=f"Added to {team.name}",
+            message="A shared workspace is now available in your Team Management panel.",
+            created_at=now,
         )
         team.updated_at = now
         db.commit()
         db.refresh(team)
+        self._emit_notification(notification)
         return self.serialize_team(db, team)
 
     def update_team_member(
@@ -695,19 +690,17 @@ class WorkspaceHubService:
         removed_user_id = member.user_id
         db.delete(member)
         team.updated_at = datetime.now(timezone.utc)
-        db.add(
-            WorkspaceNotification(
-                id=str(uuid.uuid4()),
-                user_id=removed_user_id,
-                category="team",
-                title=f"Removed from {team.name}",
-                message="Your access to that shared workspace has been removed.",
-                action_url="#/workspace",
-                created_at=datetime.now(timezone.utc),
-            )
+        notification = self._create_notification(
+            db,
+            user_id=removed_user_id,
+            category="team",
+            title=f"Removed from {team.name}",
+            message="Your access to that shared workspace has been removed.",
+            created_at=datetime.now(timezone.utc),
         )
         db.commit()
         db.refresh(team)
+        self._emit_notification(notification)
         return self.serialize_team(db, team)
 
     def serialize_notification(self, item: WorkspaceNotification) -> dict:
@@ -733,6 +726,41 @@ class WorkspaceHubService:
             "createdAt": self._serialize_datetime(item.created_at),
             "readAt": self._serialize_datetime(item.read_at),
         }
+
+    def _create_notification(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        category: str,
+        title: str,
+        message: str,
+        created_at: datetime | None = None,
+    ) -> WorkspaceNotification:
+        item = WorkspaceNotification(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            category=category,
+            title=title,
+            message=message,
+            action_url="#/workspace",
+            created_at=created_at or datetime.now(timezone.utc),
+        )
+        db.add(item)
+        db.flush()
+        return item
+
+    def _emit_notification(self, item: WorkspaceNotification) -> None:
+        if not self.realtime_notifier:
+            return
+        try:
+            anyio.from_thread.run(
+                self.realtime_notifier,
+                item.user_id,
+                {"type": "notification:new", "notification": self.serialize_notification(item)},
+            )
+        except Exception:
+            return
 
     def serialize_thread(self, db: Session, item: WorkspaceChatThread) -> dict:
         messages = db.execute(

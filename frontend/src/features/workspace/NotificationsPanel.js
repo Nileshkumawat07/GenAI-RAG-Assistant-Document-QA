@@ -18,13 +18,6 @@ function getNotificationInitials(item) {
     .join("");
 }
 
-function getNotificationActionLabel(item) {
-  if (item.actionType) {
-    return "Tap to open workflow";
-  }
-  return item.isRead ? "Viewed update" : "Tap to mark as seen";
-}
-
 function groupNotifications(notifications) {
   return notifications.reduce((accumulator, item) => {
     const dateKey = item.createdAt
@@ -172,15 +165,11 @@ function NotificationsPanel({
                         <div className="workspace-notification-chip-row">
                           <span className="workspace-stream-chip">{normalizeCategory(item.category)}</span>
                           {!item.isRead ? <span className="workspace-notification-status-chip">New</span> : null}
-                          {item.actionType ? <span className="workspace-notification-status-chip is-action">Action</span> : null}
                         </div>
                         <span className="workspace-notification-timestamp">{formatTimestamp(item.createdAt)}</span>
                       </div>
                       <strong>{item.title}</strong>
                       <p>{item.message}</p>
-                      <span className="workspace-hub-meta workspace-notification-meta">
-                        {getNotificationActionLabel(item)}
-                      </span>
                     </div>
                   </div>
                 </article>
