@@ -190,10 +190,13 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
     }
   };
 
-  const pushToast = useCallback((text) => {
+  const pushToast = useCallback((item) => {
     const id = toastIdRef.current + 1;
     toastIdRef.current = id;
-    setToastItems((current) => [...current, { id, text }].slice(-4));
+    const nextItem = typeof item === "string"
+      ? { id, title: "New message", body: item, tone: "message" }
+      : { id, title: item?.title || "New message", body: item?.body || "", meta: item?.meta || "", tone: item?.tone || "message" };
+    setToastItems((current) => [...current, nextItem].slice(-4));
     window.setTimeout(() => {
       setToastItems((current) => current.filter((item) => item.id !== id));
     }, 3200);
@@ -378,7 +381,15 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
               (item) => item.conversationType === payload.message.conversationType && item.id === payload.message.conversationId
             );
             if (!incomingItem?.isMuted) {
-              pushToast(`${payload.message.senderName}: ${payload.message.body || payload.message.fileName || "New message"}`);
+              pushToast({
+                title: payload.message.senderName || "New message",
+                body: payload.message.body || payload.message.fileName || "New message",
+                meta: payload.message.conversationType === "group"
+                  ? "Group chat"
+                  : payload.message.conversationType === "community"
+                    ? "Community"
+                    : "Direct message",
+              });
             }
           }
           await loadOverview();
@@ -782,8 +793,13 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
       {toastItems.length > 0 ? (
         <div className="workspace-chat-toast-stack">
           {toastItems.map((item) => (
-            <div key={item.id} className="workspace-chat-toast">
-              {item.text}
+            <div key={item.id} className={`workspace-chat-toast is-${item.tone || "message"}`}>
+              <div className="workspace-chat-toast-accent" aria-hidden="true" />
+              <div className="workspace-chat-toast-body">
+                <strong>{item.title}</strong>
+                <p>{item.body}</p>
+                {item.meta ? <span>{item.meta}</span> : null}
+              </div>
             </div>
           ))}
         </div>

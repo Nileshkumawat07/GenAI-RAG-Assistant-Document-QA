@@ -8758,16 +8758,62 @@ body.workspace-body-mode .contact-request-empty-card p {
   bottom: 24px;
   z-index: 40;
   display: grid;
-  gap: 10px;
-  width: min(320px, calc(100vw - 32px));
+  gap: 12px;
+  width: min(360px, calc(100vw - 32px));
 }
 
 .workspace-chat-toast {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(20, 28, 45, 0.95);
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  padding: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(106, 140, 196, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(111, 167, 255, 0.18), transparent 32%),
+    linear-gradient(180deg, rgba(26, 35, 56, 0.96), rgba(18, 25, 42, 0.98));
   color: #fff;
-  box-shadow: 0 16px 40px rgba(7, 15, 30, 0.24);
+  box-shadow: 0 20px 44px rgba(7, 15, 30, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.workspace-chat-toast-accent {
+  background: linear-gradient(180deg, #5f8fff, #79d2ff);
+}
+
+.workspace-chat-toast-body {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+}
+
+.workspace-chat-toast strong {
+  min-width: 0;
+  color: #ffffff;
+  font-size: 15px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-chat-toast p {
+  margin: 0;
+  color: rgba(235, 242, 255, 0.92);
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.workspace-chat-toast span {
+  color: rgba(170, 191, 227, 0.88);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .workspace-chat-reaction-row {

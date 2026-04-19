@@ -255,7 +255,11 @@ function App() {
     if (!notification?.id) {
       return;
     }
-    setHeaderNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)]);
+    const normalizedNotification = {
+      ...notification,
+      isRead: notification?.isRead === true || notification?.isRead === "true" || notification?.readAt != null,
+    };
+    setHeaderNotifications((current) => [normalizedNotification, ...current.filter((item) => item.id !== notification.id)]);
   }, []);
 
   const handleHeaderNotificationRead = async (notificationId) => {
@@ -503,16 +507,22 @@ function App() {
       };
 
       socket.onmessage = (event) => {
-        console.log("SOCKET MESSAGE:", event.data);
         try {
           const payload = JSON.parse(event.data);
-          console.log("SOCKET PARSED:", payload);
           window.dispatchEvent(new CustomEvent("genai-chat-socket-message", { detail: payload }));
           if (payload.type === "notification:new" && payload.notification) {
             applySocketNotification(payload.notification);
+          } else if (
+            payload.type === "receive_message" &&
+            payload.message?.senderId &&
+            payload.message.senderId !== currentUser?.id
+          ) {
+            window.setTimeout(() => {
+              loadHeaderNotifications();
+            }, 180);
           }
-        } catch (error) {
-          console.error("SOCKET ERROR:", error);
+        } catch {
+          // Ignore malformed socket messages.
         }
       };
     };
