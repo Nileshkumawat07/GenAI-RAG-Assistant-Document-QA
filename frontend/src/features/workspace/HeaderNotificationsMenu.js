@@ -78,8 +78,10 @@ function HeaderNotificationsMenu({
     <div className="header-notifications-panel">
       <div className="header-notifications-top">
         <div>
-          <span className="header-notifications-kicker">Live Alerts</span>
-          <h3>Notifications</h3>
+          <div className="header-notifications-heading-row">
+            <h3>Notifications</h3>
+            <span className="header-notifications-shortcut">Alt+N to open • Esc to close</span>
+          </div>
         </div>
         <button type="button" className="header-notifications-refresh" onClick={onRefresh} disabled={loading}>
           {loading ? "Refreshing..." : "Refresh"}
@@ -123,7 +125,6 @@ function HeaderNotificationsMenu({
             <section key={dateKey} className="header-notifications-group">
               <div className="header-notifications-group-head">
                 <div>
-                  <span className="header-notifications-group-label">Notification group</span>
                   <h4>{dateKey}</h4>
                 </div>
                 <span>{items.length} items</span>
