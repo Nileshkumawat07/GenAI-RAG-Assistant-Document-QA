@@ -846,10 +846,10 @@ button {
 
 .header-notifications-card {
   width: 100%;
-  min-height: 72px;
+  min-height: 78px;
   display: grid;
   grid-template-columns: 5px 40px minmax(0, 1fr);
-  align-items: center;
+  align-items: stretch;
   gap: 10px;
   padding: 0 14px 0 0;
   border: 1px solid rgba(42, 75, 140, 0.1);
@@ -888,22 +888,30 @@ button {
 }
 
 .header-notifications-copy {
+  position: relative;
   min-width: 0;
   display: grid;
-  gap: 4px;
+  align-content: center;
+  gap: 3px;
+  padding: 10px 92px 10px 0;
   text-align: left;
 }
 
 .header-notifications-meta-row {
-  display: flex;
+  position: absolute;
+  top: 10px;
+  right: 0;
+  display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: center;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 6px;
+  max-width: 88px;
 }
 
 .header-notifications-chip-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
   justify-content: flex-end;
@@ -927,7 +935,6 @@ button {
 }
 
 .header-notifications-time {
-  order: -1;
   color: #6a82a5;
   font-size: 10px;
   font-weight: 700;
@@ -945,6 +952,7 @@ button {
 .header-notifications-copy strong {
   color: #173d72;
   font-size: 15px;
+  line-height: 1.25;
 }
 
 .header-notifications-copy > span:last-child {
