@@ -846,22 +846,40 @@ button {
 
 .header-notifications-card {
   width: 100%;
-  min-height: 78px;
+  min-height: 86px;
   display: grid;
-  grid-template-columns: 5px 40px minmax(0, 1fr);
-  align-items: stretch;
-  gap: 10px;
-  padding: 0 14px 0 0;
-  border: 1px solid rgba(42, 75, 140, 0.1);
-  border-radius: 16px;
-  background: #ffffff;
+  grid-template-columns: 5px 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 0 0;
+  border: 1px solid rgba(77, 122, 198, 0.14);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(119, 170, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.96));
   cursor: pointer;
   box-sizing: border-box;
   overflow: hidden;
+  box-shadow: 0 18px 34px rgba(18, 43, 85, 0.08);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .header-notifications-card.is-read {
-  background: #f8fbff;
+  background:
+    radial-gradient(circle at top right, rgba(119, 170, 255, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(243, 248, 255, 0.96));
+  box-shadow: 0 14px 28px rgba(18, 43, 85, 0.05);
+}
+
+.header-notifications-card:hover,
+.header-notifications-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(61, 112, 194, 0.22);
+  box-shadow: 0 24px 42px rgba(18, 43, 85, 0.12);
+  outline: none;
 }
 
 .header-notifications-rail {
@@ -875,44 +893,49 @@ button {
 }
 
 .header-notifications-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(145deg, #14386d, #4f86d9);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.34), transparent 28%),
+    linear-gradient(145deg, #1c4d99, #4f86d9);
   color: #ffffff;
   font-size: 12px;
   font-weight: 800;
+  box-shadow: 0 12px 24px rgba(39, 85, 158, 0.22);
 }
 
 .header-notifications-copy {
-  position: relative;
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-content: center;
-  gap: 3px;
-  padding: 10px 92px 10px 0;
+  align-items: start;
+  column-gap: 14px;
+  row-gap: 4px;
+  padding: 14px 0;
   text-align: left;
 }
 
 .header-notifications-meta-row {
-  position: absolute;
-  top: 10px;
-  right: 0;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
   justify-content: flex-start;
   gap: 6px;
-  max-width: 88px;
+  min-width: 86px;
+  max-width: 110px;
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
 .header-notifications-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   justify-content: flex-end;
 }
@@ -921,17 +944,18 @@ button {
   display: inline-flex;
   align-items: center;
   padding: 3px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(69, 118, 196, 0.24);
-  background: rgba(236, 244, 255, 0.9);
+  border-radius: 999px;
+  border: 1px solid rgba(69, 118, 196, 0.2);
+  background: rgba(243, 248, 255, 0.94);
   color: #214f99;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .header-notifications-chip.is-new {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .header-notifications-time {
@@ -947,6 +971,7 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  grid-column: 1;
 }
 
 .header-notifications-copy strong {
@@ -982,6 +1007,25 @@ button {
 
   .header-notifications-hero-toprow {
     grid-template-columns: 1fr;
+  }
+
+  .header-notifications-copy {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 5px;
+    padding: 14px 0;
+  }
+
+  .header-notifications-meta-row {
+    min-width: 0;
+    max-width: none;
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    align-items: flex-start;
+  }
+
+  .header-notifications-chip-row {
+    justify-content: flex-start;
   }
 
   .header-notifications-filters {
