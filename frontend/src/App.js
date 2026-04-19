@@ -510,16 +510,14 @@ function App() {
         try {
           const payload = JSON.parse(event.data);
           window.dispatchEvent(new CustomEvent("genai-chat-socket-message", { detail: payload }));
-          if (payload.type === "notification:new" && payload.notification) {
+          if (payload.type === "notification:new" && payload.notification && payload.notification.category !== "chat") {
             applySocketNotification(payload.notification);
           } else if (
-            payload.type === "receive_message" &&
+            (payload.type === "receive_message" || payload.type === "message:new") &&
             payload.message?.senderId &&
             payload.message.senderId !== currentUser?.id
           ) {
-            window.setTimeout(() => {
-              loadHeaderNotifications();
-            }, 180);
+            loadHeaderNotifications();
           }
         } catch {
           // Ignore malformed socket messages.
@@ -540,7 +538,7 @@ function App() {
         headerSocketRef.current = null;
       }
     };
-  }, [applySocketNotification, currentUser?.id, screen]);
+  }, [applySocketNotification, currentUser?.id, loadHeaderNotifications, screen]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {

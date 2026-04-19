@@ -2486,7 +2486,7 @@ class ChatManagementService:
                 payload = {}
             if str(payload.get("messageId") or "") == str(message_id):
                 return item
-        return candidate_notifications[0] if candidate_notifications else None
+        return None
 
     def _serialize_workspace_notification(self, item: WorkspaceNotification) -> dict:
         action_context = {}
