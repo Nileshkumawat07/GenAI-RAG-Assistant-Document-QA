@@ -130,12 +130,29 @@ function NotificationsPanel({
               </div>
 
               {items.map((item) => (
-                <article key={item.id} className={`workspace-hub-list-item ${item.isRead ? "is-read" : ""}`}>
+                <article
+                  key={item.id}
+                  className={`workspace-hub-list-item ${item.isRead ? "is-read" : ""}`}
+                  onClick={() => onOpenAction?.(item)}
+                  role={item.actionType ? "button" : undefined}
+                  tabIndex={item.actionType ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (!item.actionType) {
+                      return;
+                    }
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpenAction?.(item);
+                    }
+                  }}
+                  style={item.actionType ? { cursor: "pointer" } : undefined}
+                >
                   <div style={{ display: "flex", gap: "12px", alignItems: "flex-start", width: "100%" }}>
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(item.id)}
                       onChange={() => toggleSelected(item.id)}
+                      onClick={(event) => event.stopPropagation()}
                       style={{ marginTop: "4px" }}
                     />
                     <div>
@@ -147,16 +164,14 @@ function NotificationsPanel({
                     </div>
                   </div>
                   <div className="workspace-hub-actions">
-                    {item.actionType ? (
-                      <button type="button" className="admin-table-action-button" onClick={() => onOpenAction?.(item)}>
-                        Open Action
-                      </button>
-                    ) : null}
                     <button
                       type="button"
                       className="admin-table-action-button"
                       disabled={item.isRead}
-                      onClick={() => onMarkRead(item.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onMarkRead(item.id);
+                      }}
                     >
                       {item.isRead ? "Read" : "Mark Read"}
                     </button>

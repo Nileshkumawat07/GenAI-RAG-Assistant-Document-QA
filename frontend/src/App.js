@@ -42,7 +42,6 @@ function App() {
   const [headerRecentActivity, setHeaderRecentActivity] = useState([]);
   const [headerNotificationsLoading, setHeaderNotificationsLoading] = useState(false);
   const headerSocketRef = useRef(null);
-  const headerRefreshTimeoutRef = useRef(null);
   const headerSocketReconnectTimeoutRef = useRef(null);
   const headerSocketReconnectAttemptRef = useRef(0);
 
@@ -433,7 +432,6 @@ function App() {
 
   useEffect(() => {
     if (!currentUser || screen !== "workspace") {
-      window.clearTimeout(headerRefreshTimeoutRef.current);
       window.clearTimeout(headerSocketReconnectTimeoutRef.current);
       if (headerSocketRef.current) {
         headerSocketRef.current.close();
@@ -524,7 +522,6 @@ function App() {
 
     return () => {
       disposed = true;
-      window.clearTimeout(headerRefreshTimeoutRef.current);
       window.clearTimeout(headerSocketReconnectTimeoutRef.current);
       window.removeEventListener("genai-chat-socket-send", handleSocketSend);
       window.__GENAI_CHAT_SOCKET_READY__ = false;
@@ -720,7 +717,13 @@ function App() {
                                   onClick={() => handleHeaderNotificationOpen(item)}
                                 >
                                   <span className="header-dropdown-title">{item.title}</span>
+                                  <span className="header-dropdown-copy">
+                                    {(item.category || "notification").replace(/[-_]/g, " ")}
+                                  </span>
                                   <span className="header-dropdown-copy">{item.message}</span>
+                                  <span className="header-dropdown-copy">
+                                    {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "Just now"}
+                                  </span>
                                 </button>
                               ))
                             ) : (

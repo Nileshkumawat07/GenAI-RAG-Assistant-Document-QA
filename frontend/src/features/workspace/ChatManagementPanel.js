@@ -412,7 +412,7 @@ function ChatManagementPanel({ currentUser, onUserUpdate }) {
           return undefined;
         }
         if (payload.type === "notification:new") {
-          return loadOverview();
+          return undefined;
         }
         if (["overview:refresh", "group:refresh", "community:refresh", "friends:refresh", "friend_request:new", "presence"].includes(payload.type)) {
           await loadOverview();

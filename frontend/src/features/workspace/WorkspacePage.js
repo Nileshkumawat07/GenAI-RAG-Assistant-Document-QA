@@ -14,7 +14,6 @@ import AnalyticsPanel from "./AnalyticsPanel";
 import ChatHistoryPanel from "./ChatHistoryPanel";
 import ChatManagementPanel from "./ChatManagementPanel";
 import DashboardPanel from "./DashboardPanel";
-import NotificationsPanel from "./NotificationsPanel";
 import TeamManagementPanel from "./TeamManagementPanel";
 import UsageLimitsCenter from "./UsageLimitsCenter";
 import { downloadAdministrationExport, getAdminMysqlOverview, normalizeAuthUser, updateManagementAccess } from "../auth/authApi";
@@ -1032,89 +1031,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     );
   };
 
-  const buildFallbackDashboard = ({
-    notificationsResult,
-    chatsResult,
-    teamsResult,
-  }) => {
-    const notifications = notificationsResult.status === "fulfilled" ? notificationsResult.value || [] : [];
-    const chats = chatsResult.status === "fulfilled" ? chatsResult.value || [] : [];
-    const teams = teamsResult.status === "fulfilled" ? teamsResult.value || [] : [];
-
-    const recentActivity = [
-      ...notifications.slice(0, 6).map((item) => ({
-        id: `notification-${item.id}`,
-        category: item.category || "notification",
-        title: item.title || "Workspace notification",
-        detail: item.message || "A workspace update is available.",
-        createdAt: item.createdAt || item.readAt || new Date().toISOString(),
-      })),
-      ...chats.slice(0, 4).map((item) => ({
-        id: `chat-${item.id}`,
-        category: "chat",
-        title: item.title || "Saved conversation",
-        detail: item.lastMessagePreview || "Conversation activity is available.",
-        createdAt: item.updatedAt || item.createdAt || new Date().toISOString(),
-      })),
-      ...teams.slice(0, 3).map((item) => ({
-        id: `team-${item.id}`,
-        category: "team",
-        title: item.name || "Workspace team",
-        detail: item.description || "Team activity is available.",
-        createdAt: item.updatedAt || item.createdAt || new Date().toISOString(),
-      })),
-    ].slice(0, 10);
-
-    return {
-      metrics: [
-        {
-          label: "Signals tracked",
-          value: recentActivity.length,
-          hint: "Live updates synthesized from notifications, chats, and team activity.",
-        },
-        {
-          label: "Collections live",
-          value: chats.length + teams.length + notifications.length,
-          hint: "Saved records still available even while the dashboard summary is rebuilding.",
-        },
-        {
-          label: "Unread notifications",
-          value: notifications.filter((item) => !item.isRead).length,
-          hint: "Unread updates waiting in the notification center.",
-        },
-        {
-          label: "Teams active",
-          value: teams.length,
-          hint: "Workspace teams currently visible from the shared hub.",
-        },
-      ],
-      recentActivity,
-      activityInsights: [
-        {
-          label: "Fallback mode",
-          value: "Live",
-          detail: "The dashboard summary is being rebuilt from available workspace data.",
-        },
-      ],
-      recentChats: chats.slice(0, 6).map((item) => ({
-        id: item.id,
-        title: item.title || "Saved chat",
-        detail: item.lastMessagePreview || "Conversation history available.",
-        meta: item.updatedAt ? `Updated ${new Date(item.updatedAt).toLocaleString("en-GB")}` : "Chat record",
-        createdAt: item.updatedAt || item.createdAt,
-      })),
-      activeTeamsList: teams.slice(0, 6).map((item) => ({
-        id: item.id,
-        title: item.name || "Workspace team",
-        detail: item.description || "Team workspace available.",
-        meta: item.memberCount ? `${item.memberCount} members` : "Team record",
-        createdAt: item.updatedAt || item.createdAt,
-      })),
-      supportRequestsList: [],
-      paymentHistory: [],
-    };
-  };
-
   const loadContactRequests = async () => {
     if (!currentUser?.id) {
       return;
@@ -1721,14 +1637,8 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
         setWorkspaceDashboard(dashboardResult.value);
         setWorkspaceDashboardError("");
       } else {
-        const fallbackDashboard = buildFallbackDashboard({
-          notificationsResult,
-          chatsResult,
-          teamsResult,
-        });
-        setWorkspaceDashboard(fallbackDashboard);
-        setWorkspaceDashboardError("");
-        pushStatus("Dashboard summary is using fallback workspace data.", "info");
+        setWorkspaceDashboard(null);
+        setWorkspaceDashboardError(dashboardResult.reason?.message || "Failed to load dashboard.");
       }
       if (notificationsResult.status === "fulfilled") {
         setWorkspaceNotifications(notificationsResult.value || []);
@@ -4750,9 +4660,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                   <button className={`sidebar-tab ${activeSection === "analytics" ? "active" : ""}`} onClick={() => setActiveSection("analytics")} type="button">
                     Analytics
                   </button>
-                  <button className={`sidebar-tab ${activeSection === "notifications" ? "active" : ""}`} onClick={() => setActiveSection("notifications")} type="button">
-                    Notifications
-                  </button>
                   <button className={`sidebar-tab ${activeSection === "chat-history" ? "active" : ""}`} onClick={() => setActiveSection("chat-history")} type="button">
                     Chat History
                   </button>
@@ -4769,7 +4676,7 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
           {selectedInfoPage !== "settings" ? (
             <div className="sidebar-boost-card">
               <div className="sidebar-status">
-                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "notifications" ? "Notifications Status" : activeSection === "chat" ? "Chat Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
+                <h4>{infoConfig ? infoConfig.statusTitle : activeSection === "document-retrieval" ? "Document Retrieval Status" : activeSection === "object-detection" ? "Object Detection Status" : activeSection === "image-generation" ? "Image Generation Status" : activeSection === "dashboard" ? "Dashboard Status" : activeSection === "analytics" ? "Analytics Status" : activeSection === "chat" ? "Chat Status" : activeSection === "chat-history" ? "Chat History Status" : "Team Status"}</h4>
                 {selectedInfoPage === "contact" ? (
                   <div className="workspace-form-stack">
                     <div className="status-feed">
@@ -4837,16 +4744,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
                 loading={workspaceHubLoading}
                 error={workspaceAnalyticsError}
                 onRefresh={loadWorkspaceHubData}
-              />
-            ) : activeSection === "notifications" ? (
-              <NotificationsPanel
-                notifications={workspaceNotifications}
-                loading={workspaceHubLoading}
-                error={workspaceNotificationsError}
-                onMarkRead={handleWorkspaceNotificationRead}
-                onMarkAllRead={handleWorkspaceNotificationsReadAll}
-                onRefresh={loadWorkspaceHubData}
-                onOpenAction={handleWorkspaceNotificationOpen}
               />
             ) : activeSection === "chat" ? (
               <ChatManagementPanel currentUser={currentUser} onUserUpdate={onUserUpdate} />
