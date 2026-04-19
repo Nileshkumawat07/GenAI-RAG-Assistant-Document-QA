@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 function formatTimestamp(value) {
   return value ? new Date(value).toLocaleString("en-GB") : "Just now";
@@ -33,6 +33,13 @@ function getInitials(item) {
     .join("");
 }
 
+function normalizeNotification(item) {
+  return {
+    ...item,
+    isRead: item?.isRead === true || item?.isRead === "true" || item?.readAt != null,
+  };
+}
+
 function HeaderNotificationsMenu({
   notifications,
   loading,
@@ -44,12 +51,21 @@ function HeaderNotificationsMenu({
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
 
+  const normalizedNotifications = useMemo(
+    () => notifications.map((item) => normalizeNotification(item)),
+    [notifications]
+  );
+
+  useEffect(() => {
+    if (filter !== "all" && filter !== "unread") {
+      setFilter("all");
+    }
+  }, [filter]);
+
   const filteredNotifications = useMemo(() => {
     const filtered = filter === "unread"
-      ? notifications.filter((item) => !item.isRead)
-      : filter === "actionable"
-        ? notifications.filter((item) => Boolean(item.actionType))
-        : notifications;
+      ? normalizedNotifications.filter((item) => !item.isRead)
+      : normalizedNotifications;
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
       return filtered;
@@ -57,7 +73,7 @@ function HeaderNotificationsMenu({
     return filtered.filter((item) =>
       `${item.title || ""} ${item.message || ""} ${item.category || ""}`.toLowerCase().includes(normalizedQuery)
     );
-  }, [filter, notifications, query]);
+  }, [filter, normalizedNotifications, query]);
 
   const grouped = useMemo(() => groupNotifications(filteredNotifications), [filteredNotifications]);
 
@@ -101,15 +117,15 @@ function HeaderNotificationsMenu({
 
           <div className="header-notifications-filters">
             {[
-              { id: "all", label: "All", count: notifications.length },
-              { id: "unread", label: "Unread", count: notifications.filter((item) => !item.isRead).length },
-              { id: "actionable", label: "Actionable", count: notifications.filter((item) => Boolean(item.actionType)).length },
+              { id: "all", label: "All", count: normalizedNotifications.length },
+              { id: "unread", label: "Unread", count: normalizedNotifications.filter((item) => !item.isRead).length },
             ].map((item) => (
               <button
                 key={item.id}
                 type="button"
                 className={`header-notifications-filter ${filter === item.id ? "is-active" : ""}`}
                 onClick={() => setFilter(item.id)}
+                aria-pressed={filter === item.id}
               >
                 <span>{item.label}</span>
                 <strong>{item.count}</strong>

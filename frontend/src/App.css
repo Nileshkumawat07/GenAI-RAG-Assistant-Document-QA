@@ -729,14 +729,14 @@ button {
 .header-notifications-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .header-notifications-filter {
   flex: 1 1 0;
-  min-width: 120px;
-  min-height: 56px;
-  border-radius: 16px;
+  min-width: 0;
+  min-height: 50px;
+  border-radius: 14px;
   border: 1px solid rgba(42, 75, 140, 0.14);
   background: #ffffff;
   color: #173d72;
@@ -756,7 +756,7 @@ button {
 }
 
 .header-notifications-filter strong {
-  font-size: 16px;
+  font-size: 15px;
   color: #173d72;
 }
 
@@ -841,19 +841,19 @@ button {
 .header-notifications-group-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .header-notifications-card {
   width: 100%;
-  height: 60px;
+  min-height: 54px;
   display: grid;
-  grid-template-columns: 5px 34px minmax(0, 1fr);
+  grid-template-columns: 4px 30px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  padding: 0 10px 0 0;
+  gap: 7px;
+  padding: 0 9px 0 0;
   border: 1px solid rgba(42, 75, 140, 0.1);
-  border-radius: 16px;
+  border-radius: 14px;
   background: #ffffff;
   cursor: pointer;
   box-sizing: border-box;
@@ -865,7 +865,7 @@ button {
 }
 
 .header-notifications-rail {
-  width: 5px;
+  width: 4px;
   height: 100%;
   background: linear-gradient(180deg, rgba(42, 98, 187, 0.92), rgba(125, 174, 255, 0.78));
 }
@@ -875,22 +875,22 @@ button {
 }
 
 .header-notifications-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(145deg, #14386d, #4f86d9);
   color: #ffffff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
 }
 
 .header-notifications-copy {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 1px;
   text-align: left;
 }
 
@@ -7895,15 +7895,15 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-filter-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: stretch;
 }
 
 .workspace-notification-filter-strip .workspace-filter-pill {
-  min-height: 64px;
-  min-width: 136px;
-  border-radius: 18px;
-  padding: 10px 14px;
+  min-height: 54px;
+  min-width: 120px;
+  border-radius: 16px;
+  padding: 8px 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 255, 0.94));
   box-shadow: 0 14px 28px rgba(18, 43, 85, 0.06);
 }
@@ -7957,17 +7957,17 @@ body.workspace-body-mode .contact-request-empty-card p {
   justify-content: flex-start !important;
   align-items: stretch !important;
   width: 100%;
-  height: 68px;
-  min-height: 68px;
-  max-height: 68px;
-  flex: 0 0 68px;
+  height: 58px;
+  min-height: 58px;
+  max-height: 58px;
+  flex: 0 0 58px;
   position: relative;
   z-index: 1;
   overflow: hidden;
-  gap: 12px;
+  gap: 10px;
   padding: 0;
   border: 1px solid rgba(29, 79, 151, 0.1);
-  border-radius: 18px;
+  border-radius: 16px;
   background: #ffffff;
   box-shadow: 0 18px 36px rgba(18, 43, 85, 0.08);
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
@@ -7996,11 +7996,11 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-card-main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   width: 100%;
   min-width: 0;
-  padding: 10px 12px 10px 10px;
+  padding: 8px 10px 8px 8px;
   height: 100%;
   box-sizing: border-box;
 }
@@ -8009,14 +8009,14 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.82), transparent 28%),
     linear-gradient(145deg, #14386d, #4f86d9);
   color: #ffffff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.06em;
   box-shadow: 0 16px 28px rgba(20, 56, 109, 0.26);
@@ -8025,7 +8025,7 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-copy {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
   align-content: center;
 }
 
@@ -8072,10 +8072,10 @@ body.workspace-body-mode .contact-request-empty-card p {
 
 .workspace-notification-card strong {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #173d72;
-  line-height: 1.35;
+  line-height: 1.25;
   word-break: break-word;
   white-space: nowrap;
   overflow: hidden;
@@ -8085,8 +8085,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-card p {
   margin: 0;
   color: #607897;
-  line-height: 1.4;
-  font-size: 12px;
+  line-height: 1.3;
+  font-size: 11px;
   word-break: break-word;
   white-space: nowrap;
   overflow: hidden;
