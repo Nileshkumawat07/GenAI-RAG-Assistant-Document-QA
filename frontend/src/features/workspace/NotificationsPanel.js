@@ -87,7 +87,6 @@ function NotificationsPanel({
             <span className="workspace-notification-shortcut-hint">Alt+N to open • Esc to close</span>
           </div>
           <h3>Notifications Center</h3>
-          <p>Realtime updates with a cleaner premium flow. Tap a card to open its action or mark it seen.</p>
         </div>
         <div className="workspace-hub-actions workspace-notifications-toolbar">
           <button type="button" className="hero-button hero-button-secondary" onClick={onRefresh} disabled={loading}>
@@ -116,7 +115,6 @@ function NotificationsPanel({
         </div>
 
         <label className="workspace-search-shell workspace-notification-search">
-          <span>Search alerts</span>
           <input
             type="text"
             className="workspace-input workspace-command-search"
