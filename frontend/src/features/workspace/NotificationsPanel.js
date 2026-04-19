@@ -42,10 +42,8 @@ function normalizeNotification(item) {
 
 function NotificationsPanel({
   notifications,
-  loading,
   error,
   onMarkRead,
-  onRefresh,
   onOpenAction,
 }) {
   const [filter, setFilter] = useState("all");
@@ -103,11 +101,6 @@ function NotificationsPanel({
             <span className="workspace-notification-shortcut-hint">Alt+N to open • Esc to close</span>
           </div>
           <h3>Notifications Center</h3>
-        </div>
-        <div className="workspace-hub-actions workspace-notifications-toolbar">
-          <button type="button" className="hero-button hero-button-secondary" onClick={onRefresh} disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
         </div>
       </section>
 

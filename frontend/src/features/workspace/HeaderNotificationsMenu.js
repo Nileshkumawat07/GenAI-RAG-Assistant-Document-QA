@@ -42,9 +42,7 @@ function normalizeNotification(item) {
 
 function HeaderNotificationsMenu({
   notifications,
-  loading,
   error,
-  onRefresh,
   onOpenAction,
   onMarkRead,
 }) {
@@ -110,9 +108,6 @@ function HeaderNotificationsMenu({
               />
             </label>
 
-            <button type="button" className="header-notifications-refresh" onClick={onRefresh} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
           </div>
 
           <div className="header-notifications-filters">
