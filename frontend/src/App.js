@@ -16,7 +16,7 @@ import {
 import WorkspacePage from "./features/workspace/WorkspacePage";
 import { getPublishedContentEntries } from "./features/info/aboutContentApi";
 import { getChatWebSocketUrl } from "./features/workspace/chatManagementApi";
-import NotificationsPanel from "./features/workspace/NotificationsPanel";
+import HeaderNotificationsMenu from "./features/workspace/HeaderNotificationsMenu";
 import {
   getWorkspaceNotifications,
   markAllWorkspaceNotificationsRead,
@@ -691,12 +691,11 @@ function App() {
                       </button>
                       {showNotificationMenu ? (
                         <div className="header-dropdown-menu header-notification-menu">
-                          <NotificationsPanel
+                          <HeaderNotificationsMenu
                             notifications={headerNotifications}
                             loading={headerNotificationsLoading}
                             error={headerNotificationsError}
                             onMarkRead={handleHeaderNotificationRead}
-                            onMarkAllRead={handleHeaderNotificationsReadAll}
                             onRefresh={loadHeaderNotifications}
                             onOpenAction={handleHeaderNotificationOpen}
                           />
