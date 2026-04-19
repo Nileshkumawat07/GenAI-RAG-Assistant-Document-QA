@@ -76,45 +76,48 @@ function HeaderNotificationsMenu({
 
   return (
     <div className="header-notifications-panel">
-      <div className="header-notifications-top">
-        <div>
-          <div className="header-notifications-heading-row">
-            <h3>Notifications</h3>
-            <span className="header-notifications-shortcut">Alt+N to open • Esc to close</span>
+      <div className="header-notifications-hero">
+        <div className="header-notifications-hero-info">
+          <span className="header-notifications-kicker">Premium Notifications</span>
+          <h3>Notifications with a cleaner premium command view</h3>
+          <p>Track unread updates, search faster, and open actions instantly from one focused surface.</p>
+          <span className="header-notifications-shortcut">Alt+N to open • Esc to close</span>
+        </div>
+
+        <div className="header-notifications-hero-controls">
+          <div className="header-notifications-hero-toprow">
+            <label className="header-notifications-search">
+              <input
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search title, message, or category..."
+              />
+            </label>
+
+            <button type="button" className="header-notifications-refresh" onClick={onRefresh} disabled={loading}>
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          <div className="header-notifications-filters">
+            {[
+              { id: "all", label: "All", count: notifications.length },
+              { id: "unread", label: "Unread", count: notifications.filter((item) => !item.isRead).length },
+              { id: "actionable", label: "Actionable", count: notifications.filter((item) => Boolean(item.actionType)).length },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`header-notifications-filter ${filter === item.id ? "is-active" : ""}`}
+                onClick={() => setFilter(item.id)}
+              >
+                <span>{item.label}</span>
+                <strong>{item.count}</strong>
+              </button>
+            ))}
           </div>
         </div>
-        <button type="button" className="header-notifications-refresh" onClick={onRefresh} disabled={loading}>
-          {loading ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
-
-      <div className="header-notifications-controls">
-        <div className="header-notifications-filters">
-          {[
-            { id: "all", label: "All", count: notifications.length },
-            { id: "unread", label: "Unread", count: notifications.filter((item) => !item.isRead).length },
-            { id: "actionable", label: "Actionable", count: notifications.filter((item) => Boolean(item.actionType)).length },
-          ].map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`header-notifications-filter ${filter === item.id ? "is-active" : ""}`}
-              onClick={() => setFilter(item.id)}
-            >
-              <span>{item.label}</span>
-              <strong>{item.count}</strong>
-            </button>
-          ))}
-        </div>
-
-        <label className="header-notifications-search">
-          <input
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search title, message, or category..."
-          />
-        </label>
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
