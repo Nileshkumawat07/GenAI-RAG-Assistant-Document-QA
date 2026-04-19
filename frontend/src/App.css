@@ -605,6 +605,8 @@ button {
 .header-notification-menu {
   width: min(860px, calc(100vw - 48px));
   max-height: min(78vh, 900px);
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -616,8 +618,11 @@ button {
 }
 
 .header-notification-menu .workspace-notifications-shell {
-  gap: 16px;
-  height: min(72vh, 760px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  height: auto;
 }
 
 .header-notification-menu .workspace-notifications-header h3 {
@@ -7498,8 +7503,8 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-notifications-shell {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   min-height: 0;
 }
@@ -7507,7 +7512,9 @@ body.workspace-body-mode .contact-request-empty-card p {
 .workspace-notification-list {
   display: grid;
   gap: 12px;
+  flex: 1 1 auto;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -7568,16 +7575,18 @@ body.workspace-body-mode .contact-request-empty-card p {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .workspace-notification-filter-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  align-items: stretch;
 }
 
 .workspace-notification-filter-strip .workspace-filter-pill {
+  min-height: 64px;
   min-width: 136px;
   border-radius: 18px;
   padding: 10px 14px;
@@ -7598,6 +7607,9 @@ body.workspace-body-mode .contact-request-empty-card p {
 }
 
 .workspace-notification-search {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
   border-radius: 18px;
   background:
     radial-gradient(circle at top right, rgba(90, 151, 255, 0.12), transparent 30%),
@@ -7606,9 +7618,15 @@ body.workspace-body-mode .contact-request-empty-card p {
   padding: 10px 12px;
 }
 
+.workspace-notification-search .workspace-command-search {
+  height: 42px;
+}
+
 .workspace-notification-group {
   display: grid;
   gap: 8px;
+  position: relative;
+  z-index: 0;
 }
 
 .workspace-notification-group-heading {
@@ -7622,6 +7640,8 @@ body.workspace-body-mode .contact-request-empty-card p {
   align-items: stretch !important;
   width: 100%;
   min-height: 60px;
+  position: relative;
+  z-index: 1;
   position: relative;
   overflow: hidden;
   gap: 12px;
