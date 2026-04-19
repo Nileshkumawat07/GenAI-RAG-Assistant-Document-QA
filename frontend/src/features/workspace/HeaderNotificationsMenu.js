@@ -80,7 +80,6 @@ function HeaderNotificationsMenu({
         <div className="header-notifications-hero-info">
           <span className="header-notifications-kicker">Premium Notifications</span>
           <h3>Notifications with a cleaner premium command view</h3>
-          <p>Track unread updates, search faster, and open actions instantly from one focused surface.</p>
           <span className="header-notifications-shortcut">Alt+N to open • Esc to close</span>
         </div>
 
