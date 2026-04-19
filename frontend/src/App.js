@@ -262,6 +262,39 @@ function App() {
     setHeaderNotifications((current) => [normalizedNotification, ...current.filter((item) => item.id !== notification.id)]);
   }, []);
 
+  const applySocketMessageNotification = useCallback((message) => {
+    if (!message?.id || !message?.senderId || message.senderId === currentUser?.id) {
+      return;
+    }
+
+    const conversationType = message.conversationType || "direct";
+    const senderName = (message.senderName || "").trim() || "New message";
+    const notificationTitle = conversationType === "group"
+      ? `New message in ${message.conversationId || "group"}`
+      : conversationType === "community"
+        ? `New announcement in ${message.conversationId || "community"}`
+        : `New message from ${senderName}`;
+
+    applySocketNotification({
+      id: `chat-message-${message.id}`,
+      category: "chat",
+      title: notificationTitle,
+      message: message.body || message.fileName || "New message",
+      actionType: "open_chat",
+      actionEntityId: message.conversationId || "",
+      actionEntityKind: conversationType,
+      actionContext: {
+        conversationType,
+        conversationId: message.conversationId || "",
+        focus: "conversation",
+        messageId: message.id,
+      },
+      isRead: false,
+      createdAt: message.createdAt || new Date().toISOString(),
+      readAt: null,
+    });
+  }, [applySocketNotification, currentUser?.id]);
+
   const handleHeaderNotificationRead = async (notificationId) => {
     try {
       await markWorkspaceNotificationRead(notificationId);
@@ -517,7 +550,7 @@ function App() {
             payload.message?.senderId &&
             payload.message.senderId !== currentUser?.id
           ) {
-            loadHeaderNotifications();
+            applySocketMessageNotification(payload.message);
           }
         } catch {
           // Ignore malformed socket messages.
@@ -538,7 +571,7 @@ function App() {
         headerSocketRef.current = null;
       }
     };
-  }, [applySocketNotification, currentUser?.id, loadHeaderNotifications, screen]);
+  }, [applySocketMessageNotification, applySocketNotification, currentUser?.id, screen]);
 
   useEffect(() => {
     const syncFromBrowserRoute = (event) => {
