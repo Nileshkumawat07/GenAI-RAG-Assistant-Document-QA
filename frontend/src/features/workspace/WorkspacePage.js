@@ -1339,6 +1339,52 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
   useEffect(() => {
     const handleSocketWorkspaceRefresh = (event) => {
       const payload = event?.detail || {};
+      if ((payload.type === "message:new" || payload.type === "receive_message") && payload.message?.id) {
+        const incomingMessage = payload.message;
+        setWorkspaceDashboard((currentDashboard) => {
+          if (!currentDashboard) {
+            return currentDashboard;
+          }
+
+          const conversationId = String(incomingMessage.conversationId || "");
+          const conversationType = String(incomingMessage.conversationType || "direct").toLowerCase();
+          const fallbackChatTitle = conversationType === "group"
+            ? "Group chat"
+            : conversationType === "community"
+              ? "Community"
+              : incomingMessage.senderName || "Direct chat";
+          const existingChat = (currentDashboard.recentChats || []).find((item) => String(item.id || "") === conversationId);
+          const nextChatRecord = {
+            id: conversationId || incomingMessage.id,
+            title: existingChat?.title || fallbackChatTitle,
+            detail: incomingMessage.body || incomingMessage.fileName || "New message",
+            meta: existingChat?.meta || "Live conversation",
+            createdAt: incomingMessage.createdAt || new Date().toISOString(),
+          };
+
+          return {
+            ...currentDashboard,
+            recentActivity: [
+              {
+                id: `activity-${incomingMessage.id}`,
+                title: incomingMessage.senderId === currentUser?.id
+                  ? `Message sent in ${nextChatRecord.title}`
+                  : `New message from ${incomingMessage.senderName || nextChatRecord.title}`,
+                detail: incomingMessage.body || incomingMessage.fileName || "New message",
+                category: "chat",
+                createdAt: incomingMessage.createdAt || new Date().toISOString(),
+                tone: incomingMessage.senderId === currentUser?.id ? "success" : "info",
+              },
+              ...(currentDashboard.recentActivity || []).filter((item) => item.id !== `activity-${incomingMessage.id}`),
+            ].slice(0, 5),
+            recentChats: [
+              nextChatRecord,
+              ...(currentDashboard.recentChats || []).filter((item) => String(item.id || "") !== String(nextChatRecord.id || "")),
+            ].slice(0, 4),
+          };
+        });
+        return;
+      }
       if (payload.type === "notification:new" && payload.notification?.id) {
         setWorkspaceNotifications((current) => {
           const nextNotifications = [payload.notification, ...current.filter((item) => item.id !== payload.notification.id)];
@@ -1389,8 +1435,6 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
       ].includes(payload.type)) {
         return;
       }
-
-      loadWorkspaceHubData();
     };
 
     window.addEventListener("genai-chat-socket-message", handleSocketWorkspaceRefresh);
