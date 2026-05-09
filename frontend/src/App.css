@@ -362,28 +362,40 @@ button {
 .command-palette-head {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 18px;
-  padding: 24px 24px 18px;
+  margin: 18px 18px 0;
+  padding: 22px 22px 24px;
+  border-radius: 28px;
+  border: 1px solid rgba(125, 157, 208, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(108, 153, 236, 0.22), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(241, 247, 255, 0.92) 56%, rgba(225, 237, 255, 0.96));
+  box-shadow:
+    0 22px 52px rgba(15, 35, 70, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .command-palette-copy {
   display: grid;
-  gap: 10px;
+  gap: 14px;
+  max-width: 760px;
 }
 
 .command-palette-kicker {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid rgba(101, 137, 194, 0.18);
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: 0 10px 26px rgba(20, 49, 96, 0.06);
+  border: 1px solid rgba(101, 137, 194, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.94));
+  box-shadow:
+    0 12px 28px rgba(20, 49, 96, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -393,22 +405,41 @@ button {
 
 .command-palette-head h3 {
   margin: 0;
-  color: var(--primary-deep);
+  color: #163968;
   font-family: "Space Grotesk", "Manrope", sans-serif;
-  font-size: clamp(28px, 4vw, 38px);
-  line-height: 1.02;
+  font-size: clamp(34px, 4.3vw, 56px);
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .command-palette-close {
-  min-height: 42px;
-  padding: 0 16px;
+  min-height: 52px;
+  min-width: 78px;
+  padding: 0 18px;
   border-radius: 999px;
-  border: 1px solid rgba(32, 62, 117, 0.14);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(241, 247, 255, 0.96));
-  color: var(--primary);
+  border: 1px solid rgba(32, 62, 117, 0.12);
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(233, 242, 255, 0.96));
+  color: #244a86;
   cursor: pointer;
-  font-weight: 700;
-  box-shadow: 0 10px 24px rgba(15, 35, 70, 0.08);
+  font-weight: 800;
+  font-size: 19px;
+  box-shadow:
+    0 16px 34px rgba(15, 35, 70, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.command-palette-close:hover,
+.command-palette-close:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(45, 83, 150, 0.18);
+  box-shadow:
+    0 20px 38px rgba(15, 35, 70, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
 }
 
 .command-palette-search-panel {
@@ -10004,6 +10035,12 @@ body.workspace-body-mode .contact-request-empty-card p {
   .command-palette-list {
     padding-left: 14px;
     padding-right: 14px;
+  }
+
+  .command-palette-head {
+    grid-template-columns: 1fr;
+    margin: 12px 12px 0;
+    padding: 18px 18px 20px;
   }
 
   .command-palette-input {
