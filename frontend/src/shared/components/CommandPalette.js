@@ -5,6 +5,10 @@ function renderResultMeta(item) {
   return tags.slice(0, 3);
 }
 
+function buildPreviewLetter(item) {
+  return String(item?.label || "?").trim().charAt(0).toUpperCase() || "?";
+}
+
 function CommandPalette({
   open,
   query,
@@ -36,14 +40,20 @@ function CommandPalette({
         </div>
 
         <div className="command-palette-search-panel">
-          <input
-            autoFocus
-            type="text"
-            className="command-palette-input"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search tools, pages, docs, pricing, teams, trust, admin, content..."
-          />
+          <div className="command-palette-input-shell">
+            <span className="command-palette-input-icon" aria-hidden="true">
+              <span className="command-palette-input-icon-core" />
+            </span>
+            <input
+              autoFocus
+              type="text"
+              className="command-palette-input"
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search tools, pages, docs, pricing, teams, trust, admin, content..."
+            />
+            <span className="command-palette-input-hint">Search</span>
+          </div>
           <div className="command-palette-highlights">
             {highlights.map((item) => (
               <span key={item} className="command-palette-highlight-pill">{item}</span>
@@ -73,10 +83,18 @@ function CommandPalette({
                 className={`command-palette-item ${index === 0 ? "is-featured" : ""}`}
                 onClick={() => onSelect(item)}
               >
+                <div className="command-palette-item-preview" aria-hidden="true">
+                  <span>{buildPreviewLetter(item)}</span>
+                </div>
                 <div className="command-palette-item-main">
                   <div className="command-palette-item-topline">
-                    <strong>{item.label}</strong>
-                    <span className="command-palette-item-group">{item.group}</span>
+                    <div className="command-palette-item-heading">
+                      <strong>{item.label}</strong>
+                      <span className="command-palette-item-group">{item.group}</span>
+                    </div>
+                    <div className="command-palette-item-side">
+                      <span className="command-palette-rank-badge">{String(index + 1).padStart(2, "0")}</span>
+                    </div>
                   </div>
                   <p>{item.description}</p>
                   <div className="command-palette-item-meta">
@@ -85,7 +103,7 @@ function CommandPalette({
                     ))}
                   </div>
                 </div>
-                <span className="command-palette-rank-badge">{String(index + 1).padStart(2, "0")}</span>
+                <span className="command-palette-item-arrow" aria-hidden="true" />
               </button>
             ))
           ) : (
