@@ -363,87 +363,72 @@ button {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 0;
+  gap: 18px;
   margin: 18px 18px 0;
-  padding: 0;
-  overflow: hidden;
+  padding: 22px 22px 24px;
   border-radius: 28px;
   border: 1px solid rgba(125, 157, 208, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(108, 153, 236, 0.22), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(241, 247, 255, 0.92) 56%, rgba(225, 237, 255, 0.96));
   box-shadow:
     0 22px 52px rgba(15, 35, 70, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .command-palette-copy {
-  position: relative;
   display: grid;
-  gap: 16px;
-  min-height: 100%;
-  padding: 22px 24px 20px;
-  background:
-    linear-gradient(135deg, rgba(24, 60, 116, 0.98), rgba(39, 84, 154, 0.96) 58%, rgba(67, 123, 212, 0.92));
-}
-
-.command-palette-copy::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(125deg, rgba(255, 255, 255, 0) 50%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0) 76%);
-  pointer-events: none;
+  gap: 14px;
+  max-width: 760px;
 }
 
 .command-palette-kicker {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(101, 137, 194, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.94));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  font-size: 10px;
-  letter-spacing: 0.14em;
+    0 12px 28px rgba(20, 49, 96, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(233, 241, 255, 0.84);
+  color: #5576a8;
   font-weight: 800;
 }
 
 .command-palette-head h3 {
   margin: 0;
-  color: #ffffff;
+  color: #163968;
   font-family: "Space Grotesk", "Manrope", sans-serif;
-  font-size: clamp(20px, 2.35vw, 32px);
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-  max-width: 460px;
-}
-
-.command-palette-copy h3 + * {
-  position: relative;
-  z-index: 1;
+  font-size: clamp(34px, 4.3vw, 56px);
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .command-palette-close {
-  align-self: start;
-  justify-self: end;
-  margin: 16px 16px 0 0;
-  min-height: 40px;
-  min-width: 62px;
-  padding: 0 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(180, 202, 238, 0.36);
-  background: rgba(255, 255, 255, 0.88);
-  color: #2d5189;
+  min-height: 52px;
+  min-width: 78px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(32, 62, 117, 0.12);
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(233, 242, 255, 0.96));
+  color: #244a86;
   cursor: pointer;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 19px;
   box-shadow:
-    0 12px 28px rgba(21, 45, 88, 0.1),
+    0 16px 34px rgba(15, 35, 70, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.96);
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 }
@@ -457,24 +442,12 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.98);
 }
 
-.command-palette-head::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(100% - min(320px, 44%));
-  width: 1px;
-  background: linear-gradient(180deg, rgba(135, 167, 220, 0.06), rgba(135, 167, 220, 0.35), rgba(135, 167, 220, 0.06));
-}
-
 .command-palette-search-panel {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   display: grid;
-  gap: 16px;
-  padding: 20px 20px 18px;
-  background:
-    linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(239, 246, 255, 0.94));
+  gap: 18px;
+  padding: 0 24px 18px;
 }
 
 .command-palette-input-shell {
@@ -489,7 +462,7 @@ button {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.98));
   box-shadow:
-    0 16px 34px rgba(16, 39, 76, 0.07),
+    0 22px 44px rgba(16, 39, 76, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
@@ -547,10 +520,10 @@ button {
 .command-palette-input-hint {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(18, 61, 122, 0.12), rgba(92, 156, 255, 0.2));
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(18, 61, 122, 0.08), rgba(92, 156, 255, 0.16));
   color: #315992;
   font-size: 12px;
   font-weight: 800;
@@ -585,12 +558,14 @@ button {
 
 .command-palette-hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.9fr);
+  gap: 16px;
 }
 
 .command-palette-highlights {
-  display: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .command-palette-item-tag {
@@ -609,8 +584,79 @@ button {
 
 .command-palette-highlight-card,
 .command-palette-shortcuts-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid rgba(82, 120, 183, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(109, 160, 244, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 247, 255, 0.96));
+  padding: 18px 18px 16px;
+  box-shadow:
+    0 18px 38px rgba(17, 41, 80, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.command-palette-highlight-card::before,
+.command-palette-shortcuts-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0) 34%);
+  pointer-events: none;
+}
+
+.command-palette-highlight-card {
+  display: grid;
+  gap: 12px;
+}
+
+.command-palette-highlight-card.is-primary {
+  background:
+    radial-gradient(circle at top right, rgba(109, 160, 244, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(17, 55, 106, 0.98), rgba(43, 98, 177, 0.98));
+  border-color: rgba(31, 74, 138, 0.16);
+  box-shadow: 0 24px 44px rgba(17, 49, 96, 0.18);
+}
+
+.command-palette-highlight-card.is-primary strong,
+.command-palette-highlight-card.is-primary .command-palette-highlight-label {
+  color: #ffffff;
+}
+
+.command-palette-highlight-card strong,
+.command-palette-shortcuts-kicker {
+  position: relative;
+  z-index: 1;
+}
+
+.command-palette-highlight-label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(226, 236, 251, 0.8);
+  color: #48658f;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.command-palette-highlight-card strong {
+  color: #173a72;
+  font-size: 18px;
+  line-height: 1.28;
+}
+
 .command-palette-shortcuts-card {
-  display: none;
+  display: grid;
+  gap: 16px;
+  align-content: center;
 }
 
 .command-palette-shortcuts-kicker {
@@ -644,25 +690,22 @@ button {
 }
 
 .command-palette-filter-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
+  padding: 6px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(130, 162, 214, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   gap: 12px;
 }
 
 .command-palette-filter-chip {
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 6px;
-  min-height: 78px;
-  padding: 12px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(38, 74, 136, 0.14);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(38, 74, 136, 0.12);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.92));
   color: #23406d;
   cursor: pointer;
@@ -674,22 +717,20 @@ button {
 }
 
 .command-palette-filter-chip strong {
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 13px;
 }
 
 .command-palette-filter-chip span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 52px;
-  height: 28px;
-  padding: 0 10px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
   border-radius: 999px;
-  background: rgba(237, 244, 255, 0.96);
+  background: rgba(237, 244, 255, 0.92);
   color: #2d5c9f;
-  font-size: 18px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -9999,11 +10040,16 @@ body.workspace-body-mode .contact-request-empty-card p {
   .command-palette-head {
     grid-template-columns: 1fr;
     margin: 12px 12px 0;
-    padding: 0;
+    padding: 18px 18px 20px;
   }
 
   .command-palette-input {
     width: 100%;
+  }
+
+  .command-palette-hero-grid,
+  .command-palette-highlights {
+    grid-template-columns: 1fr;
   }
 
   .command-palette-item {
@@ -10022,18 +10068,6 @@ body.workspace-body-mode .contact-request-empty-card p {
   .command-palette-input-hint,
   .command-palette-item-arrow {
     display: none;
-  }
-
-  .command-palette-head::after {
-    display: none;
-  }
-
-  .command-palette-search-panel {
-    padding: 16px;
-  }
-
-  .command-palette-filter-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .command-palette-item-preview {
