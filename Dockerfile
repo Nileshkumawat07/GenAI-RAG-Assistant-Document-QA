@@ -1,3 +1,5 @@
+ARG BUILDKIT_INLINE_CACHE=1
+
 # ======================
 # FRONTEND BUILD
 # ======================
