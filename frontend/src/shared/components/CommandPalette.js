@@ -9,6 +9,16 @@ function buildPreviewLetter(item) {
   return String(item?.label || "?").trim().charAt(0).toUpperCase() || "?";
 }
 
+function buildHighlightTitle(value) {
+  if (String(value || "").toLowerCase().includes("result")) {
+    return "Results";
+  }
+  if (String(value || "").toLowerCase().includes("matched")) {
+    return "Precision";
+  }
+  return "Scope";
+}
+
 function CommandPalette({
   open,
   query,
@@ -54,10 +64,23 @@ function CommandPalette({
             />
             <span className="command-palette-input-hint">Search</span>
           </div>
-          <div className="command-palette-highlights">
-            {highlights.map((item) => (
-              <span key={item} className="command-palette-highlight-pill">{item}</span>
-            ))}
+          <div className="command-palette-hero-grid">
+            <div className="command-palette-highlights">
+              {highlights.map((item, index) => (
+                <article key={item} className={`command-palette-highlight-card ${index === 0 ? "is-primary" : ""}`}>
+                  <span className="command-palette-highlight-label">{buildHighlightTitle(item)}</span>
+                  <strong>{item}</strong>
+                </article>
+              ))}
+            </div>
+            <div className="command-palette-shortcuts-card">
+              <span className="command-palette-shortcuts-kicker">Smart Filters</span>
+              <div className="command-palette-shortcuts-list">
+                <span>in:workspace</span>
+                <span>type:content</span>
+                <span>page:pricing</span>
+              </div>
+            </div>
           </div>
           <div className="command-palette-filter-row">
             {filters.map((filter) => (
