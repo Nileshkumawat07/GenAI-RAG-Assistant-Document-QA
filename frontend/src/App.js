@@ -26,6 +26,135 @@ import { buildAppSearchItems } from "./shared/search/appSearchIndex";
 import { pushToast } from "./shared/toast/toastBus";
 
 let socket = null;
+
+const COMMAND_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "workspace", label: "Workspace" },
+  { id: "company", label: "Company" },
+  { id: "support", label: "Support" },
+  { id: "account", label: "Account" },
+  { id: "admin", label: "Admin" },
+  { id: "content", label: "Content" },
+];
+
+function normalizeSearchValue(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function tokenizeSearchQuery(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function parseCommandSearch(query) {
+  const tokens = tokenizeSearchQuery(query);
+  const filters = {
+    group: "all",
+    type: "all",
+    page: "",
+  };
+  const terms = [];
+
+  tokens.forEach((token) => {
+    if (token.startsWith("in:")) {
+      filters.group = token.slice(3) || "all";
+      return;
+    }
+    if (token.startsWith("type:")) {
+      filters.type = token.slice(5) || "all";
+      return;
+    }
+    if (token.startsWith("page:")) {
+      filters.page = token.slice(5);
+      return;
+    }
+    terms.push(token);
+  });
+
+  return { terms, filters };
+}
+
+function scoreSearchItem(item, terms) {
+  if (!terms.length) {
+    return item.priority || 0;
+  }
+
+  const label = normalizeSearchValue(item.label);
+  const description = normalizeSearchValue(item.description);
+  const group = normalizeSearchValue(item.group);
+  const searchText = normalizeSearchValue(item.searchText);
+  const page = normalizeSearchValue(item.pageKey);
+  const tab = normalizeSearchValue(item.tabKey);
+  const keywords = (item.keywords || []).map((keyword) => normalizeSearchValue(keyword)).filter(Boolean);
+
+  let score = item.priority || 0;
+
+  for (const term of terms) {
+    let matched = false;
+
+    if (label === term) {
+      score += 180;
+      matched = true;
+    } else if (label.startsWith(term)) {
+      score += 120;
+      matched = true;
+    } else if (label.includes(term)) {
+      score += 90;
+      matched = true;
+    }
+
+    if (page === term || tab === term) {
+      score += 80;
+      matched = true;
+    }
+
+    if (keywords.some((keyword) => keyword === term)) {
+      score += 65;
+      matched = true;
+    } else if (keywords.some((keyword) => keyword.includes(term))) {
+      score += 42;
+      matched = true;
+    }
+
+    if (group.includes(term)) {
+      score += 28;
+      matched = true;
+    }
+
+    if (description.includes(term)) {
+      score += 22;
+      matched = true;
+    }
+
+    if (searchText.includes(term)) {
+      score += 16;
+      matched = true;
+    }
+
+    if (!matched) {
+      return -1;
+    }
+  }
+
+  return score;
+}
+
+function getCommandItemMeta(item) {
+  const typeLabels = {
+    tool: "Tool",
+    page: "Page",
+    section: "Section",
+    content: "Content",
+  };
+  return {
+    typeLabel: typeLabels[item.itemType] || "Result",
+    location: [item.group, item.pageKey, item.tabKey].filter(Boolean).join(" / "),
+  };
+}
+
 function App() {
   const [currentUser, setCurrentUserState] = useState(() => getCurrentUser());
   const [screen, setScreen] = useState(() => (getCurrentUser() ? "workspace" : "home"));
@@ -36,6 +165,7 @@ function App() {
   const [selectedInfoPage, setSelectedInfoPage] = useState(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
+  const [commandPaletteFilter, setCommandPaletteFilter] = useState("all");
   const [searchContentEntries, setSearchContentEntries] = useState({});
   const [toasts, setToasts] = useState([]);
   const [headerNotifications, setHeaderNotifications] = useState([]);
@@ -225,11 +355,55 @@ function App() {
     isManagement,
     contentEntriesByPage: searchContentEntries,
   });
-  const filteredCommandPaletteItems = commandPaletteItems.filter((item) => {
-    const query = commandPaletteQuery.trim().toLowerCase();
-    if (!query) return true;
-    return `${item.label} ${item.description} ${item.group} ${item.searchText || ""}`.toLowerCase().includes(query);
-  });
+  const parsedCommandSearch = parseCommandSearch(commandPaletteQuery);
+  const activeCommandGroupFilter = parsedCommandSearch.filters.group !== "all"
+    ? parsedCommandSearch.filters.group
+    : commandPaletteFilter;
+  const commandPaletteSearchPool = commandPaletteItems
+    .map((item) => ({
+      ...item,
+      matchScore: scoreSearchItem(item, parsedCommandSearch.terms),
+      meta: getCommandItemMeta(item),
+    }))
+    .filter((item) => {
+      if (item.matchScore < 0) {
+        return false;
+      }
+      if (parsedCommandSearch.filters.type !== "all" && item.itemType !== parsedCommandSearch.filters.type) {
+        return false;
+      }
+      if (
+        parsedCommandSearch.filters.page
+        && ![item.pageKey, item.tabKey, item.label, item.searchText].some((value) => normalizeSearchValue(value).includes(parsedCommandSearch.filters.page))
+      ) {
+        return false;
+      }
+      return true;
+    });
+  const filteredCommandPaletteItems = commandPaletteSearchPool
+    .filter((item) => activeCommandGroupFilter === "all" || item.groupKey === activeCommandGroupFilter)
+    .sort((left, right) => {
+      if (right.matchScore !== left.matchScore) {
+        return right.matchScore - left.matchScore;
+      }
+      return left.label.localeCompare(right.label);
+    });
+  const visibleCommandFilters = COMMAND_FILTERS.filter((filter) =>
+    filter.id === "all" || commandPaletteItems.some((item) => item.groupKey === filter.id)
+  );
+  const commandFilterCounts = Object.fromEntries(
+    visibleCommandFilters.map((filter) => [
+      filter.id,
+      filter.id === "all"
+        ? commandPaletteSearchPool.length
+        : commandPaletteSearchPool.filter((item) => item.groupKey === filter.id).length,
+    ])
+  );
+  const commandPaletteHighlights = [
+    `${filteredCommandPaletteItems.length} refined result${filteredCommandPaletteItems.length === 1 ? "" : "s"}`,
+    parsedCommandSearch.terms.length ? `${parsedCommandSearch.terms.length} term${parsedCommandSearch.terms.length === 1 ? "" : "s"} matched` : "Priority-ranked navigation",
+    activeCommandGroupFilter !== "all" ? `${activeCommandGroupFilter} filter active` : "Cross-workspace scope",
+  ];
 
   const loadHeaderNotifications = useCallback(async () => {
     if (!currentUser?.id || screen !== "workspace") {
@@ -823,11 +997,18 @@ function App() {
         onClose={() => {
           setCommandPaletteOpen(false);
           setCommandPaletteQuery("");
+          setCommandPaletteFilter("all");
         }}
         onQueryChange={setCommandPaletteQuery}
+        activeFilter={activeCommandGroupFilter}
+        filters={visibleCommandFilters}
+        filterCounts={commandFilterCounts}
+        highlights={commandPaletteHighlights}
+        onFilterChange={setCommandPaletteFilter}
         onSelect={(item) => {
           setCommandPaletteOpen(false);
           setCommandPaletteQuery("");
+          setCommandPaletteFilter("all");
           item.action();
         }}
       />

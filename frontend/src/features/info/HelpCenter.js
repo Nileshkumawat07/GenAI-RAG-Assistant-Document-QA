@@ -102,8 +102,14 @@ function parseEntryPayload(entry) {
   }
 }
 
-function HelpCenter({ currentUser = null, canEdit = false }) {
-  const [section, setSection] = useState("docs");
+function HelpCenter({
+  currentUser = null,
+  activeCategory = "",
+  onCategoryChange = null,
+  canEdit = false,
+}) {
+  const embedded = Boolean(activeCategory && onCategoryChange);
+  const [localSection, setLocalSection] = useState("docs");
   const [selectedCategory, setSelectedCategory] = useState("Getting Started");
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [history, setHistory] = useState([]);
@@ -119,6 +125,14 @@ function HelpCenter({ currentUser = null, canEdit = false }) {
     category: "Document Retrieval",
   });
   const [drafts, setDrafts] = useState(() => DEFAULT_CONTENT_MAP);
+  const section = embedded ? activeCategory : localSection;
+  const setSection = (nextSection) => {
+    if (embedded) {
+      onCategoryChange(nextSection);
+      return;
+    }
+    setLocalSection(nextSection);
+  };
 
   useEffect(() => {
     let active = true;
@@ -286,21 +300,23 @@ function HelpCenter({ currentUser = null, canEdit = false }) {
         </div>
       </section>
 
-      <div style={styles.pillRow}>
-        {HELP_SECTIONS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setSection(item.id)}
-            style={{
-              ...styles.pill,
-              ...(section === item.id ? styles.pillActive : {}),
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      {!embedded ? (
+        <div style={styles.pillRow}>
+          {HELP_SECTIONS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setSection(item.id)}
+              style={{
+                ...styles.pill,
+                ...(section === item.id ? styles.pillActive : {}),
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {loadingContent ? <p style={styles.body}>Loading help content...</p> : null}
 

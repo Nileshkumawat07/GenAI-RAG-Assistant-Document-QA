@@ -2350,7 +2350,18 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }
 
     if (selectedInfoPage === "help") {
-      return <HelpCenter currentUser={currentUser} />;
+      return (
+        <HelpCenter
+          currentUser={currentUser}
+          activeCategory={activeInfoTab}
+          onCategoryChange={(nextCategory) =>
+            setInfoTabs((current) => ({
+              ...current,
+              help: nextCategory,
+            }))
+          }
+        />
+      );
     }
 
     if (selectedInfoPage === "trust") {

@@ -181,7 +181,37 @@ function summarizeText(value, maxLength = 180) {
   if (normalized.length <= maxLength) {
     return normalized;
   }
-  return `${normalized.slice(0, maxLength - 1).trim()}…`;
+  return `${normalized.slice(0, maxLength - 1).trim()}...`;
+}
+
+function createSearchItem({
+  id,
+  label,
+  description,
+  group,
+  groupKey,
+  itemType,
+  pageKey = "",
+  tabKey = "",
+  keywords = [],
+  searchText = "",
+  priority = 0,
+  action,
+}) {
+  return {
+    id,
+    label,
+    description,
+    group,
+    groupKey,
+    itemType,
+    pageKey,
+    tabKey,
+    keywords,
+    searchText,
+    priority,
+    action,
+  };
 }
 
 export function buildAppSearchItems({
@@ -208,12 +238,16 @@ export function buildAppSearchItems({
   };
 
   const baseItems = [
-    ...WORKSPACE_SECTIONS.map((section) => ({
+    ...WORKSPACE_SECTIONS.map((section) => createSearchItem({
       id: `workspace-${section.id}`,
       label: section.label,
       description: section.description,
       group: "Workspace",
+      groupKey: "workspace",
+      itemType: "tool",
+      keywords: section.keywords || [],
       searchText: `${section.label} ${section.description} ${(section.keywords || []).join(" ")}`,
+      priority: 95,
       action: () => openWorkspaceSection(section.id),
     })),
     ...Object.entries(INFO_PAGE_SEARCH_DEFINITIONS)
@@ -227,20 +261,32 @@ export function buildAppSearchItems({
         return true;
       })
       .flatMap(([page, definition]) => {
-        const pageItem = {
+        const groupKey = String(definition.group || "").toLowerCase();
+        const pageItem = createSearchItem({
           id: `page-${page}`,
           label: definition.label,
           description: `Open ${definition.label}.`,
           group: definition.group,
+          groupKey,
+          itemType: "page",
+          pageKey: page,
+          keywords: [definition.label, definition.group],
           searchText: `${definition.label} ${definition.group}`,
+          priority: 88,
           action: () => openInfoPage(page),
-        };
-        const tabItems = (definition.tabs || []).map((tab) => ({
+        });
+        const tabItems = (definition.tabs || []).map((tab) => createSearchItem({
           id: `${page}-${tab.id}`,
           label: `${definition.label}: ${tab.label}`,
           description: `Open the ${tab.label} section in ${definition.label}.`,
           group: definition.group,
+          groupKey,
+          itemType: "section",
+          pageKey: page,
+          tabKey: tab.id,
+          keywords: tab.keywords || [],
           searchText: `${definition.label} ${tab.label} ${(tab.keywords || []).join(" ")}`,
+          priority: 82,
           action: () => openInfoPage(page, tab.id),
         }));
         return [pageItem, ...tabItems];
@@ -258,14 +304,20 @@ export function buildAppSearchItems({
       const pageLabel = prettifyPageLabel(pageKey);
       const sectionLabel = prettifySectionLabel(entry?.sectionKey || `${index + 1}`);
       const contentText = extractSearchText(payload);
-      return {
+      return createSearchItem({
         id: `content-${pageKey}-${entry?.sectionKey || index}`,
         label: `${pageLabel}: ${entry?.title || sectionLabel}`,
         description: summarizeText(contentText || `${pageLabel} ${sectionLabel}`),
         group: `${pageLabel} Content`,
+        groupKey: "content",
+        itemType: "content",
+        pageKey,
+        tabKey: entry?.sectionKey || "",
+        keywords: [pageLabel, sectionLabel, entry?.title || ""],
         searchText: `${pageLabel} ${sectionLabel} ${entry?.title || ""} ${contentText}`,
+        priority: 72,
         action: () => openInfoPage(pageKey, entry?.sectionKey || ""),
-      };
+      });
     })
   );
 
