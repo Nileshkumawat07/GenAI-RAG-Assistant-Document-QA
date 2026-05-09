@@ -2354,7 +2354,17 @@ function WorkspacePage({ currentUser, selectedInfoPage = null, onUserUpdate, onA
     }
 
     if (selectedInfoPage === "trust") {
-      return <TrustCenter />;
+      return (
+        <TrustCenter
+          activeCategory={activeInfoTab}
+          onCategoryChange={(nextCategory) =>
+            setInfoTabs((current) => ({
+              ...current,
+              trust: nextCategory,
+            }))
+          }
+        />
+      );
     }
 
     if (selectedInfoPage === "management" && activeInfoTab === "studio") {

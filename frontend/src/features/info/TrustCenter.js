@@ -99,14 +99,27 @@ function toDrafts(contentMap) {
   );
 }
 
-function TrustCenter({ canEdit = false }) {
-  const [selectedSection, setSelectedSection] = useState("privacy");
+function TrustCenter({
+  activeCategory = "",
+  onCategoryChange = null,
+  canEdit = false,
+}) {
+  const embedded = Boolean(activeCategory && onCategoryChange);
+  const [localSection, setLocalSection] = useState("privacy");
   const [contentMap, setContentMap] = useState(DEFAULT_CONTENT_MAP);
   const [drafts, setDrafts] = useState(() => toDrafts(DEFAULT_CONTENT_MAP));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const selectedSection = embedded ? activeCategory : localSection;
+  const setSelectedSection = (nextSection) => {
+    if (embedded) {
+      onCategoryChange(nextSection);
+      return;
+    }
+    setLocalSection(nextSection);
+  };
   const currentSection = useMemo(
     () => contentMap[selectedSection] || DEFAULT_CONTENT_MAP[selectedSection] || TRUST_SECTIONS[0],
     [contentMap, selectedSection]
@@ -208,28 +221,48 @@ function TrustCenter({ canEdit = false }) {
 
   return (
     <div style={styles.page}>
-      <section style={styles.hero}>
-        <div>
-          <span style={styles.eyebrow}>Trust Center</span>
-          <h2 style={styles.title}>Legal, security, and system trust pages collected into one product surface.</h2>
-          <p style={styles.body}>If the app handles payments, account data, or team access, these pages need to feel first-class instead of hidden afterthoughts.</p>
-        </div>
-        <div style={styles.heroList}>
+      {!embedded ? (
+        <section style={styles.hero}>
+          <div>
+            <span style={styles.eyebrow}>Trust Center</span>
+            <h2 style={styles.title}>Legal, security, and system trust pages collected into one product surface.</h2>
+            <p style={styles.body}>If the app handles payments, account data, or team access, these pages need to feel first-class instead of hidden afterthoughts.</p>
+          </div>
+          <div style={styles.heroList}>
+            {TRUST_SECTIONS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSelectedSection(item.id)}
+                style={{
+                  ...styles.heroLink,
+                  ...(selectedSection === item.id ? styles.heroLinkActive : {}),
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {canEdit ? (
+        <div style={styles.pillRow}>
           {TRUST_SECTIONS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setSelectedSection(item.id)}
               style={{
-                ...styles.heroLink,
-                ...(selectedSection === item.id ? styles.heroLinkActive : {}),
+                ...styles.pill,
+                ...(selectedSection === item.id ? styles.pillActive : {}),
               }}
             >
               {item.label}
             </button>
           ))}
         </div>
-      </section>
+      ) : null}
 
       {loading ? <p style={styles.bodyAlt}>Loading trust content...</p> : null}
       {statusMessage ? <p style={styles.successText}>{statusMessage}</p> : null}
@@ -336,6 +369,9 @@ function TrustCenter({ canEdit = false }) {
 
 const styles = {
   page: { display: "flex", flexDirection: "column", gap: "18px" },
+  pillRow: { display: "flex", flexWrap: "wrap", gap: "12px" },
+  pill: { padding: "14px 22px", borderRadius: "999px", border: "1px solid #c6d3eb", background: "#f8fbff", color: "#22406f", cursor: "pointer", fontWeight: 700, boxShadow: "0 8px 22px rgba(20,42,80,0.05)" },
+  pillActive: { background: "linear-gradient(135deg, #17315f 0%, #2d63b7 100%)", color: "#ffffff", borderColor: "#17315f", boxShadow: "0 14px 28px rgba(23,49,95,0.18)" },
   hero: { borderRadius: "28px", border: "1px solid #dbe5f4", background: "linear-gradient(135deg, #17315f 0%, #245293 52%, #f8fbff 52%, #ffffff 100%)", padding: "24px", display: "grid", gridTemplateColumns: "minmax(0, 1.25fr) minmax(220px, 0.75fr)", gap: "18px", alignItems: "start" },
   eyebrow: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", color: "#9cb8eb", fontWeight: 700 },
   eyebrowAlt: { display: "inline-block", fontSize: "12px", letterSpacing: "0.16em", textTransform: "uppercase", color: "#5b77a3", fontWeight: 700 },
